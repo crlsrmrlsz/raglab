@@ -2,7 +2,7 @@
 
 [← Section Chunking](section-chunking.md) | [Home](../../README.md)
 
-> **Research:** [Chroma Research on Chunking](https://arxiv.org/abs/2410.13070) | October 2024
+> **Research:** [Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070) (Qu et al., 2024) | [Chroma Chunking Evaluation](https://research.trychroma.com/evaluating-chunking)
 
 Splits text at semantic boundaries detected by embedding similarity, creating chunks that preserve topic coherence rather than splitting mid-argument.
 
@@ -78,11 +78,11 @@ Semantic chunking has been explored through several approaches:
 |--------|-------------|------------|
 | **Percentile-based** (LangChain/LlamaIndex) | Split at 95th percentile of cosine distances | Varies with document; same threshold means different things |
 | **Gradient-based** (Kamradt, 2023) | Split where similarity drops sharply | Computationally expensive; still percentile-based |
-| **Absolute threshold** (Chroma, 2024) | Split when similarity < fixed value | **Consistent across documents** |
+| **Absolute threshold** (Qu et al., 2024) | Split when similarity < fixed value | **Consistent across documents** |
 
 </div>
 
-The Chroma research (arXiv:2410.13070) tested absolute thresholds from 0.1-0.5 and found:
+The Qu et al. paper (arXiv:2410.13070) tested absolute thresholds from 0.1-0.5 and found:
 - **Absolute thresholds provide consistent behavior** across different document types
 - **0.40-0.43 range** works well for excerpt relevance filtering
 - Lower thresholds (0.3) create larger, more contextual chunks
@@ -125,7 +125,7 @@ For each sentence:
 
 | Decision | Value | Rationale |
 |----------|-------|-----------|
-| **Threshold** | 0.4 (configurable) | Chroma research shows 0.40-0.43 optimal for relevance |
+| **Threshold** | 0.4 (configurable) | Qu et al. shows 0.40-0.43 optimal for relevance |
 | **Percentile vs Absolute** | Absolute | Consistent behavior across documents |
 | **Still respect sections** | Yes | Section boundaries trump semantic similarity |
 | **Still enforce MAX_TOKENS** | Yes (800) | Embedding model sweet spot |

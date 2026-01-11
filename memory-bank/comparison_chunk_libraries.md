@@ -20,7 +20,7 @@
 | **A/B Testing Built-in** | Threshold in folder name | `semantic_0.4/` enables easy strategy comparison |
 | **RAPTOR** | Full hierarchical tree | GMM + UMAP + LLM summarization (ICLR 2024 paper implementation) |
 | **Contextual Retrieval** | Anthropic's technique | LLM context prepending (35% failure reduction) |
-| **Research-backed Thresholds** | Chroma/arXiv research | 0.4 absolute threshold vs percentile-based (more stable) |
+| **Research-backed Thresholds** | Qu et al. arXiv research | 0.4 absolute threshold vs percentile-based (more stable) |
 | **Clean Architecture** | Strategy pattern with registry | Easy to add new strategies, CLI integration |
 | **Learning Value** | Understanding fundamentals | You can explain WHY each decision was made |
 
@@ -131,7 +131,7 @@ RecursiveCharacterTextSplitter(
 
 **Your Implementation (Research-backed):**
 ```python
-# Absolute threshold based on Chroma research (arXiv:2410.13070)
+# Absolute threshold based on Qu et al. (arXiv:2410.13070)
 SEMANTIC_SIMILARITY_THRESHOLD = 0.4  # Consistent across corpora
 
 if sim < threshold:
