@@ -57,6 +57,50 @@ The implementation is based on the **breakpoint-based semantic chunker** from [I
 
 ---
 
+## State of the Art (2025)
+
+Beyond the breakpoint method implemented here, several other semantic chunking approaches exist:
+
+### 1. Breakpoint-Based (This Implementation)
+Compares embeddings of consecutive sentences; splits when similarity drops below threshold.
+
+- **Threshold types**: Absolute (fixed value), Percentile (Nth percentile of distances), Gradient (sharp drops)
+- **Pros**: O(n) complexity, simple to implement, consistent with absolute thresholds
+- **Cons**: Only considers adjacent pairs, may miss broader context
+- **Research**: [Qu et al. 2024](https://arxiv.org/abs/2410.13070)
+
+### 2. Max-Min Semantic Chunking
+Compares max(similarity to new sentence) vs min(similarity within current chunk). Adds sentence only if it fits without hurting chunk cohesion.
+
+- **Pros**: Considers internal chunk coherence, statistically significant improvements over breakpoint
+- **Cons**: O(n²) per chunk, more complex implementation
+- **Research**: [Kiss et al. 2025](https://link.springer.com/article/10.1007/s10791-025-09638-7)
+
+### 3. Cluster-Based
+Uses agglomerative/DBSCAN clustering with combined distance: `λ × positional + (1-λ) × semantic`.
+
+- **Pros**: Can group non-consecutive related sentences, considers document-wide structure
+- **Cons**: Harder to control chunk sizes, clustering overhead
+- **Research**: [Qu et al. 2024](https://arxiv.org/abs/2410.13070)
+
+### 4. LLM-Based (Propositional)
+LLM extracts self-contained semantic propositions directly from text.
+
+- **Pros**: Highest quality, captures complex relationships
+- **Cons**: Highest latency and cost, requires LLM calls at index time
+- **Research**: [VectorHub 2024](https://superlinked.com/vectorhub/articles/semantic-chunking)
+
+### Quick Comparison
+
+| Method | Complexity | Quality | Cost |
+|--------|------------|---------|------|
+| Breakpoint (this) | O(n) | Good | Low |
+| Max-Min | O(n²) | Better | Medium |
+| Cluster | O(n²) | Good | Medium |
+| LLM-based | O(n) | Best | High |
+
+---
+
 ## Algorithm
 
 ```
