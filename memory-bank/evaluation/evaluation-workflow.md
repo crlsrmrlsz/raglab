@@ -264,7 +264,7 @@ Note: `top_k` is innermost loop to maximize retrieval cache hits (see Design Dec
 
 ## Output
 
-See [docs/evaluation/README.md](../docs/evaluation/README.md) for output file locations and metrics reference.
+See [docs/evaluation/README.md](../../docs/evaluation/README.md) for output file locations and metrics reference.
 
 ## Data Flow Diagram
 

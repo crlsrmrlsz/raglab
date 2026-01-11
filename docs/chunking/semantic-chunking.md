@@ -2,50 +2,9 @@
 
 [← Section Chunking](section-chunking.md) | [Home](../../README.md)
 
-> **Research:** [Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070) (Qu et al., 2024) | [Chroma Chunking Evaluation](https://research.trychroma.com/evaluating-chunking)
 
 Splits text at semantic boundaries detected by embedding similarity, creating chunks that preserve topic coherence rather than splitting mid-argument.
 
-**Type:** Index-time chunking | **LLM Calls:** 0 | **Embedding Calls:** 1 per sentence
-
----
-
-## Diagram
-
-```mermaid
-flowchart TB
-    subgraph INPUT["Segmented Text"]
-        PARA["Paragraph with<br/>sentences"]
-    end
-
-    subgraph EMBED["Embedding Phase"]
-        S1["Sentence 1"] --> E1["Embed"]
-        S2["Sentence 2"] --> E2["Embed"]
-        S3["Sentence 3"] --> E3["Embed"]
-        S4["Sentence 4"] --> E4["Embed"]
-    end
-
-    subgraph SIMILARITY["Similarity Analysis"]
-        direction TB
-        SIM12["sim(S1,S2) = 0.82"]
-        SIM23["sim(S2,S3) = 0.31 ❌"]
-        SIM34["sim(S3,S4) = 0.76"]
-    end
-
-    subgraph OUTPUT["Semantic Chunks"]
-        C1["Chunk 1:<br/>S1, S2"]
-        C2["Chunk 2:<br/>S3, S4"]
-    end
-
-    INPUT --> EMBED --> SIMILARITY
-    SIMILARITY --> OUTPUT
-
-    style SIM23 fill:#ffebee,stroke:#c62828,stroke-width:2px
-    style C1 fill:#e8f5e9,stroke:#2e7d32
-    style C2 fill:#e8f5e9,stroke:#2e7d32
-```
-
----
 
 ## Theory
 

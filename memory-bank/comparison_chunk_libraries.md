@@ -457,7 +457,7 @@ This project implements custom chunking strategies rather than using LangChain/L
 3. **Section awareness**: Respects document structure (chapters, sections) when creating chunks
 4. **Learning focus**: Understanding chunking fundamentals is essential for RAG systems
 
-See [memory-bank/comparison_chunk_libraries.md](memory-bank/comparison_chunk_libraries.md) for detailed comparison.
+See [comparison_chunk_libraries.md](comparison_chunk_libraries.md) for detailed comparison.
 ```
 
 ---

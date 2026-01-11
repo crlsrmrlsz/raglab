@@ -235,5 +235,5 @@ Traces enable metric recalculation without re-running retrieval/generation.
 **Next:** [Evaluation Results](results.md) — Metrics and leaderboards
 
 **Related:**
-- [evaluation-workflow.md](../../memory-bank/evaluation-workflow.md) — Architecture diagrams, caching, retry logic
-- [comprehensive-evaluation-synthesis.md](../../memory-bank/insights/comprehensive-evaluation-synthesis.md) — Full analysis of evaluation results
+- [evaluation-workflow.md](../../memory-bank/evaluation/evaluation-workflow.md) — Architecture diagrams, caching, retry logic
+- [comprehensive-evaluation-synthesis.md](../../memory-bank/evaluation/insights/comprehensive-evaluation-synthesis.md) — Full analysis of evaluation results
