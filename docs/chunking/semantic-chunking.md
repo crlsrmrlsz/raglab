@@ -29,31 +29,34 @@ Better: Complete dopamine discussion, then serotonin topic.
 
 ---
 
-## Theory
+## Origin
 
-### Research: Qu et al. (2024)
+### Not Academic Research
 
-The implementation is based on the **breakpoint-based semantic chunker** from [Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070) (Qu et al., October 2024).
+Semantic chunking is a **practitioner-developed technique**, not from peer-reviewed research.
 
-**Core idea:** Embed each sentence, compute cosine similarity between adjacent sentences, and split where similarity drops below a threshold.
+| | |
+|---|---|
+| **Creator** | Greg Kamradt (2023) |
+| **Format** | YouTube video + Jupyter notebook |
+| **Title** | "5 Levels of Text Splitting" |
+| **Source** | [FullStackRetrieval-com/RetrievalTutorials](https://github.com/FullStackRetrieval-com/RetrievalTutorials/blob/main/tutorials/LevelsOfTextSplitting/5_Levels_Of_Text_Splitting.ipynb) |
 
-### Approaches Compared in the Paper
+**Core idea:** Embed each sentence, compute cosine similarity between adjacent sentences, split where similarity drops below a threshold.
 
-| Method | Description | Finding |
-|--------|-------------|---------|
-| **Percentile-based** | Split at Nth percentile of cosine distances | Inconsistent across documents |
-| **Gradient-based** | Split where similarity drops sharply | Computationally expensive |
-| **Absolute threshold** | Split when similarity < fixed value | More consistent behavior |
+### Adoption
 
-### Key Findings from Qu et al.
+- [LlamaIndex SemanticChunker](https://docs.llamaindex.ai/en/stable/examples/node_parsers/semantic_chunking/) - adapted from Kamradt
+- LangChain SemanticChunker - similar implementation
+- Qu et al. (2024) - later **evaluated** the method academically
 
-1. **Absolute thresholds are more consistent** than percentile-based methods across different document types
+### Academic Evaluation: Qu et al. (2024)
 
-2. **No universal best threshold** - the paper tested 0.1-0.5 and found performance is dataset-dependent
+[Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070) evaluated semantic chunking methods and found:
 
-3. **Fixed-size chunking may be more practical** - the paper concludes: "fixed-size chunking remains a more efficient and reliable choice for practical RAG applications" when computational costs are considered
-
-4. **Threshold requires tuning** - optimal value depends on your specific corpus and use case
+1. **Absolute thresholds more consistent** than percentile-based across document types
+2. **No universal best threshold** - tested 0.1-0.5, performance is dataset-dependent
+3. **Fixed-size chunking may be more practical** - "remains a more efficient and reliable choice for practical RAG applications"
 
 ---
 
@@ -244,7 +247,8 @@ python -m src.stages.run_stage_6_weaviate --strategy semantic_0.4
 
 ## References
 
-- Qu et al. (2024). [Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070). arXiv:2410.13070
+- Kamradt, G. (2023). [5 Levels of Text Splitting](https://github.com/FullStackRetrieval-com/RetrievalTutorials/blob/main/tutorials/LevelsOfTextSplitting/5_Levels_Of_Text_Splitting.ipynb). FullStackRetrieval Tutorials. *(Original method)*
+- Qu et al. (2024). [Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070). arXiv:2410.13070. *(Evaluation)*
 
 ---
 
