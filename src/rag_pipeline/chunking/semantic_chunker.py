@@ -41,7 +41,7 @@ from collections import deque
 from src.config import (
     DIR_FINAL_CHUNKS,
     DIR_NLP_CHUNKS,
-    MAX_CHUNK_TOKENS,
+    EMBEDDING_MAX_INPUT_TOKENS,
     OVERLAP_SENTENCES,
     CHUNK_ID_PREFIX,
     CHUNK_ID_SEPARATOR,
@@ -164,7 +164,7 @@ def _create_chunk_dict(
 def create_semantic_chunks(
     paragraphs: list[dict],
     book_name: str,
-    max_tokens: int = MAX_CHUNK_TOKENS,
+    max_tokens: int = EMBEDDING_MAX_INPUT_TOKENS,
     overlap_sentences: int = OVERLAP_SENTENCES,
     similarity_threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
 ) -> list[dict]:
@@ -173,13 +173,17 @@ def create_semantic_chunks(
     Algorithm:
     1. Process paragraphs in order, respecting section boundaries
     2. For each paragraph, find semantic breakpoints via embedding similarity
-    3. Build chunks from breakpoint segments, respecting token limits
+    3. Build chunks from breakpoint segments (semantic coherence drives size)
     4. Add sentence overlap between chunks (same section only)
+
+    The max_tokens parameter is a safeguard against embedding model limits,
+    not an optimization target. Semantic boundaries (similarity < threshold)
+    are the primary split mechanism.
 
     Args:
         paragraphs: List of paragraph dicts with 'context', 'sentences' keys.
         book_name: Book identifier.
-        max_tokens: Maximum tokens per chunk.
+        max_tokens: Safeguard limit for embedding model (default: 8191).
         overlap_sentences: Number of sentences to overlap between chunks.
         similarity_threshold: Cosine similarity threshold for splitting.
 
@@ -383,9 +387,9 @@ def run_semantic_chunking(
     logger.info(f"Starting semantic chunking...")
     logger.info(f"Processing {len(input_files)} files")
     logger.info(f"Output folder: {folder_name}/")
-    logger.info(f"Max tokens per chunk: {MAX_CHUNK_TOKENS}")
     logger.info(f"Similarity threshold: {similarity_threshold}")
     logger.info(f"Overlap sentences: {OVERLAP_SENTENCES}")
+    logger.info(f"Token safeguard: {EMBEDDING_MAX_INPUT_TOKENS} (embedding model limit)")
 
     for file_path in input_files:
         book_name, chunk_count, was_processed = process_single_file(

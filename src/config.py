@@ -137,12 +137,16 @@ CONTEXT_SEPARATOR = ' > '
 # ============================================================================
 
 
-# Chunking parameters (tuned for text-embedding-3-large)
-MAX_CHUNK_TOKENS = 800
-MAX_SENTENCE_TOKENS = 800
+# Chunking parameters
+MAX_CHUNK_TOKENS = 800  # Target size for section chunking (sequential accumulation)
 
 # Tokenizer model name (OpenAI compatible)
 TOKENIZER_MODEL = "text-embedding-3-large"
+
+# Embedding model input limit (safeguard for semantic chunking)
+# text-embedding-3-large max context: 8191 tokens
+# Semantic chunking uses this as safety ceiling, not optimization target
+EMBEDDING_MAX_INPUT_TOKENS = 8191
 
 # Configurable overlap: number of sentences to carry from previous chunk
 OVERLAP_SENTENCES = 2  # Adjust this value (0 = no overlap, 2-3 recommended)
@@ -485,7 +489,7 @@ DEFAULT_CHUNKING_STRATEGY = "section"
 # - 0.5: Conservative, major topic shifts only
 # - 0.4: Recommended default (aligns with Chroma 0.40-0.43 range)
 # - 0.3: Test value for maximum context grouping
-# Note: MAX_CHUNK_TOKENS (800) limits chunk size regardless of threshold
+# Note: EMBEDDING_MAX_INPUT_TOKENS (8191) is safeguard only; semantic boundaries drive chunking
 SEMANTIC_SIMILARITY_THRESHOLD = 0.4  # Default; test 0.3 for larger groups
 
 # Contextual chunking parameters (Anthropic-style)

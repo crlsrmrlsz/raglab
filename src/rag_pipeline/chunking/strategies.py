@@ -33,6 +33,7 @@ from src.config import (
     MAX_CHUNK_TOKENS,
     OVERLAP_SENTENCES,
     SEMANTIC_SIMILARITY_THRESHOLD,
+    EMBEDDING_MAX_INPUT_TOKENS,
     CONTEXTUAL_MODEL,
     RAPTOR_MAX_LEVELS,
     RAPTOR_MIN_CLUSTER_SIZE,
@@ -110,7 +111,7 @@ def semantic_strategy(
     from src.rag_pipeline.chunking.semantic_chunker import run_semantic_chunking
 
     logger.info(f"[semantic] Using embedding similarity chunking")
-    logger.info(f"[semantic] Max tokens: {MAX_CHUNK_TOKENS}, threshold: {similarity_threshold}")
+    logger.info(f"[semantic] Threshold: {similarity_threshold}, safeguard: {EMBEDDING_MAX_INPUT_TOKENS} tokens")
     return run_semantic_chunking(
         similarity_threshold=similarity_threshold,
         overwrite_context=overwrite_context,
