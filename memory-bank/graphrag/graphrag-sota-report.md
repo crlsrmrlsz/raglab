@@ -1,9 +1,8 @@
 # GraphRAG State-of-the-Art: December 2025
 
 > **Related Docs:**
-> - [Quick Reference](graphrag.md) — RAGLab implementation status and troubleshooting
-> - [Deep Tutorial](graphrag-tutorial.md) — Step-by-step implementation guide
-> - [Public Docs](../docs/preprocessing/graphrag.md) — User-facing documentation
+> - [Quick Reference](graphrag-reference.md) — RAGLab implementation status and troubleshooting
+> - [Public Docs](../../docs/preprocessing/graphrag.md) — User-facing documentation
 
 ## Overview & Evolution
 

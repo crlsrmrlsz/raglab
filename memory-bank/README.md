@@ -24,7 +24,6 @@ Internal project knowledge and research documentation. For public-facing documen
 | [raptor-research.md](raptor-research.md) | RAPTOR algorithm deep-dive | [arXiv:2401.18059](https://arxiv.org/abs/2401.18059) |
 | [decomposition-research.md](decomposition-research.md) | Query decomposition paper | [arXiv:2507.00355](https://arxiv.org/abs/2507.00355) |
 | [graphrag-sota-report.md](graphrag-sota-report.md) | GraphRAG 2025 landscape | [arXiv:2404.16130](https://arxiv.org/abs/2404.16130) |
-| [graphrag-tutorial.md](graphrag-tutorial.md) | Comprehensive GraphRAG tutorial (25k+ lines) | Microsoft Research |
 
 ---
 
@@ -55,7 +54,6 @@ GraphRAG documentation is intentionally split across multiple files for differen
 |------|----------|-------|
 | [graphrag.md](graphrag.md) | Operators | Quick reference, crash recovery, Neo4j queries |
 | [graphrag-sota-report.md](graphrag-sota-report.md) | Researchers | 2025 landscape, implementations comparison |
-| [graphrag-tutorial.md](graphrag-tutorial.md) | Learners | Comprehensive step-by-step tutorial |
 | [docs/preprocessing/graphrag.md](../docs/preprocessing/graphrag.md) | Users | Public documentation with implementation details |
 
 ---
