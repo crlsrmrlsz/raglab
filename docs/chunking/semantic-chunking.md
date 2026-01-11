@@ -1,16 +1,16 @@
 # Semantic Chunking
 
-[← Section Chunking](section-chunking.md) | [Home](../../README.md)
-
+[← Section Chunking](section-chunking.md) | [Chunking Overview](README.md)
 
 Splits text at semantic boundaries detected by embedding similarity, creating chunks that preserve topic coherence rather than splitting mid-argument.
 
+**Type:** Index-time chunking | **LLM Calls:** 0 | **Embedding Calls:** 1 per sentence
 
-## Theory
+---
 
-### The Core Problem
+## The Problem
 
-Fixed-size chunking often splits mid-topic, fragmenting semantically related content:
+Fixed-size chunking splits at arbitrary token boundaries, often fragmenting semantically related content:
 
 ```
 Fixed-size split (token boundary):
@@ -27,46 +27,37 @@ Chunk 2: "Serotonin, in contrast, modulates mood through different mechanisms...
 Better: Complete dopamine discussion, then serotonin topic.
 ```
 
-### Research Background
+---
 
-Semantic chunking has been explored through several approaches:
+## Theory
 
-<div align="center">
+### Research: Qu et al. (2024)
 
-| Method | Description | Limitation |
-|--------|-------------|------------|
-| **Percentile-based** (LangChain/LlamaIndex) | Split at 95th percentile of cosine distances | Varies with document; same threshold means different things |
-| **Gradient-based** (Kamradt, 2023) | Split where similarity drops sharply | Computationally expensive; still percentile-based |
-| **Absolute threshold** (Qu et al., 2024) | Split when similarity < fixed value | **Consistent across documents** |
+The implementation is based on the **breakpoint-based semantic chunker** from [Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070) (Qu et al., October 2024).
 
-</div>
+**Core idea:** Embed each sentence, compute cosine similarity between adjacent sentences, and split where similarity drops below a threshold.
 
-The Qu et al. paper (arXiv:2410.13070) tested absolute thresholds from 0.1-0.5 and found:
-- **Absolute thresholds provide consistent behavior** across different document types
-- **No universal best threshold** - requires dataset-specific tuning
-- Lower thresholds (0.3) create larger, more contextual chunks
-- Higher thresholds (0.5+) create smaller, topic-focused chunks
+### Approaches Compared in the Paper
 
-> **Note:** The paper concludes that fixed-size chunking may be more reliable for practical RAG applications when computational costs are considered.
+| Method | Description | Finding |
+|--------|-------------|---------|
+| **Percentile-based** | Split at Nth percentile of cosine distances | Inconsistent across documents |
+| **Gradient-based** | Split where similarity drops sharply | Computationally expensive |
+| **Absolute threshold** | Split when similarity < fixed value | More consistent behavior |
 
-### The Trade-off
+### Key Findings from Qu et al.
 
-```
-                    ← Larger chunks              Smaller chunks →
-                    ← Fewer splits               More splits →
+1. **Absolute thresholds are more consistent** than percentile-based methods across different document types
 
-Threshold:    0.3 ─────────── 0.4 ─────────── 0.5 ─────────── 0.75
-              │                │                │                │
-              More context     Balanced         Topic-focused    Fragmented
-              Risk: noise      (Recommended)    Risk: orphaned   Risk: lost
-                                               sentences         coherence
-```
+2. **No universal best threshold** - the paper tested 0.1-0.5 and found performance is dataset-dependent
+
+3. **Fixed-size chunking may be more practical** - the paper concludes: "fixed-size chunking remains a more efficient and reliable choice for practical RAG applications" when computational costs are considered
+
+4. **Threshold requires tuning** - optimal value depends on your specific corpus and use case
 
 ---
 
-## Implementation in RAGLab
-
-### Algorithm
+## Algorithm
 
 ```
 For each paragraph:
@@ -76,40 +67,14 @@ For each paragraph:
 
 For each sentence:
   4. If breakpoint: save current chunk, start new chunk with overlap
-  5. If (chunk + sentence) > MAX_TOKENS: save chunk, start new with overlap
+  5. If chunk exceeds safeguard limit: save chunk, start new with overlap
   6. Add sentence to current chunk
 ```
-
-### Key Design Decisions
-
-<div align="center">
-
-| Decision | Value | Rationale |
-|----------|-------|-----------|
-| **Threshold** | 0.4 (configurable) | Qu et al. shows 0.40-0.43 optimal for relevance |
-| **Percentile vs Absolute** | Absolute | Consistent behavior across documents |
-| **Still respect sections** | Yes | Section boundaries trump semantic similarity |
-| **Still enforce MAX_TOKENS** | Yes (800) | Embedding model sweet spot |
-| **Overlap** | 2 sentences | Same as section chunking for continuity |
-
-</div>
-
-### Differences from LangChain/LlamaIndex
-
-1. **Absolute threshold**: We use 0.4 (configurable), not 95th percentile
-2. **Token guarantee**: MAX_TOKENS enforced even if semantic suggests larger chunks
-3. **Section awareness**: Never cross section boundaries regardless of similarity
-4. **Threshold in folder name**: Output like `semantic_0.4/` enables A/B testing
 
 ### Similarity Computation
 
 ```python
-# src/rag_pipeline/chunking/semantic_chunker.py
-
-def compute_similarity_breakpoints(
-    sentences: List[str],
-    threshold: float = 0.4,
-) -> List[int]:
+def compute_similarity_breakpoints(sentences, threshold=0.4):
     """Find semantic breakpoints by embedding similarity."""
 
     # Embed all sentences (batch API call)
@@ -120,164 +85,125 @@ def compute_similarity_breakpoints(
     norms = np.linalg.norm(embeddings_array, axis=1, keepdims=True)
     normalized = embeddings_array / norms
 
-    # Compute adjacent similarities
+    # Compute adjacent similarities, mark breakpoints
     breakpoints = [0]  # Always start at 0
     for i in range(len(normalized) - 1):
         sim = np.dot(normalized[i], normalized[i + 1])
         if sim < threshold:
-            breakpoints.append(i + 1)  # Start new chunk
+            breakpoints.append(i + 1)  # Start new chunk here
 
     return breakpoints
 ```
 
-### Configurable Threshold
+---
+
+## Implementation Details
+
+### Design Decisions
+
+| Decision | Value | Rationale |
+|----------|-------|-----------|
+| **Threshold type** | Absolute (not percentile) | Qu et al. found more consistent across documents |
+| **Default threshold** | 0.4 | Starting point for tuning; adjust per corpus |
+| **Section boundaries** | Always respected | Never merge content across markdown sections |
+| **Token safeguard** | 8191 (embedding model limit) | Safety ceiling, not optimization target |
+| **Overlap** | 2 sentences | Continuity between chunks |
+
+### Differences from LangChain/LlamaIndex
+
+| Aspect | LangChain/LlamaIndex | RAGLab |
+|--------|---------------------|--------|
+| Threshold type | 95th percentile of distances | Absolute value |
+| Threshold meaning | Relative to document | Consistent across documents |
+| Section awareness | No | Yes (markdown headers) |
+| Configurability | Limited | Threshold in folder name for A/B testing |
+
+---
+
+## Configuration
+
+### Threshold Parameter
+
+The threshold controls where splits occur:
+- **Lower values (e.g., 0.3)**: Fewer splits, larger chunks, more context per chunk
+- **Higher values (e.g., 0.5)**: More splits, smaller chunks, tighter topic focus
 
 ```bash
 # Default threshold (0.4)
 python -m src.stages.run_stage_4_chunking --strategy semantic
 
-# Stricter threshold (more splits, smaller chunks)
-python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.5
-
-# Looser threshold (fewer splits, larger chunks)
+# Lower threshold (fewer splits, larger chunks)
 python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.3
+
+# Higher threshold (more splits, smaller chunks)
+python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.5
 ```
 
-Output folders are named by threshold (`semantic_0.4/`, `semantic_0.3/`) to enable comparing different configurations.
+Output folders are named by threshold (`semantic_0.4/`, `semantic_0.3/`) to enable comparing configurations.
+
+### Config Parameters
+
+```python
+# src/config.py
+
+# Similarity threshold for splitting (tune per corpus)
+SEMANTIC_SIMILARITY_THRESHOLD = 0.4
+
+# Safety limit (embedding model max input)
+EMBEDDING_MAX_INPUT_TOKENS = 8191
+
+# Sentence overlap between chunks
+OVERLAP_SENTENCES = 2
+```
 
 ---
 
-## Performance in This Pipeline
+## Cost
 
-### Key Finding: Best Precision, But Precision Doesn't Convert to Answers
+Semantic chunking requires embedding API calls during indexing:
 
-From comprehensive evaluation across 102 configurations:
+| Corpus Size | Estimated Cost | Processing Time |
+|-------------|----------------|-----------------|
+| ~50,000 sentences | ~$0.65 | ~30 minutes |
 
-<div align="center">
-
-| Metric | Semantic 0.3 | Semantic 0.75 | Contextual | Section |
-|--------|--------------|---------------|------------|---------|
-| Context Precision | **73.4%** (1st) | 71.2% | 71.7% | 69.1% |
-| Context Recall | 93.3% | 86.1% | **96.3%** | 92.9% |
-| Answer Correctness | 54.1% (4th) | 50.8% (5th) | **59.1%** | 57.6% |
-| Faithfulness | 90.2% | 85.4% | 93.9% | 95.0% |
-
-</div>
-
-### Why High Precision Doesn't Win
-
-The evaluation revealed a critical insight: **recall matters more than precision for answer quality**.
-
-```
-Semantic 0.3:   Precision 73.4% (best) → Answer Correctness 54.1% (4th)
-Contextual:     Precision 71.7% (2nd) → Answer Correctness 59.1% (best)
-```
-
-The generator LLM can filter irrelevant context (low precision is recoverable) but cannot invent missing information (low recall is unrecoverable). Semantic 0.3's stricter boundaries improve precision by removing borderline-relevant content, but this sometimes excludes information the answer needs.
-
-### Cross-Domain Degradation
-
-<div align="center">
-
-| Strategy | Single-Concept Recall | Cross-Domain Recall | Delta |
-|----------|----------------------|---------------------|-------|
-| Section | 92.9% | 76.3% | **-16.6%** (best) |
-| Contextual | 96.3% | 79.4% | -16.8% |
-| Semantic 0.3 | 93.3% | 69.3% | -24.0% |
-| Semantic 0.75 | 86.1% | 55.6% | **-30.5%** (worst) |
-
-</div>
-
-Semantic chunking shows **steeper recall degradation** on cross-domain queries. The embedding-based boundaries work well within topics but struggle when questions require connecting concepts across different semantic spaces.
-
-### Threshold Comparison
-
-<div align="center">
-
-| Threshold | Precision | Recall | Correctness | Use Case |
-|-----------|-----------|--------|-------------|----------|
-| **0.3** | 73.4% | 93.3% | 54.1% | Single-domain, precision focus |
-| **0.4** | ~72% | ~91% | ~53% | Balanced default |
-| **0.75** | 71.2% | 86.1% | 50.8% | Avoid - too fragmented |
-
-</div>
-
----
-
-## Cost Analysis
-
-Semantic chunking is **more expensive than section chunking** due to embedding API calls:
-
-For 19 books with ~50,000 sentences:
-- **Embedding calls**: ~50,000 sentences × $0.13/1M tokens = ~$0.65
-- **Processing time**: ~30 minutes (dominated by API rate limits)
-- **No LLM calls**: Unlike contextual chunking
-
-Compared to alternatives:
-
-<div align="center">
-
-| Strategy | Indexing Cost | Indexing Time |
-|----------|--------------|---------------|
-| Section | $0 | ~1 minute |
-| **Semantic** | ~$0.65 | ~30 minutes |
-| Contextual | ~$2-3 | ~2-3 hours |
-| RAPTOR | ~$0.40 | ~3 minutes/book |
-
-</div>
+Cost driver: One embedding call per sentence (batched). No LLM calls.
 
 ---
 
 ## When to Use
 
-<div align="center">
+**Consider semantic chunking when:**
+- Topic coherence matters more than consistent chunk sizes
+- Your corpus has clear topic transitions within sections
+- You can afford embedding costs during indexing
 
-| Scenario | Recommendation |
-|----------|----------------|
-| **Single-domain corpus** | Good choice - high precision within topic |
-| Precision is critical | Best precision (73.4%) of all strategies |
-| Fast A/B testing | Threshold parameter enables quick experiments |
-| Cost-sensitive (vs Contextual) | No LLM calls, just embeddings |
-| **Avoid when** | Cross-domain queries, answer correctness priority |
-
-</div>
-
-### Threshold Guidelines
-
-<div align="center">
-
-| Threshold | When to Use |
-|-----------|-------------|
-| **0.3** | Large context is acceptable; maximize topic coherence |
-| **0.4** | Balanced default; recommended starting point |
-| **0.5** | Topic-focused chunks; some context loss acceptable |
-| **0.75+** | Not recommended - creates fragmented chunks |
-
-</div>
+**Consider alternatives when:**
+- Computational cost is a concern (use section chunking)
+- You need LLM-enhanced context (use contextual chunking)
 
 ---
 
-## Running Semantic Chunking
+## Running the Pipeline
 
 ```bash
-# Default threshold (0.4)
-python -m src.stages.run_stage_4_chunking --strategy semantic
+# 1. Chunk with semantic strategy
+python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4
 
-# Custom threshold
-python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.3
-
-# Then embed and upload
+# 2. Generate embeddings
 python -m src.stages.run_stage_5_embedding --strategy semantic_0.4
+
+# 3. Upload to Weaviate
 python -m src.stages.run_stage_6_weaviate --strategy semantic_0.4
 ```
 
 ---
 
+## References
+
+- Qu et al. (2024). [Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070). arXiv:2410.13070
+
+---
+
 ## Navigation
 
-**Next:** [Contextual Chunking](contextual-chunking.md) — Adds LLM context to chunks
-
-**Related:**
-- [Section Chunking](section-chunking.md) — Simpler baseline without embeddings
-- [RAPTOR](raptor.md) — Hierarchical approach for multi-level abstraction
-- [Chunking Overview](README.md) — Strategy comparison
+[← Section Chunking](section-chunking.md) | [Contextual Chunking →](contextual-chunking.md) | [Chunking Overview](README.md)
