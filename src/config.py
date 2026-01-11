@@ -479,18 +479,18 @@ DEFAULT_CHUNKING_STRATEGY = "section"
 # Lower = fewer splits (larger chunks), Higher = more splits (smaller chunks)
 #
 # References:
-# - arXiv:2410.13070 (Oct 2024): Tested absolute thresholds [0.1-0.5], found
-#   absolute thresholds more consistent than percentile-based across corpus sizes
+# - arXiv:2410.13070 (Qu et al., 2024): Tested absolute thresholds [0.1-0.5],
+#   found absolute thresholds more consistent than percentile-based, but
+#   no universal best value - requires dataset-specific tuning
 # - LlamaIndex/LangChain: Use 95th percentile of cosine distances (Kamradt method)
-# - Chroma Research: Excerpt relevance filtering at 0.40-0.43 cosine similarity
 #
-# Tuning notes:
-# - 0.75: Too aggressive (small chunks, fragmented topics)
+# Tuning notes (from RAGLab evaluation):
+# - 0.75: Too aggressive (small chunks, worst recall in evaluation)
 # - 0.5: Conservative, major topic shifts only
-# - 0.4: Recommended default (aligns with Chroma 0.40-0.43 range)
-# - 0.3: Test value for maximum context grouping
+# - 0.4: Default starting point for tuning
+# - 0.3: Best precision in evaluation, larger chunks
 # Note: EMBEDDING_MAX_INPUT_TOKENS (8191) is safeguard only; semantic boundaries drive chunking
-SEMANTIC_SIMILARITY_THRESHOLD = 0.4  # Default; test 0.3 for larger groups
+SEMANTIC_SIMILARITY_THRESHOLD = 0.4  # Starting point; tune per corpus
 
 # Contextual chunking parameters (Anthropic-style)
 # Model for generating contextual snippets

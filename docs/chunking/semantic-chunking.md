@@ -84,9 +84,11 @@ Semantic chunking has been explored through several approaches:
 
 The Qu et al. paper (arXiv:2410.13070) tested absolute thresholds from 0.1-0.5 and found:
 - **Absolute thresholds provide consistent behavior** across different document types
-- **0.40-0.43 range** works well for excerpt relevance filtering
+- **No universal best threshold** - requires dataset-specific tuning
 - Lower thresholds (0.3) create larger, more contextual chunks
-- Higher thresholds (0.75) create smaller, topic-focused chunks
+- Higher thresholds (0.5+) create smaller, topic-focused chunks
+
+> **Note:** The paper concludes that fixed-size chunking may be more reliable for practical RAG applications when computational costs are considered.
 
 ### The Trade-off
 
