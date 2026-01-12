@@ -8,7 +8,7 @@ uses embedding similarity to detect topic boundaries:
 
 1. Embed each sentence using the same model as Stage 5
 2. Compute cosine similarity between adjacent sentences
-3. Split when similarity drops below threshold (topic shift)
+3. Split when similarity drops below mean - (coefficient * std) (statistical outlier)
 4. Still respect section boundaries and token limits
 
 Research shows 8-12% improvement in retrieval precision for Q&A tasks when
@@ -16,7 +16,7 @@ using semantic boundaries vs fixed-size chunks.
 
 ## Library Usage
 
-- numpy: Cosine similarity computation
+- numpy: Cosine similarity computation, mean/std calculation
 - src.rag_pipeline.embedding.embedder: API embeddings (same as Stage 5)
 - Reuses section_chunker helpers (split_oversized_sentence, parse_section_name)
 
@@ -26,10 +26,10 @@ using semantic boundaries vs fixed-size chunks.
 2. For each paragraph:
    a. Embed all sentences (batch API call)
    b. Compute pairwise cosine similarity
-   c. Find breakpoints where similarity < threshold
+   c. Find breakpoints where similarity < mean - (coefficient * std)
 3. Build chunks respecting breakpoints and token limits
 4. Add 2-sentence overlap between chunks (same section only)
-5. Save to DIR_FINAL_CHUNKS/semantic/{book}.json
+5. Save to DIR_FINAL_CHUNKS/semantic_std{coefficient}/{book}.json
 """
 
 import json
@@ -45,7 +45,7 @@ from src.config import (
     OVERLAP_SENTENCES,
     CHUNK_ID_PREFIX,
     CHUNK_ID_SEPARATOR,
-    SEMANTIC_SIMILARITY_THRESHOLD,
+    SEMANTIC_STD_COEFFICIENT,
     get_semantic_folder_name,
 )
 from src.rag_pipeline.embedding.embedder import embed_texts
@@ -66,17 +66,19 @@ logger = setup_logging(__name__)
 
 def compute_similarity_breakpoints(
     sentences: list[str],
-    threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
+    std_coefficient: float = SEMANTIC_STD_COEFFICIENT,
 ) -> list[int]:
-    """Find semantic breakpoints by embedding similarity.
+    """Find semantic breakpoints by embedding similarity using standard deviation.
 
     Computes cosine similarity between adjacent sentences and identifies
-    indices where similarity drops below threshold, indicating topic shifts.
+    indices where similarity is statistically low (below mean - k*std),
+    indicating topic shifts.
 
     Args:
         sentences: List of sentence strings.
-        threshold: Cosine similarity threshold (0-1). Lower values mean
-            more splits. Default 0.75 works well for most content.
+        std_coefficient: Number of standard deviations below mean for breakpoint.
+            Higher values = fewer splits (only extreme drops trigger breakpoints).
+            Default is 3.0 (statistically significant drops only).
 
     Returns:
         List of indices where new chunks should start (0-indexed).
@@ -84,7 +86,7 @@ def compute_similarity_breakpoints(
 
     Example:
         >>> sentences = ["Intro.", "More intro.", "New topic!", "Continues."]
-        >>> # If similarity between "More intro." and "New topic!" < threshold
+        >>> # If similarity between "More intro." and "New topic!" < mean - 3*std
         >>> breakpoints = compute_similarity_breakpoints(sentences)
         >>> breakpoints  # [0, 2] - split before "New topic!"
     """
@@ -116,12 +118,18 @@ def compute_similarity_breakpoints(
         sim = np.dot(normalized[i], normalized[i + 1])
         similarities.append(float(sim))
 
-    # Find breakpoints where similarity drops below threshold
+    # Compute cutoff using standard deviation
+    similarities_array = np.array(similarities)
+    mean_sim = np.mean(similarities_array)
+    std_sim = np.std(similarities_array)
+    cutoff = mean_sim - (std_coefficient * std_sim)
+
+    # Find breakpoints where similarity drops below cutoff
     breakpoints = [0]  # Always start at 0
     for i, sim in enumerate(similarities):
-        if sim < threshold:
+        if sim < cutoff:
             breakpoints.append(i + 1)  # Start new chunk at next sentence
-            logger.debug(f"Semantic split at index {i+1}, similarity={sim:.3f}")
+            logger.debug(f"Semantic split at index {i+1}, similarity={sim:.3f} < cutoff={cutoff:.3f}")
 
     return breakpoints
 
@@ -136,7 +144,7 @@ def _create_chunk_dict(
     context: str,
     book_name: str,
     chunk_id: int,
-    similarity_threshold: float,
+    std_coefficient: float,
 ) -> dict:
     """Create standardized chunk dictionary with semantic strategy marker.
 
@@ -145,7 +153,7 @@ def _create_chunk_dict(
         context: Hierarchical context string (Book > Chapter > Section).
         book_name: Book identifier.
         chunk_id: Sequential chunk number.
-        similarity_threshold: Actual threshold used for this chunking run.
+        std_coefficient: Std coefficient used for this chunking run.
 
     Returns:
         Chunk dictionary with all required metadata fields.
@@ -157,7 +165,7 @@ def _create_chunk_dict(
         "section": parse_section_name(context),
         "text": text,
         "token_count": count_tokens(text),
-        "chunking_strategy": f"semantic_{similarity_threshold}",
+        "chunking_strategy": get_semantic_folder_name(std_coefficient),
     }
 
 
@@ -166,7 +174,7 @@ def create_semantic_chunks(
     book_name: str,
     max_tokens: int = EMBEDDING_MAX_INPUT_TOKENS,
     overlap_sentences: int = OVERLAP_SENTENCES,
-    similarity_threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
+    std_coefficient: float = SEMANTIC_STD_COEFFICIENT,
 ) -> list[dict]:
     """Create chunks using semantic similarity breakpoints.
 
@@ -177,7 +185,7 @@ def create_semantic_chunks(
     4. Add sentence overlap between chunks (same section only)
 
     The max_tokens parameter is a safeguard against embedding model limits,
-    not an optimization target. Semantic boundaries (similarity < threshold)
+    not an optimization target. Semantic boundaries (similarity < mean - k*std)
     are the primary split mechanism.
 
     Args:
@@ -185,7 +193,7 @@ def create_semantic_chunks(
         book_name: Book identifier.
         max_tokens: Safeguard limit for embedding model (default: 8191).
         overlap_sentences: Number of sentences to overlap between chunks.
-        similarity_threshold: Cosine similarity threshold for splitting.
+        std_coefficient: Standard deviation coefficient for breakpoint detection.
 
     Returns:
         List of chunk dicts ready for embedding.
@@ -209,7 +217,7 @@ def create_semantic_chunks(
                 context=current_context,
                 book_name=book_name,
                 chunk_id=chunk_id,
-                similarity_threshold=similarity_threshold,
+                std_coefficient=std_coefficient,
             ))
             chunk_id += 1
 
@@ -245,7 +253,7 @@ def create_semantic_chunks(
             overlap_buffer.clear()
 
         # Find semantic breakpoints within this paragraph
-        breakpoints = compute_similarity_breakpoints(sentences, similarity_threshold)
+        breakpoints = compute_similarity_breakpoints(sentences, std_coefficient)
 
         # Process sentences using breakpoints as hints
         for i, sentence in enumerate(sentences):
@@ -313,14 +321,14 @@ def create_semantic_chunks(
 
 def process_single_file(
     file_path: Path,
-    similarity_threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
+    std_coefficient: float = SEMANTIC_STD_COEFFICIENT,
     overwrite_context: OverwriteContext = None,
 ) -> tuple[str, int, bool]:
     """Process a single JSON file with semantic chunking.
 
     Args:
         file_path: Path to input JSON file from Stage 3.
-        similarity_threshold: Cosine similarity threshold for detecting topic shifts.
+        std_coefficient: Standard deviation coefficient for breakpoint detection.
         overwrite_context: Context for handling existing file overwrites.
 
     Returns:
@@ -329,8 +337,8 @@ def process_single_file(
     """
     book_name = file_path.stem
 
-    # Determine output path using threshold-based folder name
-    folder_name = get_semantic_folder_name(similarity_threshold)
+    # Determine output path using coefficient-based folder name
+    folder_name = get_semantic_folder_name(std_coefficient)
     output_dir = Path(DIR_FINAL_CHUNKS) / folder_name
     output_path = output_dir / f"{book_name}.json"
 
@@ -347,10 +355,10 @@ def process_single_file(
     logger.info(f"Processing {book_name} ({len(paragraphs)} paragraphs)")
 
     chunks = create_semantic_chunks(
-        paragraphs, book_name, similarity_threshold=similarity_threshold
+        paragraphs, book_name, std_coefficient=std_coefficient
     )
 
-    # Save to threshold-based subdirectory (e.g., semantic_0.5/)
+    # Save to coefficient-based subdirectory (e.g., semantic_std3/)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with output_path.open("w", encoding="utf-8") as f:
@@ -360,7 +368,7 @@ def process_single_file(
 
 
 def run_semantic_chunking(
-    similarity_threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
+    std_coefficient: float = SEMANTIC_STD_COEFFICIENT,
     overwrite_context: OverwriteContext = None,
 ) -> dict[str, int]:
     """Process all files with semantic chunking.
@@ -369,8 +377,8 @@ def run_semantic_chunking(
     from Stage 3 output and creates semantically-coherent chunks.
 
     Args:
-        similarity_threshold: Cosine similarity threshold (0.0-1.0) for detecting
-            topic shifts. Lower = fewer splits (larger chunks).
+        std_coefficient: Standard deviation coefficient for breakpoint detection.
+            Higher = fewer splits (only extreme drops). Default is 3.0.
         overwrite_context: Context for handling existing file overwrites.
 
     Returns:
@@ -383,17 +391,17 @@ def run_semantic_chunking(
     results = {}
     skipped_count = 0
 
-    folder_name = get_semantic_folder_name(similarity_threshold)
+    folder_name = get_semantic_folder_name(std_coefficient)
     logger.info(f"Starting semantic chunking...")
     logger.info(f"Processing {len(input_files)} files")
     logger.info(f"Output folder: {folder_name}/")
-    logger.info(f"Similarity threshold: {similarity_threshold}")
+    logger.info(f"Std coefficient: {std_coefficient}")
     logger.info(f"Overlap sentences: {OVERLAP_SENTENCES}")
     logger.info(f"Token safeguard: {EMBEDDING_MAX_INPUT_TOKENS} (embedding model limit)")
 
     for file_path in input_files:
         book_name, chunk_count, was_processed = process_single_file(
-            file_path, similarity_threshold, overwrite_context
+            file_path, std_coefficient, overwrite_context
         )
         if was_processed:
             results[book_name] = chunk_count

@@ -4,28 +4,7 @@
 
 Splits text at semantic boundaries detected by embedding similarity, creating chunks that preserve topic coherence rather than splitting mid-argument.
 
-**Type:** Index-time chunking | **LLM Calls:** 0 | **Embedding Calls:** 1 per sentence
 
----
-
-## The Problem
-
-Fixed-size chunking splits at arbitrary token boundaries, often fragmenting semantically related content:
-
-```
-Fixed-size split (token boundary):
-Chunk 1: "...dopamine regulates reward. The mesolimbic pathway extends from"
-Chunk 2: "the VTA to the nucleus accumbens, where dopamine release signals..."
-
-Problem: Splits a complete thought about the dopamine pathway.
-
-Semantic split (topic boundary):
-Chunk 1: "...dopamine regulates reward. The mesolimbic pathway extends from
-          the VTA to the nucleus accumbens, where dopamine release signals..."
-Chunk 2: "Serotonin, in contrast, modulates mood through different mechanisms..."
-
-Better: Complete dopamine discussion, then serotonin topic.
-```
 
 ---
 
@@ -110,19 +89,20 @@ LLM extracts self-contained semantic propositions directly from text.
 For each paragraph:
   1. Embed all sentences (batch API call)
   2. Compute cosine similarity between adjacent sentences
-  3. Mark breakpoints where similarity < THRESHOLD
+  3. Compute mean and std of similarities
+  4. Mark breakpoints where similarity < mean - (coefficient * std)
 
 For each sentence:
-  4. If breakpoint: save current chunk, start new chunk with overlap
-  5. If chunk exceeds safeguard limit: save chunk, start new with overlap
-  6. Add sentence to current chunk
+  5. If breakpoint: save current chunk, start new chunk with overlap
+  6. If chunk exceeds safeguard limit: save chunk, start new with overlap
+  7. Add sentence to current chunk
 ```
 
 ### Similarity Computation
 
 ```python
-def compute_similarity_breakpoints(sentences, threshold=0.4):
-    """Find semantic breakpoints by embedding similarity."""
+def compute_similarity_breakpoints(sentences, std_coefficient=3.0):
+    """Find semantic breakpoints by embedding similarity using std deviation."""
 
     # Embed all sentences (batch API call)
     embeddings = embed_texts(sentences)
@@ -132,11 +112,21 @@ def compute_similarity_breakpoints(sentences, threshold=0.4):
     norms = np.linalg.norm(embeddings_array, axis=1, keepdims=True)
     normalized = embeddings_array / norms
 
-    # Compute adjacent similarities, mark breakpoints
-    breakpoints = [0]  # Always start at 0
+    # Compute adjacent similarities
+    similarities = []
     for i in range(len(normalized) - 1):
         sim = np.dot(normalized[i], normalized[i + 1])
-        if sim < threshold:
+        similarities.append(sim)
+
+    # Compute cutoff using standard deviation
+    mean_sim = np.mean(similarities)
+    std_sim = np.std(similarities)
+    cutoff = mean_sim - (std_coefficient * std_sim)
+
+    # Mark breakpoints where similarity is statistically low
+    breakpoints = [0]  # Always start at 0
+    for i, sim in enumerate(similarities):
+        if sim < cutoff:
             breakpoints.append(i + 1)  # Start new chunk here
 
     return breakpoints
@@ -150,8 +140,8 @@ def compute_similarity_breakpoints(sentences, threshold=0.4):
 
 | Decision | Value | Rationale |
 |----------|-------|-----------|
-| **Threshold type** | Absolute (not percentile) | Qu et al. found more consistent across documents |
-| **Default threshold** | 0.4 | Starting point for tuning; adjust per corpus |
+| **Breakpoint detection** | Standard deviation-based | Statistically identifies outlier similarity drops |
+| **Default std coefficient** | 3.0 | Conservative, only significant topic shifts trigger breakpoints |
 | **Section boundaries** | Always respected | Never merge content across markdown sections |
 | **Token safeguard** | 8191 (embedding model limit) | Safety ceiling, not optimization target |
 | **Overlap** | 2 sentences | Continuity between chunks |
@@ -160,41 +150,41 @@ def compute_similarity_breakpoints(sentences, threshold=0.4):
 
 | Aspect | LangChain/LlamaIndex | RAGLab |
 |--------|---------------------|--------|
-| Threshold type | 95th percentile of distances | Absolute value |
-| Threshold meaning | Relative to document | Consistent across documents |
+| Breakpoint detection | Fixed threshold or percentile | Standard deviation-based (mean - k*std) |
+| Threshold meaning | Absolute or relative to document | Statistical outlier detection |
 | Section awareness | No | Yes (markdown headers) |
-| Configurability | Limited | Threshold in folder name for A/B testing |
+| Configurability | Limited | Std coefficient in folder name for A/B testing |
 
 ---
 
 ## Configuration
 
-### Threshold Parameter
+### Std Coefficient Parameter
 
-The threshold controls where splits occur:
-- **Lower values (e.g., 0.3)**: Fewer splits, larger chunks, more context per chunk
-- **Higher values (e.g., 0.5)**: More splits, smaller chunks, tighter topic focus
+The std coefficient controls where splits occur using statistical outlier detection:
+- **Higher values (e.g., 3.0)**: Fewer splits, larger chunks (only extreme drops trigger breakpoints)
+- **Lower values (e.g., 2.0)**: More splits, smaller chunks (more sensitive to similarity drops)
 
 ```bash
-# Default threshold (0.4)
+# Default coefficient (3.0)
 python -m src.stages.run_stage_4_chunking --strategy semantic
 
-# Lower threshold (fewer splits, larger chunks)
-python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.3
+# Lower coefficient (more splits, smaller chunks)
+python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0
 
-# Higher threshold (more splits, smaller chunks)
-python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.5
+# Higher coefficient (fewer splits, larger chunks)
+python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 4.0
 ```
 
-Output folders are named by threshold (`semantic_0.4/`, `semantic_0.3/`) to enable comparing configurations.
+Output folders are named by coefficient (`semantic_std3/`, `semantic_std2/`) to enable comparing configurations.
 
 ### Config Parameters
 
 ```python
 # src/config.py
 
-# Similarity threshold for splitting (tune per corpus)
-SEMANTIC_SIMILARITY_THRESHOLD = 0.4
+# Standard deviation coefficient for breakpoint detection
+SEMANTIC_STD_COEFFICIENT = 3.0
 
 # Safety limit (embedding model max input)
 EMBEDDING_MAX_INPUT_TOKENS = 8191
@@ -203,44 +193,19 @@ EMBEDDING_MAX_INPUT_TOKENS = 8191
 OVERLAP_SENTENCES = 2
 ```
 
----
 
-## Cost
-
-Semantic chunking requires embedding API calls during indexing:
-
-| Corpus Size | Estimated Cost | Processing Time |
-|-------------|----------------|-----------------|
-| ~50,000 sentences | ~$0.65 | ~30 minutes |
-
-Cost driver: One embedding call per sentence (batched). No LLM calls.
-
----
-
-## When to Use
-
-**Consider semantic chunking when:**
-- Topic coherence matters more than consistent chunk sizes
-- Your corpus has clear topic transitions within sections
-- You can afford embedding costs during indexing
-
-**Consider alternatives when:**
-- Computational cost is a concern (use section chunking)
-- You need LLM-enhanced context (use contextual chunking)
-
----
 
 ## Running the Pipeline
 
 ```bash
 # 1. Chunk with semantic strategy
-python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4
+python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 3.0
 
 # 2. Generate embeddings
-python -m src.stages.run_stage_5_embedding --strategy semantic_0.4
+python -m src.stages.run_stage_5_embedding --strategy semantic --std-coefficient 3.0
 
 # 3. Upload to Weaviate
-python -m src.stages.run_stage_6_weaviate --strategy semantic_0.4
+python -m src.stages.run_stage_6_weaviate --strategy semantic --std-coefficient 3.0
 ```
 
 ---

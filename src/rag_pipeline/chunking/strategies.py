@@ -32,7 +32,7 @@ from typing import Any, Callable, Optional
 from src.config import (
     MAX_CHUNK_TOKENS,
     OVERLAP_SENTENCES,
-    SEMANTIC_SIMILARITY_THRESHOLD,
+    SEMANTIC_STD_COEFFICIENT,
     EMBEDDING_MAX_INPUT_TOKENS,
     CONTEXTUAL_MODEL,
     RAPTOR_MAX_LEVELS,
@@ -83,7 +83,7 @@ def section_strategy(
 
 
 def semantic_strategy(
-    similarity_threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
+    std_coefficient: float = SEMANTIC_STD_COEFFICIENT,
     overwrite_context: Optional[OverwriteContext] = None,
 ) -> dict[str, int]:
     """Semantic similarity-based chunking.
@@ -91,7 +91,7 @@ def semantic_strategy(
     Algorithm:
     - Embed sentences using text-embedding-3-large API
     - Compute cosine similarity between adjacent sentences
-    - Split where similarity drops below threshold (topic shift)
+    - Split where similarity < mean - (coefficient * std) (statistical outliers)
     - Still respects section boundaries and token limits
     - Uses same overlap mechanism as section strategy
 
@@ -101,8 +101,8 @@ def semantic_strategy(
     Note: Requires API calls during chunking (costs apply).
 
     Args:
-        similarity_threshold: Cosine similarity threshold (0.0-1.0) for detecting
-            topic shifts. Lower = fewer splits (larger chunks). Default from config.
+        std_coefficient: Standard deviation coefficient for breakpoint detection.
+            Higher = fewer splits (only extreme drops). Default is 3.0.
         overwrite_context: Context for handling existing file overwrites.
 
     Returns:
@@ -111,9 +111,9 @@ def semantic_strategy(
     from src.rag_pipeline.chunking.semantic_chunker import run_semantic_chunking
 
     logger.info(f"[semantic] Using embedding similarity chunking")
-    logger.info(f"[semantic] Threshold: {similarity_threshold}, safeguard: {EMBEDDING_MAX_INPUT_TOKENS} tokens")
+    logger.info(f"[semantic] Std coefficient: {std_coefficient}, safeguard: {EMBEDDING_MAX_INPUT_TOKENS} tokens")
     return run_semantic_chunking(
-        similarity_threshold=similarity_threshold,
+        std_coefficient=std_coefficient,
         overwrite_context=overwrite_context,
     )
 
@@ -219,7 +219,7 @@ def get_strategy(strategy_id: str, **kwargs: Any) -> ChunkingStrategyFunction:
         strategy_id: One of "section", "semantic", "contextual", "raptor".
         **kwargs: Optional parameters to pass to the strategy function.
             Common: overwrite_context (OverwriteContext).
-            For semantic strategy: similarity_threshold (float).
+            For semantic strategy: std_coefficient (float).
             For contextual strategy: model (str, OpenRouter model ID).
             For raptor strategy: max_levels (int), min_cluster_size (int),
                 summary_model (str).
@@ -231,7 +231,7 @@ def get_strategy(strategy_id: str, **kwargs: Any) -> ChunkingStrategyFunction:
         ValueError: If strategy_id is not registered.
 
     Example:
-        >>> strategy_fn = get_strategy("semantic", similarity_threshold=0.6)
+        >>> strategy_fn = get_strategy("semantic", std_coefficient=2.0)
         >>> stats = strategy_fn()
         >>> print(stats)  # {"book1": 45, "book2": 67}
         >>> strategy_fn = get_strategy("contextual", model="anthropic/claude-3-haiku")

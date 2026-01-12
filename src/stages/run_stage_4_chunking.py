@@ -9,7 +9,7 @@ Supports multiple chunking strategies:
 Usage:
     python -m src.stages.run_stage_4_chunking                    # Default: section
     python -m src.stages.run_stage_4_chunking --strategy semantic  # Semantic chunking
-    python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.6
+    python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0
 """
 
 import argparse
@@ -19,7 +19,7 @@ from src.config import (
     DIR_NLP_CHUNKS,
     DIR_FINAL_CHUNKS,
     DEFAULT_CHUNKING_STRATEGY,
-    SEMANTIC_SIMILARITY_THRESHOLD,
+    SEMANTIC_STD_COEFFICIENT,
     get_semantic_folder_name,
 )
 from src.shared import (
@@ -47,13 +47,13 @@ def main():
         help=f"Chunking strategy (default: {DEFAULT_CHUNKING_STRATEGY})",
     )
     parser.add_argument(
-        "--threshold",
+        "--std-coefficient",
         type=float,
         default=None,
         help=(
-            f"Semantic similarity threshold (0.0-1.0). "
-            f"Lower = fewer splits (larger chunks). "
-            f"Only used with semantic strategy. (default: {SEMANTIC_SIMILARITY_THRESHOLD})"
+            f"Standard deviation coefficient for semantic breakpoints. "
+            f"Higher = fewer splits (only extreme drops). "
+            f"Only used with semantic strategy. (default: {SEMANTIC_STD_COEFFICIENT})"
         ),
     )
     parser.add_argument(
@@ -69,11 +69,11 @@ def main():
 
     # Build strategy kwargs
     strategy_kwargs = {"overwrite_context": overwrite_context}
-    if args.threshold is not None:
+    if args.std_coefficient is not None:
         if args.strategy != "semantic":
-            logger.warning("--threshold is only used with semantic strategy, ignoring")
+            logger.warning("--std-coefficient is only used with semantic strategy, ignoring")
         else:
-            strategy_kwargs["similarity_threshold"] = args.threshold
+            strategy_kwargs["std_coefficient"] = args.std_coefficient
 
     logger.info(f"Starting Stage 4: Chunking (strategy: {args.strategy})")
 
@@ -89,10 +89,10 @@ def main():
     strategy_fn = get_strategy(args.strategy, **strategy_kwargs)
     stats = strategy_fn()
 
-    # Determine output directory (semantic uses threshold-based folder name)
+    # Determine output directory (semantic uses coefficient-based folder name)
     if args.strategy == "semantic":
-        threshold = args.threshold if args.threshold is not None else SEMANTIC_SIMILARITY_THRESHOLD
-        strategy_dir = DIR_FINAL_CHUNKS / get_semantic_folder_name(threshold)
+        coef = args.std_coefficient if args.std_coefficient is not None else SEMANTIC_STD_COEFFICIENT
+        strategy_dir = DIR_FINAL_CHUNKS / get_semantic_folder_name(coef)
     else:
         strategy_dir = DIR_FINAL_CHUNKS / args.strategy
     strategy_files = list(strategy_dir.glob("*.json")) if strategy_dir.exists() else []

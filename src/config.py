@@ -475,22 +475,18 @@ AVAILABLE_CHUNKING_STRATEGIES = [
 DEFAULT_CHUNKING_STRATEGY = "section"
 
 # Semantic chunking parameters
-# Threshold for cosine similarity between adjacent sentences
-# Lower = fewer splits (larger chunks), Higher = more splits (smaller chunks)
+# Standard deviation coefficient for detecting topic shifts
+# Breakpoint occurs where: similarity < mean - (coefficient * std)
 #
-# References:
-# - arXiv:2410.13070 (Qu et al., 2024): Tested absolute thresholds [0.1-0.5],
-#   found absolute thresholds more consistent than percentile-based, but
-#   no universal best value - requires dataset-specific tuning
-# - LlamaIndex/LangChain: Use 95th percentile of cosine distances (Kamradt method)
+# Higher values = fewer splits (only extreme outliers trigger breakpoints)
+# Lower values = more splits (more sensitive to similarity drops)
 #
-# Tuning notes (from RAGLab evaluation):
-# - 0.75: Too aggressive (small chunks, worst recall in evaluation)
-# - 0.5: Conservative, major topic shifts only
-# - 0.4: Default starting point for tuning
-# - 0.3: Best precision in evaluation, larger chunks
+# Tuning notes:
+# - 3.0: Default, conservative (statistically significant drops only)
+# - 2.0: More sensitive, smaller chunks
+# - 1.5: Aggressive splitting
 # Note: EMBEDDING_MAX_INPUT_TOKENS (8191) is safeguard only; semantic boundaries drive chunking
-SEMANTIC_SIMILARITY_THRESHOLD = 0.4  # Starting point; tune per corpus
+SEMANTIC_STD_COEFFICIENT = 3.0  # Standard deviations below mean for breakpoint
 
 # Contextual chunking parameters (Anthropic-style)
 # Model for generating contextual snippets
@@ -506,27 +502,27 @@ CONTEXTUAL_MAX_SNIPPET_TOKENS = 100
 # CONTEXTUAL_PROMPT is imported from src/prompts.py (see bottom of file)
 
 
-def get_semantic_folder_name(threshold: float = SEMANTIC_SIMILARITY_THRESHOLD) -> str:
-    """Generate semantic chunking folder name with threshold.
+def get_semantic_folder_name(std_coefficient: float = SEMANTIC_STD_COEFFICIENT) -> str:
+    """Generate semantic chunking folder name with std coefficient.
 
-    Creates folder names like 'semantic_0.5' or 'semantic_0.75' to distinguish
-    outputs from different threshold configurations.
+    Creates folder names like 'semantic_std3' or 'semantic_std2.5' to distinguish
+    outputs from different coefficient configurations.
 
     Args:
-        threshold: Similarity threshold (0.0-1.0).
+        std_coefficient: Standard deviation coefficient for breakpoint detection.
 
     Returns:
-        Folder name in format 'semantic_{threshold}'.
+        Folder name in format 'semantic_std{coefficient}'.
 
     Example:
-        >>> get_semantic_folder_name(0.5)
-        'semantic_0.5'
-        >>> get_semantic_folder_name(0.75)
-        'semantic_0.75'
+        >>> get_semantic_folder_name(3.0)
+        'semantic_std3'
+        >>> get_semantic_folder_name(2.5)
+        'semantic_std2.5'
     """
-    # Format threshold: remove trailing zeros (0.50 -> 0.5, 0.75 -> 0.75)
-    threshold_str = f"{threshold:.2f}".rstrip("0").rstrip(".")
-    return f"semantic_{threshold_str}"
+    # Format coefficient: remove trailing zeros (3.00 -> 3, 2.50 -> 2.5)
+    coef_str = f"{std_coefficient:.2f}".rstrip("0").rstrip(".")
+    return f"semantic_std{coef_str}"
 
 
 # ============================================================================

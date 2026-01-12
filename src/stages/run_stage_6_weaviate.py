@@ -27,7 +27,7 @@ from src.config import (
     WEAVIATE_HOST,
     WEAVIATE_HTTP_PORT,
     DEFAULT_CHUNKING_STRATEGY,
-    SEMANTIC_SIMILARITY_THRESHOLD,
+    SEMANTIC_STD_COEFFICIENT,
 )
 
 from src.shared.files import setup_logging
@@ -113,20 +113,20 @@ def main() -> None:
         help=f"Chunking strategy for collection naming (default: {DEFAULT_CHUNKING_STRATEGY})",
     )
     parser.add_argument(
-        "--threshold",
+        "--std-coefficient",
         type=float,
         default=None,
         help=(
-            f"Semantic similarity threshold (for finding correct embedding folder). "
-            f"Only used with semantic strategy. (default: {SEMANTIC_SIMILARITY_THRESHOLD})"
+            f"Std coefficient (for finding correct embedding folder). "
+            f"Only used with semantic strategy. (default: {SEMANTIC_STD_COEFFICIENT})"
         ),
     )
     args = parser.parse_args()
 
-    # Determine strategy key for paths (semantic uses threshold-based naming)
+    # Determine strategy key for paths (semantic uses coefficient-based naming)
     if args.strategy == "semantic":
-        threshold = args.threshold if args.threshold is not None else SEMANTIC_SIMILARITY_THRESHOLD
-        strategy_key = get_semantic_folder_name(threshold)
+        coef = args.std_coefficient if args.std_coefficient is not None else SEMANTIC_STD_COEFFICIENT
+        strategy_key = get_semantic_folder_name(coef)
     else:
         strategy_key = args.strategy
 

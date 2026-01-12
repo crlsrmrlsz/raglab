@@ -25,7 +25,7 @@ from src.config import (
     DIR_FINAL_CHUNKS,
     EMBEDDING_MODEL,
     DEFAULT_CHUNKING_STRATEGY,
-    SEMANTIC_SIMILARITY_THRESHOLD,
+    SEMANTIC_STD_COEFFICIENT,
     get_semantic_folder_name,
     get_embedding_folder_path,
 )
@@ -125,12 +125,12 @@ def main() -> None:
         help=f"Chunking strategy to embed (default: {DEFAULT_CHUNKING_STRATEGY})",
     )
     parser.add_argument(
-        "--threshold",
+        "--std-coefficient",
         type=float,
         default=None,
         help=(
-            f"Semantic similarity threshold (for finding correct input folder). "
-            f"Only used with semantic strategy. (default: {SEMANTIC_SIMILARITY_THRESHOLD})"
+            f"Std coefficient (for finding correct input folder). "
+            f"Only used with semantic strategy. (default: {SEMANTIC_STD_COEFFICIENT})"
         ),
     )
     parser.add_argument(
@@ -144,10 +144,10 @@ def main() -> None:
 
     overwrite_context = OverwriteContext(parse_overwrite_arg(args.overwrite))
 
-    # Determine strategy key for paths (semantic uses threshold-based naming)
+    # Determine strategy key for paths (semantic uses coefficient-based naming)
     if args.strategy == "semantic":
-        threshold = args.threshold if args.threshold is not None else SEMANTIC_SIMILARITY_THRESHOLD
-        strategy_key = get_semantic_folder_name(threshold)
+        coef = args.std_coefficient if args.std_coefficient is not None else SEMANTIC_STD_COEFFICIENT
+        strategy_key = get_semantic_folder_name(coef)
     else:
         strategy_key = args.strategy
 
