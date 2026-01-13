@@ -94,6 +94,25 @@ Output: `data/processed/05_final_chunks/semantic_std{coefficient}/`
 
 ---
 
+## Corpus Analysis
+
+Analysis of the semantic chunking output (std=3.0) reveals how the conservative coefficient affects chunk distribution:
+
+<div align="center">
+
+| Corpus | Avg Chunk Tokens | Median | Single-Chunk Sections |
+|--------|------------------|--------|----------------------|
+| **Neuroscience** | 652 | 475 | 3,296 / 3,321 (99%) |
+| **Philosophy** | 1,324 | 382 | 532 / 545 (98%) |
+
+</div>
+
+The high single-chunk percentage (98-99%) reflects the conservative std=3.0 coefficient—only statistically extreme similarity drops trigger splits. Philosophy's lower median (382) versus high average (1,324) indicates skewed distribution: many short aphoristic sections alongside lengthy essays that remain unsplit.
+
+Compared to [section chunking](section-chunking.md) (71% and 64% single-chunk sections), semantic chunking preserves more content within single chunks by only splitting at major topic shifts. A lower coefficient (e.g., std=2.0) would increase sensitivity and reduce chunk sizes.
+
+---
+
 ## Design Decisions
 
 | Decision | Value | Rationale |
