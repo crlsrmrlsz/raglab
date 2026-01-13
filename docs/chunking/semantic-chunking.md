@@ -124,4 +124,24 @@ Compared to [section chunking](section-chunking.md) (71% and 64% single-chunk se
 
 ---
 
+## Empirical Analysis
+
+Analysis of the semantic chunking output (std=3.0) reveals how the conservative coefficient affects chunk distribution:
+
+| Corpus | Avg Chunk Tokens | Median | Single-Chunk Sections |
+|--------|------------------|--------|----------------------|
+| Neuroscience | 651 | 475 | 3,185 / 3,219 (98%) |
+| Philosophy | 1,323 | 381 | 532 / 545 (97%) |
+
+Analysis of the semantic chunking output (std=2.0) shows the effect of a more sensitive coefficient:
+
+| Corpus | Avg Chunk Tokens | Median | Single-Chunk Sections |
+|--------|------------------|--------|----------------------|
+| Neuroscience | 584 | 428 | 2,819 / 3,219 (87%) |
+| Philosophy | 1,044 | 471 | 455 / 545 (83%) |
+
+The std=2.0 coefficient produces smaller chunks (10-20% fewer tokens on average) and more multi-chunk sections, as it triggers splits on less extreme similarity drops.
+
+---
+
 [← Section Chunking](section-chunking.md) | [Contextual Chunking →](contextual-chunking.md) | [Chunking Overview](README.md)
