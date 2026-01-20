@@ -15,16 +15,18 @@ Research indicates 512-1024 tokens is optimal for technical/analytical content. 
 
 Analysis of this corpus:
 
+![Chunk Size Distribution](../../assets/section-chunking-distribution.png)
+
 <div align="center">
 
 | Corpus | Avg Section Tokens | Single-Chunk Sections |
 |--------|-------------------|----------------------|
-| **Neuroscience** | 666 | 2,372 / 3,321 (71%) |
-| **Philosophy** | 1,427 | 351 / 545 (64%) |
+| **Neuroscience** | 722 | 2,270 / 3,219 (71%) |
+| **Philosophy** | 1,549 | 351 / 545 (64%) |
 
 </div>
 
-Neuroscience sections average 666 tokens—below the limit, preserving most conceptual units intact. Philosophy varies widely: aphoristic works (Tao Te Ching: 159, Art of Living: 238) fit single chunks, while essay collections (Seneca: 2,127, Schopenhauer: 2,300+) require splitting.
+Neuroscience sections average 722 tokens—below the limit, preserving most conceptual units intact. Philosophy varies widely: aphoristic works (Tao Te Ching: 159, Art of Living: 238) fit single chunks, while essay collections (Seneca: 2,127, Schopenhauer: 2,300+) require splitting.
 
 The 800-token limit balances these needs: within the research-backed 512-1024 optimal range, preserves paragraph unity (one idea per chunk), and keeps most neuroscience sections whole. For longer philosophy essays, 2-sentence overlap maintains continuity, though [Contextual Chunking](contextual-chunking.md) or [RAPTOR](raptor.md) may better handle extended arguments.
 
