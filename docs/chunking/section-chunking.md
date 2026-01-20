@@ -2,8 +2,33 @@
 
 [← Chunking Overview](README.md) | [Home](../../README.md)
 
-This is the baseline chunking strategy, leveraging the structure authors have already created. It operates on a key assumption: **each section contains a single coherent subject**. By respecting this natural boundary, the chunker splits documents into chunks with a maximum 800-token size while maintaining sentence overlap for context continuity.
+This is the baseline chunking strategy, splitting by token number but leveraging the structure authors have already created. It operates on a key assumption: **each section contains a single coherent subject**. By respecting this natural boundary, the chunker splits documents into chunks with a maximum 800-token size while maintaining sentence overlap for context continuity.
 
+The algorithm uses these parameters:
+
+- **Chunk size**:  800 tokens (max).  Upper limit balancing paragraph unity and retrieval performance
+- **Overlap**:  2 sentences. Handles "As mentioned above..." references with minimal redundancy (~50-100 tokens)
+
+### Chunk Size: Why 800-Token Limit?
+
+Research indicates 512-1024 tokens is optimal for technical/analytical content. [NVIDIA's benchmark](https://developer.nvidia.com/blog/finding-the-best-chunking-strategy-for-accurate-ai-responses/) found this range best for complex queries, while [academic studies](https://arxiv.org/html/2505.21700v2) show smaller chunks (64-128) suit factoid queries but larger chunks dramatically improve technical retrieval (TechQA: 4.8% → 71.5% accuracy from 64 to 1024 tokens).
+
+Analysis of this corpus:
+
+<div align="center">
+
+| Corpus | Avg Section Tokens | Single-Chunk Sections |
+|--------|-------------------|----------------------|
+| **Neuroscience** | 666 | 2,372 / 3,321 (71%) |
+| **Philosophy** | 1,427 | 351 / 545 (64%) |
+
+</div>
+
+Neuroscience sections average 666 tokens—below the limit, preserving most conceptual units intact. Philosophy varies widely: aphoristic works (Tao Te Ching: 159, Art of Living: 238) fit single chunks, while essay collections (Seneca: 2,127, Schopenhauer: 2,300+) require splitting.
+
+The 800-token limit balances these needs: within the research-backed 512-1024 optimal range, preserves paragraph unity (one idea per chunk), and keeps most neuroscience sections whole. For longer philosophy essays, 2-sentence overlap maintains continuity, though [Contextual Chunking](contextual-chunking.md) or [RAPTOR](raptor.md) may better handle extended arguments.
+
+**Future work:** per-content-type tuning (shorter for factoid references, longer for essays).
 
 ### Algorithm
 
@@ -27,35 +52,21 @@ For each document:
 ```
 
 
-### Key Design Decisions
 
-| Decision | Value | Rationale |
-|----------|-------|-----------|
-| **Chunk size** | 800 tokens (max) | Upper limit balancing paragraph unity and retrieval performance |
-| **Overlap** | 2 sentences | Handles "As mentioned above..." references with minimal redundancy (~50-100 tokens) |
-| **Section boundaries** | Hard break | Prevents mixing unrelated content; preserves author's semantic organization |
-| **Tokenizer** | tiktoken (text-embedding-3-large) | Exact token count matching embedding model |
+### Core Function
 
-### Chunk Size: 800-Token Limit
+```python
+# src/rag_pipeline/chunking/section_chunker.py
 
-Research shows optimal chunk size depends on content type and query complexity. [NVIDIA's chunking benchmark](https://developer.nvidia.com/blog/finding-the-best-chunking-strategy-for-accurate-ai-responses/) tested sizes from 128 to 2,048 tokens and found 512-1024 tokens optimal for complex analytical queries, while page-level chunking achieved the highest overall accuracy (0.648). [Academic research on long-document retrieval](https://arxiv.org/html/2505.21700v2) confirms this pattern: smaller chunks (64-128 tokens) work best for factoid queries with concise answers, but larger chunks (512-1024 tokens) significantly improve retrieval for technical content—TechQA accuracy jumped from 4.8% at 64 tokens to 71.5% at 1024 tokens. For content requiring broader contextual understanding like NarrativeQA, performance improved from 4.2% to 10.7% as chunk size increased from 64 to 1024 tokens.
+def create_chunks_from_paragraphs(
+    paragraphs: list[dict],
+    book_name: str,
+    max_tokens: int = MAX_CHUNK_TOKENS,  # from config.py (800)
+    overlap_sentences: int = OVERLAP_SENTENCES  # from config.py (2)
+) -> list[dict]:
+```
 
-Analysis of this corpus reveals distinct patterns between content types:
 
-<div align="center">
-
-| Corpus | Avg Section Tokens | Median | Single-Chunk Sections |
-|--------|-------------------|--------|----------------------|
-| **Neuroscience** | 666 | ~500-700 | 2,372 / 3,321 (71%) |
-| **Philosophy** | 1,427 | varies widely | 351 / 545 (64%) |
-
-</div> 
-
-Neuroscience textbooks have well-structured sections averaging 666 tokens—comfortably below the 800-token limit, meaning most conceptual units remain intact within single chunks. Philosophy texts show much higher variance, ranging from aphoristic works like Tao Te Ching (159 avg) and Art of Living (238 avg) that fit easily in single chunks, to essay collections like Seneca's Letters (2,127 avg) and Schopenhauer (2,300+ avg) that require multiple chunks per section.
-
-The 800-token limit represents a balanced estimate for this mixed corpus. The underlying assumption is that well-written paragraphs typically contain single, self-contained ideas—by preserving paragraph unity, each chunk is more likely to represent one coherent concept useful for answering queries. This limit falls within the 512-1024 range that the NVIDIA and academic studies cited above identify as optimal for technical and analytical content, while preserving most neuroscience textbook sections as complete units. For philosophy essays that exceed this limit, the 2-sentence overlap helps maintain some continuity, though advanced techniques like Contextual Chunking or RAPTOR may provide better results for such content. 
-
-**Future work** could investigate tuning chunk limits per content type: shorter limits for factoid-heavy reference works, longer for essay-style texts requiring extended context. Semantic chunking also enforces this 800-token maximum to prevent oversized segments regardless of similarity scores.
 
 <details>
 <summary><strong>Example Chunk</strong></summary>
@@ -75,21 +86,6 @@ The 800-token limit represents a balanced estimate for this mixed corpus. The un
 
 </small>
 </details>
-
-### Core Function
-
-```python
-# src/rag_pipeline/chunking/section_chunker.py
-
-def create_chunks_from_paragraphs(
-    paragraphs: list[dict],
-    book_name: str,
-    max_tokens: int = MAX_CHUNK_TOKENS,  # from config.py (800)
-    overlap_sentences: int = OVERLAP_SENTENCES  # from config.py (2)
-) -> list[dict]:
-```
-
-
 
 ## Navigation
 
