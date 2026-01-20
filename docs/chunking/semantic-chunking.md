@@ -6,12 +6,12 @@ Semantic chunking splits text at topic boundaries detected by embedding similari
 
 ## Semantic Chunking Approaches
 
-Research identifies two main approaches ([Qu et al. 2024](https://arxiv.org/abs/2410.13070)):
+[Qu et al. 2024](https://arxiv.org/abs/2410.13070) identifies two main approaches:
 
-- **Breakpoint-based** — Scans consecutive sentences and inserts splits where semantic distance exceeds a threshold. Preserves document order but makes locally greedy decisions using only two sentences at a time. *This is the approach implemented here.*
-- **Clustering-based** — Groups semantically similar sentences using clustering algorithms, potentially combining non-consecutive text. Captures global relationships but risks losing contextual information from sentence proximity ([S2 Chunking, 2025](https://arxiv.org/abs/2501.05485)).
+- **Breakpoint-based** — "Scans over the sequence of sentences and decides where to insert a breakpoint" when "semantic distance between two consecutive sentences exceeds a threshold, meaning a significant topic change." Preserves document order but is "locally greedy" since it examines only two adjacent sentences at each decision point.
+- **Clustering-based** — "Leverages clustering algorithms to group sentences together semantically, capturing global relationships and allowing for non-sequential sentence groupings." However, "risks losing contextual information hidden in the proximity of sentences."
 
-This implementation uses **breakpoint-based** chunking with standard deviation thresholds—see below.
+[LangChain](https://python.langchain.com/api_reference/experimental/text_splitter/langchain_experimental.text_splitter.SemanticChunker.html) and [LlamaIndex](https://developers.llamaindex.ai/python/examples/node_parsers/semantic_chunking/) both implement **breakpoint-based** chunking as their primary semantic chunking approach.
 
 ---
 
@@ -69,33 +69,6 @@ For each document:
 | `k = 2.0` | More sensitive: smaller chunks, more splits (95% CI) |
 | `k = 4.0` | Very conservative: larger chunks, fewer splits |
 
-### Core Implementation
-
-```python
-def compute_similarity_breakpoints(sentences, std_coefficient=3.0):
-    """Find semantic breakpoints using standard deviation."""
-
-    # Embed and normalize
-    embeddings = embed_texts(sentences)
-    normalized = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-
-    # Compute adjacent similarities
-    similarities = [np.dot(normalized[i], normalized[i + 1])
-                    for i in range(len(normalized) - 1)]
-
-    # Statistical cutoff
-    cutoff = np.mean(similarities) - (std_coefficient * np.std(similarities))
-
-    # Mark breakpoints
-    breakpoints = [0]
-    for i, sim in enumerate(similarities):
-        if sim < cutoff:
-            breakpoints.append(i + 1)
-
-    return breakpoints
-```
-
----
 
 ## Corpus Analysis
 
@@ -175,19 +148,7 @@ The same content handled differently by each strategy:
 
 ---
 
-## Usage
 
-```bash
-# Default (coefficient = 3.0)
-python -m src.stages.run_stage_4_chunking --strategy semantic
-
-# Custom coefficient
-python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0
-```
-
-Output: `data/processed/05_final_chunks/semantic_std{coefficient}/`
-
----
 
 ## Navigation
 
