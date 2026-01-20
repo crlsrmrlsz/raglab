@@ -54,25 +54,24 @@ Cite sources by number [1], [2], etc. so users can explore further."""
 # CONTEXTUAL CHUNKING PROMPTS
 # =============================================================================
 
-# Section-title based context generation (adapted from Anthropic's approach)
+# Context generation adapted from Anthropic's approach.
 # Instead of passing the full document (impractical for books), we pass:
-# - Book title (LLM may have knowledge of well-known books/authors)
-# - Surrounding section titles (provides topic flow and key terms)
+# - Book title (LLM may recognize well-known books/authors)
+# - Section title (contains disambiguation terms like "Ventral Striatum: Pleasure and Reward")
 # - The chunk text
-# Section titles often contain the exact disambiguation terms needed.
 CONTEXTUAL_PROMPT = """<book>
 {book_title}
 </book>
 
-<sections>
-{sections_context}
-</sections>
+<section>
+{section_title}
+</section>
 
 <chunk>
 {chunk_text}
 </chunk>
 
-Please give a short succinct context to situate this chunk within the book for the purposes of improving search retrieval of the chunk. Use key terms from the section titles that help identify what this chunk is about. Answer only with the succinct context and nothing else."""
+Please give a short succinct context to situate this chunk within the book for the purposes of improving search retrieval of the chunk. Use key terms from the section title that help identify what this chunk is about. Answer only with the succinct context and nothing else."""
 
 
 # =============================================================================

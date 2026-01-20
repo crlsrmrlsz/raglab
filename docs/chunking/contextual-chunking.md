@@ -7,7 +7,6 @@ Contextual chunking prepends LLM-generated snippets that situate each chunk with
 While section and semantic chunking optimize *where* to split text, contextual chunking addresses *what information is lost* after splitting—the document-level context that makes chunks meaningful.
 
 Here [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) approach is implemented as a **post-processing step on semantic chunks (std=2)**, using these parameters:
-- **Section window**: 2 sections before + 2 after for topic flow context
 - **Max snippet tokens**: 100, brief disambiguation not a summary
 - **Model**: gpt-4o-mini, cost-efficient for simple contextualization
 
@@ -73,14 +72,14 @@ Anthropic tested on short documents (papers, articles) where the full document f
 
 | Aspect | Anthropic | This Implementation |
 |--------|-----------|---------------------|
-| **Document context** | Full document (~8K-50K tokens) | Surrounding section titles (~100 tokens) |
+| **Document context** | Full document (~8K-50K tokens) | Section title (~10 tokens) |
 | **Document size** | Papers, articles (<500 pages) | Books (300-800 pages) |
-| **Context source** | Full document with prompt caching | Book title + section title window |
+| **Context source** | Full document with prompt caching | **Book title** + section title |
 | **Original preservation** | Not mentioned | Stores `original_text` and `contextual_snippet` separately |
 
 </div>
 
-**Trade-off**: This implementation uses **section titles** instead of full document context. Section titles often contain the exact disambiguation terms needed (e.g., "Ventral Striatum: Pleasure and Reward") at a fraction of the token cost. The LLM's job is to connect the chunk's content to these section title concepts.
+**Trade-off**: This implementation uses **section title** instead of full document context. Section titles often contain the exact disambiguation terms needed (e.g., "Ventral Striatum: Pleasure and Reward") at a fraction of the token cost. The LLM's job is to connect the chunk's content to the section title's concepts.
 
 **This implementation's prompt:**
 
@@ -89,9 +88,9 @@ Anthropic tested on short documents (papers, articles) where the full document f
 {book_title}
 </book>
 
-<sections>
-{sections_context}
-</sections>
+<section>
+{section_title}
+</section>
 
 <chunk>
 {chunk_text}
@@ -99,14 +98,14 @@ Anthropic tested on short documents (papers, articles) where the full document f
 
 Please give a short succinct context to situate this chunk within the book
 for the purposes of improving search retrieval of the chunk. Use key terms
-from the section titles that help identify what this chunk is about.
+from the section title that help identify what this chunk is about.
 Answer only with the succinct context and nothing else.
 ```
 
 Key differences from Anthropic's prompt:
 - **`<book>`** instead of `<document>`: Uses the **book title** (e.g., "Behave, The Biology of Humans at Our Best Worst (Robert M. Sapolsky)") which the LLM may recognize, providing implicit context about the work's themes and domain
-- **`<sections>`** instead of full document: Provides 2 sections before + 2 after the current section, showing topic flow (~100 tokens vs ~200K tokens)
-- **"Use key terms from the section titles"**: Explicit instruction to leverage section title terminology for disambiguation
+- **`<section>`** instead of full document: Just the section title (~10 tokens vs ~200K tokens for a book)
+- **"Use key terms from the section title"**: Explicit instruction to leverage section title terminology for disambiguation
 
 
 
@@ -117,28 +116,15 @@ The input is semantic chunks (std=2) from `semantic_std2/{book}.json`. Semantic 
 ```
 For each document:
   Load existing chunks from semantic_std2/ folder
-  Build section list (unique section titles in document order)
 
   For each chunk:
-    Get current section title
-    Gather surrounding section titles (2 before + 2 after current)
-    Build prompt with: book_title, section_titles_context, chunk_text
+    Get book title and section title from chunk metadata
+    Build prompt with: book_title, section_title, chunk_text
     Call LLM: "Situate this chunk using section title key terms"
     Prepend snippet: "[{snippet}] {original_text}"
     Re-compute token count
     Save with original_text preserved
 ```
-
-**Section titles context format:**
-```
-  The Amygdala as Part of Networks in the Brain
-  SOME INPUTS TO THE AMYGDALA
-→ THE FRONTAL CORTEX
-  The Interface Between the Frontal Cortex and the Limbic System
-  Different Subregions of the Frontal Cortex
-```
-
-The arrow (→) marks the current chunk's section. This provides the LLM with topic flow and key terminology.
 
 
 
@@ -155,6 +141,7 @@ The same content handled by each strategy:
 {
   "chunk_id": "Brain and behavior...::chunk_549",
   "context": "Brain and behavior... > CHAPTER 13 Emotions > Ventral Striatum: Pleasure and Reward",
+  "section": "Ventral Striatum: Pleasure and Reward",
   "text": "In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat, hoping to study the effects of stimulation on its movements. However, the results were unexpected: the rat began returning again and again to the place in the cage where it received stimulation, as if strongly rewarded for doing so (Olds & Milner, 1954). Surprised to see this effect, Olds and Milner then tried providing the rat with a lever that would trigger stimulation. The rat soon began pressing this lever repeatedly, hundreds of times an hour, often to the exclusion of all other activities. The effects of the stimulation bore all the behavioral hallmarks of intense reward. X-rays and postmortem examinations eventually revealed that the electrode had missed its intended target and instead had reached a region known as the septal area, near the ventral striatum. In a series of experiments and later in televised demonstrations, Olds and Milner showed rats braving severe electric shocks to obtain stimulation and engaging in self-stimulation so fervently as to reach the point of starvation. As a result, this region, and its nearby connections through the medial forebrain bundle, soon became popularized as the so-called 'pleasure center of the brain' (Olds & Milner, 1954). Over the next two decades, studies provided evidence that these same regions have a similar function in human beings who underwent neurosurgical implantation of DBS electrodes for the treatment of psychiatric and neurological illnesses...",
   "token_count": 672,
   "chunking_strategy": "semantic_std2"
@@ -168,11 +155,12 @@ The same content handled by each strategy:
 <summary><strong>Contextual Chunking: 732 tokens (+60 from snippet)</strong></summary>
 <small>
 
-**Enriched chunk** — LLM-generated context from section titles:
+**Enriched chunk** — LLM-generated context from book and section title:
 ```json
 {
   "chunk_id": "Brain and behavior...::chunk_549",
   "context": "Brain and behavior... > CHAPTER 13 Emotions > Ventral Striatum: Pleasure and Reward",
+  "section": "Ventral Striatum: Pleasure and Reward",
   "text": "[This chunk describes the 1954 discovery by Olds and Milner of the brain's 'pleasure center' through electrode stimulation in rats, a foundational experiment in understanding the ventral striatum's role in reward and motivation within the neuroscience of emotions.] In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat...",
   "token_count": 732,
   "chunking_strategy": "contextual",
@@ -181,20 +169,15 @@ The same content handled by each strategy:
 }
 ```
 
-**Section titles used for context:**
-```
-  Orbital Frontal Cortex: Linking Emotions to Judgment
-  Ventral Striatum: Pleasure and Reward
-→ Ventral Striatum: Pleasure and Reward (same section, chunk 549)
-  Ventromedial Prefrontal Cortex: Gut Feelings
-  Emotions and Cognition: Dual-System Theories
-```
+**Context provided to LLM:**
+- **Book**: "Brain and behavior, a cognitive neuroscience perspective (David Eagleman, Jonathan Downar)"
+- **Section**: "Ventral Striatum: Pleasure and Reward"
 
 </small>
 </details>
 
 
-**Key difference:** The snippet explicitly names "ventral striatum," "pleasure center," "reward and motivation," and "neuroscience of emotions"—terms derived from the section titles that the embedding model can now use for disambiguation. A query about "brain reward mechanisms" will match this chunk more precisely than the original, which never explicitly states its topic.
+**Key difference:** The snippet explicitly names "ventral striatum," "pleasure center," "reward and motivation," and "neuroscience of emotions"—terms derived from the section title that the embedding model can now use for disambiguation. A query about "brain reward mechanisms" will match this chunk more precisely than the original, which never explicitly states its topic.
 
 
 
