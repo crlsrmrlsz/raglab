@@ -411,16 +411,16 @@ DEFAULT_PREPROCESSING_STRATEGY = "hyde"
 
 # Preprocessing compatibility by collection type
 # GraphRAG requires chunk IDs to match between extraction and search.
-# Only section and contextual collections have compatible IDs because:
+# Only section collections have compatible IDs because:
 # - section: Original chunk IDs used for entity extraction
-# - contextual: Preserves section chunk IDs (adds context prefix only)
+# - contextual: Uses semantic_std2 as input, so has semantic chunk IDs (no match)
 # - semantic: Different chunk boundaries = different IDs = no match
 # - raptor: Summary nodes have different IDs; only leaf chunks match
-GRAPHRAG_COMPATIBLE_COLLECTIONS = ["section", "contextual"]
+GRAPHRAG_COMPATIBLE_COLLECTIONS = ["section"]
 
 PREPROCESSING_COMPATIBILITY = {
     "section": ["none", "hyde", "decomposition", "graphrag"],
-    "contextual": ["none", "hyde", "decomposition", "graphrag"],
+    "contextual": ["none", "hyde", "decomposition"],  # No graphrag - uses semantic chunk IDs
     "semantic": ["none", "hyde", "decomposition"],  # No graphrag - chunk ID mismatch
     "raptor": ["none", "hyde", "decomposition"],  # No graphrag - partial match only
 }
