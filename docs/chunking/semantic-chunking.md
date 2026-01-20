@@ -4,9 +4,9 @@
 
 Semantic chunking splits text at topic boundaries detected by embedding similarity, creating chunks that preserve conceptual coherence rather than splitting mid-argument. Unlike fixed-size chunking, it adapts to content structure.
 
-Here **Breakpoint-based semantic chunking**, with **standard deviation** as reference is implemented, using these parameters:
+Here **Breakpoint-based semantic chunking**, with **standard deviation** as a reference is implemented, using these parameters:
 - **Max token limit**: 8192, embedding model max. To leave room for semantic chunk to group as needed.
-- **Sentecen overlap**: 2, same as in section chunking.
+- **Sentence overlap**: 2, same as in section chunking.
 - **Std coefficient**: 2std and 3std chunks were generated to compare results.
 
 
@@ -23,18 +23,14 @@ Here **Breakpoint-based semantic chunking**, with **standard deviation** as refe
 
 LangChain/LlamaIndex embed the **entire document** at once—suited for short documents (articles, pages). For books with chapters/sections, this implementation uses **section-scope**:
 
-| Scope | When to use |
-|-------|-------------|
-| **Document** (LangChain) | Short documents where cross-section relationships matter |
-| **Section** (this impl) | Books/long documents where sections represent coherent topics |
+Why section-scope for books?
 
-**Why section-scope for books:**
 1. Authors create sections to group coherent topics—a strong structural prior
 2. Cross-section comparison introduces noise (unrelated topics may have similar embeddings about the same entities)
 3. The std deviation threshold needs a homogeneous distribution; mixing topics creates multimodal distributions
 4. [Qu et al. 2024](https://arxiv.org/abs/2410.13070) found semantic chunking helps most on content with "high topic diversity"—which exists *within* sections (sub-topics), not across them
 
----
+
 
 ## Breakpoint Detection: Why Standard Deviation?
 
@@ -48,7 +44,7 @@ After evaluating threshold methods for breakpoint detection, standard deviation-
 
 The formula `similarity < mean - (k × std)` treats low similarities as statistical outliers, making breakpoint detection self-calibrating.
 
----
+
 
 ## Algorithm
 
@@ -84,6 +80,8 @@ For each document:
 
 Comparison of semantic chunking with two coefficient values:
 
+**INCLUDE PLOT WITH CHUNK SIZE DISTRIBUTION FOR 4 CASES**
+
 <div align="center">
 
 | Corpus | Coefficient | Chunks | Avg Tokens | Median | Single-Chunk Sections |
@@ -97,9 +95,9 @@ Comparison of semantic chunking with two coefficient values:
 
 ### Comparative Analysis
 
-**std=3.0 (conservative):** Only statistically extreme similarity drops trigger splits. Result: 99% neuroscience and 98% philosophy sections remain as single chunks. Fewer total chunks, larger average size.
+**k=3.0 (conservative):** Only statistically extreme similarity drops trigger splits. Result: 99% neuroscience and 98% philosophy sections remain as single chunks. Fewer total chunks, larger average size.
 
-**std=2.0 (sensitive):** Triggers on smaller similarity drops (95% CI vs 99.7% CI). Result: 13% more chunks for neuroscience, 29% more for philosophy. Single-chunk rate drops to 88% and 83% respectively. Average tokens decrease ~10-20%.
+**k=2.0 (sensitive):** Triggers on smaller similarity drops (95% CI vs 99.7% CI). Result: 13% more chunks for neuroscience, 29% more for philosophy. Single-chunk rate drops to 88% and 83% respectively. Average tokens decrease ~10-20%.
 
 **vs Section Chunking:** [Section chunking](section-chunking.md) produces 71% (neuroscience) and 64% (philosophy) single-chunk sections—splitting purely on token limits. Both semantic coefficients preserve significantly more content within chunks by only splitting at topic boundaries.
 
@@ -141,11 +139,11 @@ The same content handled differently by each strategy:
 **Single coherent chunk** — No topic boundary detected, content preserved:
 ```json
 {
-  "chunk_id": "Brain and behavior...::chunk_451",
+  "chunk_id": "Brain and behavior, a cognitive neuroscience perspective (David Eagleman, Jonathan Downar)::chunk_458",
   "book_id": "Brain and behavior, a cognitive neuroscience perspective (David Eagleman, Jonathan Downar)",
   "context": "Brain and behavior... > CHAPTER 14 Motivation and Reward > Why Motivation Matters",
   "section": "Why Motivation Matters",
-  "text": "Staying alive is a balancing act. From the moment an animal opens its eyes in the morning, it is faced with a series of dilemmas... [full section: survival needs, intelligence vs motivation, internal drives (hypothalamus), external drives (amygdala), concluding note about incomplete drive lists] ...However, the ones listed above are the most well studied so far.",
+  "text": "Staying alive is a balancing act. From the moment an animal opens its eyes in the morning, it is faced with a series of dilemmas. Should I spend my time foraging for food and building my energy supplies? Or is it more important to find a source of water? [...] What are these basic needs or drives? We can divide them into the drives arising from internal states or bodily functions and the drives arising from external sources or incentives. The internal drives include homeostatic drives such as energy balance, water balance, thermoregulation, circadian rhythms including sleep and wakefulness, and stress responses, as well as internal drives toward reproductive and defensive behavior. These drives are closely associated with the circuitry of the hypothalamus, as we'll see further below. External drives arise from sources outside the body itself. These include drives in response to threats, sexual or reproductive opportunities, parental attachment drives, social dominance, and affiliation. These types of drives are more closely associated with the circuitry of the amygdala, as we'll see in a moment. At this point in the progress of neuroscience, our list of drives is almost certainly incomplete. However, the ones listed above are the most well studied so far.",
   "token_count": 840,
   "chunking_strategy": "semantic_std3"
 }
@@ -154,8 +152,41 @@ The same content handled differently by each strategy:
 </small>
 </details>
 
+<details>
+<summary><strong>Semantic Chunking (std=2.0): 2 chunks (521 + 380 tokens)</strong></summary>
+<small>
 
-**Key difference:** Section chunking splits at 800 tokens regardless of content, creating a 91-token orphan chunk. Semantic chunking recognizes no significant topic shift occurs and keeps the conceptual unit intact (840 tokens, slightly over limit but semantically coherent).
+**Chunk 1 (521 tokens)** — Splits at detected topic boundary (intelligence vs survival needs):
+```json
+{
+  "chunk_id": "Brain and behavior, a cognitive neuroscience perspective (David Eagleman, Jonathan Downar)::chunk_676",
+  "context": "Brain and behavior... > CHAPTER 14 Motivation and Reward > Why Motivation Matters",
+  "section": "Why Motivation Matters",
+  "text": "Staying alive is a balancing act. From the moment an animal opens its eyes in the morning, it is faced with a series of dilemmas. [...] It is worth mentioning here that the circuitry of what we usually mean by 'intelligence' is a relatively new addition to an ancient basic brain plan. [...] Motivation is more akin to judgment: the ability to make accurate predictions about what is most important in any given scenario. Of course, intelligence and judgment do not always go together. A person may have a high ability to memorize textbook content and predict the most appropriate answers on a test. However, this same person may have difficulty assigning the most appropriate priority level to reading the textbook over sending emails in the nights leading up to the examination and perform poorly on the examination as a result.",
+  "token_count": 521,
+  "chunking_strategy": "semantic_std2"
+}
+```
+
+**Chunk 2 (380 tokens)** — Continues with drives and neural circuitry:
+```json
+{
+  "chunk_id": "Brain and behavior, a cognitive neuroscience perspective (David Eagleman, Jonathan Downar)::chunk_677",
+  "context": "Brain and behavior... > CHAPTER 14 Motivation and Reward > Why Motivation Matters",
+  "section": "Why Motivation Matters",
+  "text": "A person may have a high ability to memorize textbook content and predict the most appropriate answers on a test. [...] Human beings meet their survival needs with behaviors that are more complex than those of any other species on the planet. [...] What are these basic needs or drives? We can divide them into the drives arising from internal states or bodily functions and the drives arising from external sources or incentives. [...] These drives are closely associated with the circuitry of the hypothalamus, as we'll see further below. External drives arise from sources outside the body itself. [...] These types of drives are more closely associated with the circuitry of the amygdala, as we'll see in a moment. At this point in the progress of neuroscience, our list of drives is almost certainly incomplete. However, the ones listed above are the most well studied so far.",
+  "token_count": 380,
+  "chunking_strategy": "semantic_std2"
+}
+```
+
+</small>
+</details>
+
+**Key differences:**
+- **Section chunking** splits at 800 tokens regardless of content, creating a 91-token orphan chunk
+- **Semantic std=3.0** (conservative) keeps the entire section intact (840 tokens) since no statistically extreme similarity drop occurs
+- **Semantic std=2.0** (sensitive) detects a topic shift between "intelligence vs judgment" discussion and "basic survival drives" discussion, creating two balanced chunks with 2-sentence overlap
 
 
 
