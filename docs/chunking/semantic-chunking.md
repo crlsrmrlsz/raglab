@@ -82,6 +82,8 @@ Comparison of semantic chunking with two coefficient values:
 
 ![Chunk Size Distribution](../../assets/semantic-chunking-distribution.png)
 
+The distributions show **right-skewed patterns** with no ceiling effect—unlike section chunking's spike at 800 tokens, semantic chunking produces smooth tails extending to 2000+ tokens. This reflects the algorithm preserving complete conceptual units regardless of length. The k=3.0 (conservative) distributions have higher means than medians (Neuroscience: 665 vs 490; Philosophy: 1331 vs 375), indicating many small sections kept intact plus some very large ones—the long tail represents multi-paragraph arguments preserved as single chunks. The k=2.0 (sensitive) distributions shift left with lower means (479 and 916), showing how the more aggressive threshold detects subtler topic shifts. Philosophy's extreme mean-median gap at k=3.0 (1331 vs 375) reveals its bimodal nature: short aphorisms (Tao Te Ching, Epictetus) alongside lengthy essays (Schopenhauer, Seneca) that semantic chunking keeps intact when no topic boundary is detected.
+
 <div align="center">
 
 | Corpus | Coefficient | Chunks | Avg Tokens | Median | Single-Chunk Sections |

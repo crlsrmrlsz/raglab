@@ -17,6 +17,8 @@ Analysis of this corpus:
 
 ![Chunk Size Distribution](../../assets/section-chunking-distribution.png)
 
+The distribution reveals a **bimodal pattern** characteristic of fixed-limit chunking. Neuroscience shows a relatively uniform spread across 50-700 tokens (sections naturally fitting the limit) with a sharp spike at 800 tokens where the chunker forces splits. Philosophy exhibits an even more pronounced spike at exactly 800 tokens—longer essay sections repeatedly hit the ceiling, creating many maximum-size chunks. The mean-median gap (Neuroscience: 482 vs 492; Philosophy: 589 vs 746) indicates left-skew in neuroscience (many small sections) and right-skew in philosophy (chunks clustering at the limit). This "ceiling effect" is the key limitation of token-based chunking: it splits mid-argument regardless of semantic coherence.
+
 <div align="center">
 
 | Corpus | Avg Section Tokens | Single-Chunk Sections |
