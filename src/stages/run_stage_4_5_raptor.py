@@ -2,7 +2,7 @@
 Stage 4.5: Build RAPTOR hierarchical summary trees.
 
 This stage runs between Stage 4 (chunking) and Stage 5 (embedding).
-It takes section chunks as input and builds a tree of summaries.
+It takes semantic chunks (std=2) as input and builds a tree of summaries.
 
 RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval
 Paper: arXiv:2401.18059 (ICLR 2024)
@@ -12,7 +12,7 @@ Usage:
     python -m src.stages.run_stage_4_5_raptor --max-levels 3
     python -m src.stages.run_stage_4_5_raptor --overwrite all
 
-Input:  data/processed/05_final_chunks/section/{book}.json
+Input:  data/processed/05_final_chunks/semantic_std2/{book}.json
 Output: data/processed/05_final_chunks/raptor/{book}.json
 """
 
@@ -66,7 +66,7 @@ def main():
     logger.info("=" * 60)
     logger.info("Stage 4.5: RAPTOR Tree Building")
     logger.info("=" * 60)
-    logger.info(f"Input:  {DIR_FINAL_CHUNKS}/section/")
+    logger.info(f"Input:  {DIR_FINAL_CHUNKS}/semantic_std2/")
     logger.info(f"Output: {DIR_FINAL_CHUNKS}/raptor/")
     logger.info(f"Max levels: {args.max_levels}")
     logger.info(f"Min cluster size: {args.min_cluster_size}")
@@ -108,8 +108,8 @@ def main():
 
     except FileNotFoundError as e:
         logger.error(str(e))
-        logger.error("Run section chunking first:")
-        logger.error("  python -m src.stages.run_stage_4_chunking --strategy section")
+        logger.error("Run semantic chunking first:")
+        logger.error("  python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4")
         raise
 
     except Exception as e:

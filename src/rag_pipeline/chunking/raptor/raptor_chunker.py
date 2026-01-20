@@ -2,8 +2,8 @@
 
 ## RAG Theory: RAPTOR as Post-Processing Strategy
 
-Like contextual chunking, RAPTOR is a post-processing step on section chunks:
-1. Section chunking creates the leaf nodes
+Like contextual chunking, RAPTOR is a post-processing step on semantic chunks (std=2):
+1. Semantic chunking creates the leaf nodes (topic-boundary splits)
 2. RAPTOR builds a hierarchical tree on top
 3. All nodes (leaves + summaries) go to Stage 5 for embedding
 
@@ -18,7 +18,7 @@ abstraction for improved thematic retrieval.
 
 ## Data Flow
 
-1. Load: DIR_FINAL_CHUNKS/section/{book}.json
+1. Load: DIR_FINAL_CHUNKS/semantic_std2/{book}.json
 2. Process: build_raptor_tree() for each book
 3. Save: DIR_FINAL_CHUNKS/raptor/{book}.json
 """
@@ -70,21 +70,21 @@ def run_raptor_chunking(
         FileNotFoundError: If section chunks don't exist.
         Exception: Re-raises any error from processing (fail-fast).
     """
-    # Input: section chunks
-    section_dir = Path(DIR_FINAL_CHUNKS) / "section"
+    # Input: semantic chunks (std=2)
+    input_dir = Path(DIR_FINAL_CHUNKS) / "semantic_std2"
 
-    if not section_dir.exists():
+    if not input_dir.exists():
         raise FileNotFoundError(
-            f"Section chunks not found at {section_dir}. "
-            "Run section chunking first: python -m src.stages.run_stage_4_chunking --strategy section"
+            f"Semantic chunks not found at {input_dir}. "
+            "Run semantic chunking first: python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4"
         )
 
-    input_files = list(section_dir.glob("*.json"))
+    input_files = list(input_dir.glob("*.json"))
 
     if not input_files:
         raise FileNotFoundError(
-            f"No chunk files found in {section_dir}. "
-            "Run section chunking first."
+            f"No chunk files found in {input_dir}. "
+            "Run semantic chunking first."
         )
 
     # Output directory
@@ -97,7 +97,7 @@ def run_raptor_chunking(
     skipped_count = 0
 
     logger.info("Starting RAPTOR tree building...")
-    logger.info(f"Processing {len(input_files)} books from section/")
+    logger.info(f"Processing {len(input_files)} books from semantic_std2/")
     logger.info(f"Output folder: {RAPTOR_FOLDER}/")
     logger.info(f"Max levels: {max_levels}, min cluster size: {min_cluster_size}")
     logger.info(f"Summary model: {summary_model}")

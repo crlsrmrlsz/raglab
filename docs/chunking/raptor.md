@@ -73,14 +73,14 @@ The input is semantic chunks (std=2). The algorithm recursively clusters and sum
 
 ```
 For each book:
-  1. Load semantic chunks (std=2) as level-0 nodes
-  2. Embed all nodes
+  Load semantic chunks (std=2) as level-0 nodes
 
   While nodes.count > MIN_CLUSTER_SIZE:
-    1. UMAP reduce → GMM cluster → LLM summarize
-    2. Create new nodes at level+1
-    3. Embed summary nodes
-    4. Repeat with summaries as input
+    1. Embed current level nodes
+    2. UMAP reduce dimensions
+    3. Find optimal K via BIC
+    4. GMM cluster nodes
+    5. LLM summarize each cluster → new nodes at level+1
 
   Return all nodes (leaves + summaries)
 ```

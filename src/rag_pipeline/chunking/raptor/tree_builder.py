@@ -4,18 +4,18 @@
 
 RAPTOR builds a tree of summaries through recursive clustering:
 
-1. **Level 0 (Leaves)**: Original document chunks from section_chunker
+1. **Level 0 (Leaves)**: Semantic chunks (std=2) as starting nodes
 2. **Level 1 (First Summaries)**: LLM summaries of clustered leaves
 3. **Level 2+ (Higher Summaries)**: LLM summaries of clustered summaries
 4. **Termination**: When too few nodes remain or max level reached
 
-The algorithm:
+The algorithm (per iteration):
 1. Embed current level nodes
 2. UMAP dimensionality reduction
 3. Find optimal K via BIC
-4. GMM soft clustering
-5. Summarize each cluster -> new level
-6. Repeat until stopping condition
+4. GMM clustering
+5. LLM summarize each cluster -> new nodes at level+1
+6. Repeat with new nodes until stopping condition
 
 ## Library Usage
 
@@ -25,9 +25,9 @@ The algorithm:
 
 ## Data Flow
 
-1. Input: List of section chunk dicts
+1. Input: List of semantic chunk dicts (std=2)
 2. Convert to RaptorNodes (level 0)
-3. Recursive: cluster -> summarize -> embed -> cluster -> ...
+3. Recursive: embed -> cluster -> summarize -> repeat
 4. Output: All nodes (leaves + summaries) + metadata
 
 ## Query Strategies (Paper Section 2.3)
@@ -88,13 +88,13 @@ def build_raptor_tree(
     min_cluster_size: int = RAPTOR_MIN_CLUSTER_SIZE,
     summary_model: str = RAPTOR_SUMMARY_MODEL,
 ) -> tuple[list[RaptorNode], TreeMetadata]:
-    """Build hierarchical RAPTOR tree from section chunks.
+    """Build hierarchical RAPTOR tree from semantic chunks.
 
-    Main entry point for tree construction. Takes section chunks and builds
+    Main entry point for tree construction. Takes semantic chunks (std=2) and builds
     a multi-level tree of summaries through recursive clustering.
 
     Args:
-        chunks: List of chunk dicts from section_chunker.py.
+        chunks: List of chunk dicts from semantic chunking (std=2).
         book_id: Book identifier for chunk IDs.
         max_levels: Maximum tree depth (1-4 typical).
         min_cluster_size: Minimum nodes to attempt clustering.
