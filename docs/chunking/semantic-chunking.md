@@ -69,6 +69,33 @@ For each document:
 | `k = 2.0` | More sensitive: smaller chunks, more splits (95% CI) |
 | `k = 4.0` | Very conservative: larger chunks, fewer splits |
 
+### Core Implementation
+
+```python
+def compute_similarity_breakpoints(sentences, std_coefficient=3.0):
+    """Find semantic breakpoints using standard deviation."""
+
+    # Embed and normalize
+    embeddings = embed_texts(sentences)
+    normalized = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+    # Compute adjacent similarities
+    similarities = [np.dot(normalized[i], normalized[i + 1])
+                    for i in range(len(normalized) - 1)]
+
+    # Statistical cutoff
+    cutoff = np.mean(similarities) - (std_coefficient * np.std(similarities))
+
+    # Mark breakpoints
+    breakpoints = [0]
+    for i, sim in enumerate(similarities):
+        if sim < cutoff:
+            breakpoints.append(i + 1)
+
+    return breakpoints
+```
+
+---
 
 ## Corpus Analysis
 
@@ -148,7 +175,19 @@ The same content handled differently by each strategy:
 
 ---
 
+## Usage
 
+```bash
+# Default (coefficient = 3.0)
+python -m src.stages.run_stage_4_chunking --strategy semantic
+
+# Custom coefficient
+python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0
+```
+
+Output: `data/processed/05_final_chunks/semantic_std{coefficient}/`
+
+---
 
 ## Navigation
 
