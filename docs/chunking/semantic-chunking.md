@@ -8,13 +8,13 @@ Splits text at semantic boundaries detected by embedding similarity, creating ch
 
 ## Why Standard Deviation-Based Breakpoints
 
-After evaluating different breakpoint detection methods, we chose standard deviation-based detection over fixed thresholds:
+After evaluating different breakpoint detection methods, I chose to test standard deviation-based detection over fixed thresholds:
 
-| Approach | Problem |
-|----------|---------|
-| **Fixed threshold** (e.g., 0.4) | No universal best value; requires per-corpus tuning ([Qu et al. 2024](https://arxiv.org/abs/2410.13070)) |
-| **Percentile-based** (LangChain/LlamaIndex) | Inconsistent across document types |
-| **Standard deviation** | Adapts to each document's similarity distribution; only statistically significant drops trigger splits |
+| Approach | Description |
+|----------|-------------|
+| **Fixed threshold** | Sets a constant similarity cutoff (e.g., 0.4). Splits whenever consecutive sentence similarity falls below this value. Simple to understand but lacks adaptability—optimal thresholds vary significantly across corpora and document types, requiring manual tuning for each dataset ([Qu et al. 2024](https://arxiv.org/abs/2410.13070)). |
+| **Percentile-based** | Computes all pairwise distances between consecutive sentences, then splits at distances exceeding the Xth percentile (default: 95th in LangChain/LlamaIndex). Adapts to each document's distance distribution, but percentile thresholds can behave inconsistently—documents with uniform similarity may split at arbitrary points ([LangChain SemanticChunker](https://python.langchain.com/api_reference/experimental/text_splitter/langchain_experimental.text_splitter.SemanticChunker.html)). |
+| **Standard deviation** | Splits when similarity drops below `mean - (k × std)` (default: k=3). Self-calibrating: interprets low similarities as statistical outliers, so only significant topic shifts trigger splits. Maps directly to statistical confidence intervals (k=3 ≈ 99.7% CI). Performs well on positively-skewed similarity distributions typical of most documents ([LangChain PR #16807](https://github.com/langchain-ai/langchain/pull/16807)). |
 
 The formula `similarity < mean - (k × std)` treats low similarities as statistical outliers, making breakpoint detection self-calibrating.
 
