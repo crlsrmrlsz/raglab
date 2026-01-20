@@ -67,7 +67,9 @@ The main deviation in this implementation is using larger leaf chunks. The paper
 
 
 
-## Implementation
+## Algorithm
+
+The input is semantic chunks (std=2). The algorithm recursively clusters and summarizes until the tree stops growing, then returns all nodes for collapsed-tree retrieval.
 
 ```
 For each book:
@@ -75,10 +77,10 @@ For each book:
   2. Embed all nodes
 
   While nodes.count > MIN_CLUSTER_SIZE:
-    3. UMAP reduce → GMM cluster → LLM summarize
-    4. Create new nodes at level+1
-    5. Embed summary nodes
-    6. Repeat with summaries as input
+    1. UMAP reduce → GMM cluster → LLM summarize
+    2. Create new nodes at level+1
+    3. Embed summary nodes
+    4. Repeat with summaries as input
 
   Return all nodes (leaves + summaries)
 ```

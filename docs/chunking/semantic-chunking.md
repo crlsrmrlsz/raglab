@@ -65,12 +65,12 @@ For each document:
 
       For each sentence:
         If breakpoint detected:
-          Save current_chunk
-          Start new chunk with last 2 sentences (overlap)
+          1. Save current_chunk
+          2. Start new chunk with last 2 sentences (overlap)
 
         If (current_chunk + sentence) > MAX_TOKENS:
-          Save current_chunk
-          Start new chunk with last 2 sentences (overlap)
+          1. Save current_chunk
+          2. Start new chunk with last 2 sentences (overlap)
 
         Append sentence to current_chunk
 ```

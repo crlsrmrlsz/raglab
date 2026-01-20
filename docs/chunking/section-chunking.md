@@ -39,20 +39,20 @@ The 800-token limit balances these needs: within the research-backed 512-1024 op
 The input is a JSON file per book with NLP generated chunks, each one containing one paragraph and with the context included (book > section)
 ```
 For each document:
-  1. Load NLP-segmented paragraphs 
+  1. Load NLP-segmented paragraphs
   2. Initialize: current_chunk = [], current_context = None
 
   For each paragraph:
     If context changed (new section):
-      Save current_chunk
-      Start new chunk (no overlap across sections)
+      1. Save current_chunk
+      2. Start new chunk (no overlap across sections)
 
     For each sentence:
       If (current_chunk + sentence) <= MAX_TOKENS:
         Append sentence to chunk
       Else:
-        Save current_chunk
-        Start new chunk with last 2 sentences (overlap)
+        1. Save current_chunk
+        2. Start new chunk with last 2 sentences (overlap)
 ```
 
 

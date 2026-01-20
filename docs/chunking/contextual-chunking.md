@@ -115,15 +115,15 @@ The input is semantic chunks (std=2) from `semantic_std2/{book}.json`. Semantic 
 
 ```
 For each document:
-  Load existing chunks from semantic_std2/ folder
+  Load existing chunks
 
   For each chunk:
-    Get book title and section title from chunk metadata
-    Build prompt with: book_title, section_title, chunk_text
-    Call LLM: "Situate this chunk using section title key terms"
-    Prepend snippet: "[{snippet}] {original_text}"
-    Re-compute token count
-    Save with original_text preserved
+    1. Get book title and section title from chunk metadata
+    2. Build prompt with: book_title, section_title, chunk_text
+    3. Call LLM: "Situate this chunk using section title key terms"
+    4. Prepend snippet: "[{snippet}] {original_text}"
+    5. Re-compute token count
+    6. Save with original_text preserved
 ```
 
 
