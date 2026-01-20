@@ -493,8 +493,9 @@ SEMANTIC_STD_COEFFICIENT = 3.0  # Standard deviations below mean for breakpoint
 # GPT-4o-mini: $0.15/$0.60 per 1M tokens - consistent across all tasks
 CONTEXTUAL_MODEL = "openai/gpt-4o-mini"
 
-# Number of neighboring chunks to include as context for LLM
-CONTEXTUAL_NEIGHBOR_CHUNKS = 2  # chunks before + after current chunk
+# Number of surrounding section titles to include as context
+# Section titles provide topic flow without full document text
+CONTEXTUAL_SECTION_WINDOW = 2  # sections before + after current section
 
 # Maximum tokens for the contextual snippet (output limit)
 CONTEXTUAL_MAX_SNIPPET_TOKENS = 100

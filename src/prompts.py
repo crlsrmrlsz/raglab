@@ -54,23 +54,25 @@ Cite sources by number [1], [2], etc. so users can explore further."""
 # CONTEXTUAL CHUNKING PROMPTS
 # =============================================================================
 
-CONTEXTUAL_PROMPT = """<document>
-{document_context}
-</document>
+# Section-title based context generation (adapted from Anthropic's approach)
+# Instead of passing the full document (impractical for books), we pass:
+# - Book title (LLM may have knowledge of well-known books/authors)
+# - Surrounding section titles (provides topic flow and key terms)
+# - The chunk text
+# Section titles often contain the exact disambiguation terms needed.
+CONTEXTUAL_PROMPT = """<book>
+{book_title}
+</book>
 
-Here is the chunk we want to situate within the document:
+<sections>
+{sections_context}
+</sections>
+
 <chunk>
 {chunk_text}
 </chunk>
 
-Please give a short succinct context (2-3 sentences) to situate this chunk within the overall document.
-The context should help a reader understand what broader topic or argument this relates to.
-Include key terms or entities that provide disambiguation.
-
-Book: "{book_name}"
-Section: "{context_path}"
-
-Answer only with the contextual description, nothing else."""
+Please give a short succinct context to situate this chunk within the book for the purposes of improving search retrieval of the chunk. Use key terms from the section titles that help identify what this chunk is about. Answer only with the succinct context and nothing else."""
 
 
 # =============================================================================

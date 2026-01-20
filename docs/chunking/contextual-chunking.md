@@ -7,15 +7,14 @@ Contextual chunking prepends LLM-generated snippets that situate each chunk with
 While section and semantic chunking optimize *where* to split text, contextual chunking addresses *what information is lost* after splitting—the document-level context that makes chunks meaningful.
 
 Here [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) approach is implemented as a **post-processing step on section chunks**, using these parameters:
-- **Neighbor chunks**: 2 before + 2 after for local context
+- **Section window**: 2 sections before + 2 after for topic flow context
 - **Max snippet tokens**: 100, brief disambiguation not a summary
 - **Model**: gpt-4o-mini, cost-efficient for simple contextualization
 
 
 
-## Research Background
+## Anthropic's Implementation
 
-> **Source:** [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) (September 2024)
 
 Anthropic's research quantified how much document-level context is lost during chunking:
 
@@ -31,7 +30,6 @@ Anthropic's research quantified how much document-level context is lost during c
 
 **Key insight:** The embedding model encodes *what words are in the chunk* but not *what the chunk is about*. Adding a contextual snippet that explicitly states the chunk's semantic role bridges this gap.
 
-### Anthropic's Implementation
 
 Anthropic passes the **entire document** to the LLM for each chunk, using [prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) to avoid re-processing the document for every chunk. The document is cached after the first chunk, making subsequent calls ~90% cheaper.
 
@@ -75,33 +73,46 @@ Anthropic tested on short documents (papers, articles) where the full document f
 
 | Aspect | Anthropic | This Implementation |
 |--------|-----------|---------------------|
-| **Document context** | Full document (~8K-50K tokens) | 2 neighbor chunks (~1.6K tokens) |
+| **Document context** | Full document (~8K-50K tokens) | Surrounding section titles (~100 tokens) |
 | **Document size** | Papers, articles (<500 pages) | Books (300-800 pages) |
-| **Section metadata** | Not mentioned | Includes `Book > Chapter > Section` path |
+| **Context source** | Full document with prompt caching | Book title + section title window |
 | **Original preservation** | Not mentioned | Stores `original_text` and `contextual_snippet` separately |
 
 </div>
 
-**Trade-off**: This implementation sacrifices full-document awareness for cost efficiency, partially compensating with hierarchical metadata (`context_path`).
+**Trade-off**: This implementation uses **section titles** instead of full document context. Section titles often contain the exact disambiguation terms needed (e.g., "Ventral Striatum: Pleasure and Reward") at a fraction of the token cost. The LLM's job is to connect the chunk's content to these section title concepts.
 
 
 
 ## Algorithm
 
-The input is section chunks from `section/{book}.json`. The algorithm enriches each chunk with LLM-generated context.
+The input is section chunks from `section/{book}.json`. The algorithm enriches each chunk with LLM-generated context using surrounding section titles.
 
 ```
 For each document:
   Load existing chunks from section/ folder
+  Build section list (unique section titles in document order)
 
   For each chunk:
-    Gather neighboring chunks (2 before + 2 after)
-    Build prompt with: book_name, section_path, neighbors, chunk_text
-    Call LLM: "Give 2-3 sentences situating this chunk"
+    Get current section title
+    Gather surrounding section titles (2 before + 2 after current)
+    Build prompt with: book_title, section_titles_context, chunk_text
+    Call LLM: "Situate this chunk using section title key terms"
     Prepend snippet: "[{snippet}] {original_text}"
     Re-compute token count
     Save with original_text preserved
 ```
+
+**Section titles context format:**
+```
+  The Amygdala as Part of Networks in the Brain
+  SOME INPUTS TO THE AMYGDALA
+→ THE FRONTAL CORTEX
+  The Interface Between the Frontal Cortex and the Limbic System
+  Different Subregions of the Frontal Cortex
+```
+
+The arrow (→) marks the current chunk's section. This provides the LLM with topic flow and key terminology.
 
 
 
@@ -128,27 +139,36 @@ The same content handled by each strategy:
 </details>
 
 <details>
-<summary><strong>Contextual Chunking: 759 tokens (+87 from snippet)</strong></summary>
+<summary><strong>Contextual Chunking: 732 tokens (+60 from snippet)</strong></summary>
 <small>
 
-**Enriched chunk** — LLM-generated context prepended:
+**Enriched chunk** — LLM-generated context from section titles:
 ```json
 {
   "chunk_id": "Brain and behavior...::chunk_549",
   "context": "Brain and behavior... > CHAPTER 13 Emotions > Ventral Striatum: Pleasure and Reward",
-  "text": "[This chunk provides background on the discovery of the ventral striatum's role in pleasure and reward, which is a key focus of this chapter on the neuroscience of emotions. It describes early experiments on electrical stimulation of the ventral striatum in rats and how this led to the identification of this region as the \"pleasure center of the brain\", a finding that has also been observed in humans undergoing deep brain stimulation for psychiatric disorders.] In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat...",
-  "token_count": 759,
+  "text": "[This chunk describes the 1954 discovery by Olds and Milner of the brain's 'pleasure center' through electrode stimulation in rats, a foundational experiment in understanding the ventral striatum's role in reward and motivation within the neuroscience of emotions.] In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat...",
+  "token_count": 732,
   "chunking_strategy": "contextual",
   "original_text": "In 1954, at McGill University in Montreal...",
-  "contextual_snippet": "This chunk provides background on the discovery of the ventral striatum's role in pleasure and reward..."
+  "contextual_snippet": "This chunk describes the 1954 discovery by Olds and Milner of the brain's 'pleasure center'..."
 }
+```
+
+**Section titles used for context:**
+```
+  Orbital Frontal Cortex: Linking Emotions to Judgment
+  Ventral Striatum: Pleasure and Reward
+→ Ventral Striatum: Pleasure and Reward (same section, chunk 549)
+  Ventromedial Prefrontal Cortex: Gut Feelings
+  Emotions and Cognition: Dual-System Theories
 ```
 
 </small>
 </details>
 
 
-**Key difference:** The snippet explicitly names "ventral striatum," "pleasure and reward," "neuroscience of emotions," and "deep brain stimulation"—terms the embedding model can now use for disambiguation. A query about "brain reward mechanisms" will match this chunk more precisely than the original, which never explicitly states its topic.
+**Key difference:** The snippet explicitly names "ventral striatum," "pleasure center," "reward and motivation," and "neuroscience of emotions"—terms derived from the section titles that the embedding model can now use for disambiguation. A query about "brain reward mechanisms" will match this chunk more precisely than the original, which never explicitly states its topic.
 
 
 

@@ -3,16 +3,23 @@
 ## RAG Theory: Contextual Retrieval (Anthropic)
 
 Traditional chunking loses document-level context when encoding chunks. A chunk
-saying "The company's revenue grew by 3%" loses the context of which company
-and time period. Contextual retrieval prepends a short LLM-generated snippet:
+saying "In 1954, James Olds and Peter Milner implanted electrodes in a rat..."
+loses the context that this is about the ventral striatum and pleasure/reward.
+Contextual retrieval prepends a short LLM-generated snippet:
 
-"[This chunk discusses ACME Corp's Q2 2023 financial performance...] The company's
-revenue grew by 3%"
+"[This chunk discusses the ventral striatum's role in pleasure and reward...]
+In 1954, James Olds and Peter Milner implanted electrodes in a rat..."
 
-This improves embedding quality by:
-1. Adding disambiguation terms (entities, topics)
-2. Situating the chunk within broader arguments
-3. Connecting isolated facts to their context
+Anthropic's original approach passes the FULL DOCUMENT to the LLM for each chunk.
+This is impractical for books (300-800 pages), so this implementation uses
+SECTION TITLES as context instead:
+
+- Book title (LLM may have knowledge of well-known books/authors)
+- Surrounding section titles (provides topic flow and key terms)
+- The chunk text
+
+Section titles often contain the exact disambiguation terms needed. The LLM's
+job is to connect the chunk's content to the section title's concepts.
 
 Anthropic reports 35% failure reduction (recall@20) with contextual embeddings,
 up to 67% with BM25 hybrid + reranking.
@@ -26,11 +33,12 @@ up to 67% with BM25 hybrid + reranking.
 ## Data Flow
 
 1. Load existing chunks from DIR_FINAL_CHUNKS/section/{book}.json
-2. For each chunk:
-   a. Gather neighboring chunks as document context
+2. Build section list (unique sections in order)
+3. For each chunk:
+   a. Get surrounding section titles as context
    b. Call LLM with contextual prompt
    c. Prepend snippet to chunk text
-3. Save to DIR_FINAL_CHUNKS/contextual/{book}.json
+4. Save to DIR_FINAL_CHUNKS/contextual/{book}.json
 """
 
 import json
@@ -40,7 +48,7 @@ from typing import Optional
 from src.config import (
     DIR_FINAL_CHUNKS,
     CONTEXTUAL_MODEL,
-    CONTEXTUAL_NEIGHBOR_CHUNKS,
+    CONTEXTUAL_SECTION_WINDOW,
     CONTEXTUAL_MAX_SNIPPET_TOKENS,
     CONTEXTUAL_PROMPT,
 )
@@ -55,72 +63,95 @@ CONTEXTUAL_FOLDER = "contextual"
 
 
 # ============================================================================
+# SECTION CONTEXT BUILDING
+# ============================================================================
+
+
+def build_section_list(chunks: list[dict]) -> list[str]:
+    """Extract unique section titles in document order.
+
+    Preserves the order sections appear in the document while
+    removing duplicates (multiple chunks may share a section).
+
+    Args:
+        chunks: List of chunk dicts with 'section' field.
+
+    Returns:
+        List of unique section titles in document order.
+    """
+    seen = set()
+    sections = []
+    for chunk in chunks:
+        section = chunk.get("section", "")
+        if section and section not in seen:
+            seen.add(section)
+            sections.append(section)
+    return sections
+
+
+def get_sections_context(
+    all_sections: list[str],
+    current_section: str,
+    window: int = CONTEXTUAL_SECTION_WINDOW,
+) -> str:
+    """Build section context with surrounding section titles.
+
+    Creates a formatted list of section titles with the current
+    section marked, providing topic flow context for the LLM.
+
+    Args:
+        all_sections: List of all section titles in document order.
+        current_section: The section of the current chunk.
+        window: Number of sections to include before and after.
+
+    Returns:
+        Formatted string with section titles, current marked with arrow.
+
+    Example:
+        >>> sections = ["Intro", "Methods", "Results", "Discussion"]
+        >>> get_sections_context(sections, "Results", window=1)
+        '  Methods\\n→ Results\\n  Discussion'
+    """
+    try:
+        current_idx = all_sections.index(current_section)
+    except ValueError:
+        # Section not found, return just the current section
+        return f"→ {current_section}"
+
+    start = max(0, current_idx - window)
+    end = min(len(all_sections), current_idx + window + 1)
+
+    lines = []
+    for i in range(start, end):
+        section = all_sections[i]
+        if i == current_idx:
+            lines.append(f"→ {section}")
+        else:
+            lines.append(f"  {section}")
+
+    return "\n".join(lines)
+
+
+# ============================================================================
 # CONTEXT GENERATION
 # ============================================================================
 
 
-def gather_document_context(
-    chunks: list[dict],
-    current_index: int,
-    neighbor_count: int = CONTEXTUAL_NEIGHBOR_CHUNKS,
-    max_context_tokens: int = 2000,
-) -> str:
-    """Gather text from neighboring chunks as document context.
-
-    Collects chunks before and after the current chunk to provide
-    the LLM with surrounding document context.
-
-    Args:
-        chunks: List of all chunks in the document.
-        current_index: Index of the chunk being contextualized.
-        neighbor_count: Number of chunks to include before and after.
-        max_context_tokens: Maximum tokens for the context window.
-
-    Returns:
-        Combined text from neighboring chunks, truncated if needed.
-    """
-    # Determine range of neighbors
-    start_idx = max(0, current_index - neighbor_count)
-    end_idx = min(len(chunks), current_index + neighbor_count + 1)
-
-    # Gather neighbor texts (excluding current chunk)
-    context_parts = []
-    for i in range(start_idx, end_idx):
-        if i != current_index:
-            chunk_text = chunks[i].get("text", "")
-            section = chunks[i].get("section", "")
-            if chunk_text:
-                # Add section marker for context
-                if section:
-                    context_parts.append(f"[{section}] {chunk_text}")
-                else:
-                    context_parts.append(chunk_text)
-
-    context = "\n\n".join(context_parts)
-
-    # Truncate if too long (simple character-based truncation)
-    # Rough estimate: 4 chars per token
-    max_chars = max_context_tokens * 4
-    if len(context) > max_chars:
-        context = context[:max_chars] + "..."
-
-    return context
-
-
 def generate_contextual_snippet(
     chunk: dict,
-    document_context: str,
+    sections_context: str,
     model: str = CONTEXTUAL_MODEL,
     max_tokens: int = CONTEXTUAL_MAX_SNIPPET_TOKENS,
 ) -> str:
     """Generate a contextual snippet for a chunk using LLM.
 
-    Calls the LLM with the contextual prompt to generate a short
-    snippet (2-3 sentences) situating the chunk within the document.
+    Calls the LLM with the book title, surrounding section titles,
+    and chunk text to generate a short snippet (2-3 sentences)
+    situating the chunk for improved search retrieval.
 
     Args:
-        chunk: The chunk dict with 'text', 'context', 'book_id' fields.
-        document_context: Text from neighboring chunks.
+        chunk: The chunk dict with 'text', 'book_id' fields.
+        sections_context: Formatted string of surrounding section titles.
         model: OpenRouter model ID for generation.
         max_tokens: Maximum tokens for the generated snippet.
 
@@ -129,15 +160,13 @@ def generate_contextual_snippet(
         Returns empty string if generation fails.
     """
     chunk_text = chunk.get("text", "")
-    book_name = chunk.get("book_id", "Unknown")
-    context_path = chunk.get("context", "")
+    book_title = chunk.get("book_id", "Unknown")
 
     # Build prompt from template
     prompt = CONTEXTUAL_PROMPT.format(
-        document_context=document_context,
+        book_title=book_title,
+        sections_context=sections_context,
         chunk_text=chunk_text,
-        book_name=book_name,
-        context_path=context_path,
     )
 
     messages = [{"role": "user", "content": prompt}]
@@ -210,8 +239,8 @@ def process_single_file(
 ) -> tuple[str, int, int, bool]:
     """Process a single book's chunks with contextual enrichment.
 
-    Loads existing section chunks, generates contextual snippets,
-    and saves contextualized chunks to output directory.
+    Loads existing section chunks, builds section list, generates
+    contextual snippets using section titles, and saves output.
 
     Args:
         file_path: Path to input JSON file (section chunks).
@@ -240,16 +269,21 @@ def process_single_file(
 
     logger.info(f"Processing {book_name} ({len(chunks)} chunks)")
 
+    # Build section list for this book
+    all_sections = build_section_list(chunks)
+    logger.info(f"  Found {len(all_sections)} unique sections")
+
     # Process each chunk
     contextualized_chunks = []
     snippets_generated = 0
 
     for i, chunk in enumerate(chunks):
-        # Gather context from neighbors
-        doc_context = gather_document_context(chunks, i)
+        # Get section context from surrounding section titles
+        current_section = chunk.get("section", "")
+        sections_context = get_sections_context(all_sections, current_section)
 
         # Generate contextual snippet
-        snippet = generate_contextual_snippet(chunk, doc_context, model=model)
+        snippet = generate_contextual_snippet(chunk, sections_context, model=model)
         if snippet:
             snippets_generated += 1
 
@@ -281,7 +315,7 @@ def run_contextual_chunking(
     """Process all section chunks with contextual enrichment.
 
     Main entry point for contextual chunking strategy. Reads section chunks
-    and adds LLM-generated contextual snippets to each chunk.
+    and adds LLM-generated contextual snippets using section titles as context.
 
     Note: This is a POST-PROCESSING step on section chunks, not a new
     chunking algorithm. Run section chunking first if needed.
@@ -318,11 +352,11 @@ def run_contextual_chunking(
     skipped_count = 0
     total_snippets = 0
 
-    logger.info("Starting contextual chunking (Anthropic-style)...")
+    logger.info("Starting contextual chunking (section-title based)...")
     logger.info(f"Processing {len(input_files)} files from section/")
     logger.info(f"Output folder: {CONTEXTUAL_FOLDER}/")
     logger.info(f"Context model: {model}")
-    logger.info(f"Neighbor chunks: {CONTEXTUAL_NEIGHBOR_CHUNKS} before + after")
+    logger.info(f"Section window: {CONTEXTUAL_SECTION_WINDOW} before + after")
 
     for file_path in sorted(input_files):
         book_name, chunk_count, snippets, was_processed = process_single_file(
