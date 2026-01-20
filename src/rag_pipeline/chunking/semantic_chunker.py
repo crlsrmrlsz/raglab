@@ -11,8 +11,17 @@ uses embedding similarity to detect topic boundaries:
 3. Split when similarity drops below mean - (coefficient * std) (statistical outlier)
 4. Still respect section boundaries and token limits
 
-Research shows 8-12% improvement in retrieval precision for Q&A tasks when
-using semantic boundaries vs fixed-size chunks.
+## Section-Scope vs Document-Scope
+
+This implementation uses SECTION-SCOPE breakpoint detection:
+- LangChain/LlamaIndex use document-scope (embed entire document at once)
+- Document-scope suits short documents (articles, pages)
+- For books with chapters/sections, section-scope is more appropriate because:
+  1. Authors create sections to group coherent topics (strong structural prior)
+  2. Cross-section comparison introduces noise (unrelated topics may have similar embeddings)
+  3. The std deviation threshold needs a homogeneous distribution to work well
+  4. Qu et al. 2024 found semantic chunking helps most on "high topic diversity" content,
+     which exists WITHIN sections (sub-topics), not across them
 
 ## Library Usage
 
@@ -23,13 +32,15 @@ using semantic boundaries vs fixed-size chunks.
 ## Data Flow
 
 1. Load paragraphs from DIR_NLP_CHUNKS/{book}.json
-2. For each paragraph:
-   a. Embed all sentences (batch API call)
-   b. Compute pairwise cosine similarity
-   c. Find breakpoints where similarity < mean - (coefficient * std)
-3. Build chunks respecting breakpoints and token limits
-4. Add 2-sentence overlap between chunks (same section only)
-5. Save to DIR_FINAL_CHUNKS/semantic_std{coefficient}/{book}.json
+2. Group paragraphs by section (context)
+3. For each section:
+   a. Aggregate all sentences
+   b. Embed all sentences (batch API call)
+   c. Compute pairwise cosine similarity
+   d. Find breakpoints where similarity < mean - (coefficient * std)
+4. Build chunks respecting breakpoints and token limits
+5. Add 2-sentence overlap between chunks (same section only)
+6. Save to DIR_FINAL_CHUNKS/semantic_std{coefficient}/{book}.json
 """
 
 import json
@@ -176,17 +187,18 @@ def create_semantic_chunks(
     overlap_sentences: int = OVERLAP_SENTENCES,
     std_coefficient: float = SEMANTIC_STD_COEFFICIENT,
 ) -> list[dict]:
-    """Create chunks using semantic similarity breakpoints.
+    """Create chunks using semantic similarity breakpoints at SECTION scope.
 
     Algorithm:
-    1. Process paragraphs in order, respecting section boundaries
-    2. For each paragraph, find semantic breakpoints via embedding similarity
+    1. Group paragraphs by section (context)
+    2. For each section, aggregate all sentences and find semantic breakpoints
     3. Build chunks from breakpoint segments (semantic coherence drives size)
     4. Add sentence overlap between chunks (same section only)
 
-    The max_tokens parameter is a safeguard against embedding model limits,
-    not an optimization target. Semantic boundaries (similarity < mean - k*std)
-    are the primary split mechanism.
+    Section-scope (vs paragraph-scope) produces more meaningful similarity
+    distributions for the std deviation threshold. With 5 sentences per paragraph,
+    variance is minimal and breakpoints rarely trigger. With 50+ sentences per
+    section, outliers become statistically meaningful.
 
     Args:
         paragraphs: List of paragraph dicts with 'context', 'sentences' keys.
@@ -200,42 +212,10 @@ def create_semantic_chunks(
     """
     chunks = []
     chunk_id = 0
-    current_context = None
-    current_chunk_sentences: list[str] = []
-    num_overlap_sentences = 0
 
-    # Overlap buffer for continuity between chunks
-    overlap_buffer: Deque[str] = deque(maxlen=overlap_sentences if overlap_sentences > 0 else None)
-
-    def _save_current_chunk():
-        """Save current chunk and update overlap buffer."""
-        nonlocal chunk_id, num_overlap_sentences
-        if current_chunk_sentences:
-            chunk_text = " ".join(current_chunk_sentences)
-            chunks.append(_create_chunk_dict(
-                text=chunk_text,
-                context=current_context,
-                book_name=book_name,
-                chunk_id=chunk_id,
-                std_coefficient=std_coefficient,
-            ))
-            chunk_id += 1
-
-            # Update overlap buffer
-            if overlap_sentences > 0:
-                overlap_buffer.clear()
-                overlap_buffer.extend(current_chunk_sentences[-overlap_sentences:])
-
-            num_overlap_sentences = 0
-
-    def _start_new_chunk_with_overlap() -> list[str]:
-        """Initialize new chunk with overlap from previous."""
-        nonlocal num_overlap_sentences
-        if overlap_sentences > 0 and len(overlap_buffer) > 0:
-            num_overlap_sentences = len(overlap_buffer)
-            return list(overlap_buffer)
-        num_overlap_sentences = 0
-        return []
+    # --- PHASE 1: Group paragraphs by section ---
+    sections: dict[str, list[str]] = {}  # context -> list of all sentences
+    section_order: list[str] = []  # preserve section order
 
     for paragraph in paragraphs:
         context = paragraph.get("context", "")
@@ -244,50 +224,89 @@ def create_semantic_chunks(
         if not sentences or not context:
             continue
 
-        # Section boundary: save current chunk, start fresh, clear overlap
-        if context != current_context:
-            _save_current_chunk()
-            current_chunk_sentences = []
-            current_context = context
-            num_overlap_sentences = 0
-            overlap_buffer.clear()
+        if context not in sections:
+            sections[context] = []
+            section_order.append(context)
 
-        # Find semantic breakpoints within this paragraph
-        breakpoints = compute_similarity_breakpoints(sentences, std_coefficient)
-
-        # Process sentences using breakpoints as hints
-        for i, sentence in enumerate(sentences):
+        # Aggregate all sentences from this paragraph into the section
+        for sentence in sentences:
             sentence = sentence.strip()
-            if not sentence:
-                continue
+            if sentence:
+                sections[context].append(sentence)
 
-            # Check if this is a semantic breakpoint
-            is_breakpoint = i in breakpoints and i > 0
+    # --- PHASE 2: Process each section with section-scope breakpoints ---
+    for context in section_order:
+        section_sentences = sections[context]
+
+        if not section_sentences:
+            continue
+
+        # Find semantic breakpoints across ALL sentences in this section
+        breakpoints = compute_similarity_breakpoints(section_sentences, std_coefficient)
+        breakpoint_set = set(breakpoints)
+
+        logger.debug(
+            f"Section '{context[-50:]}': {len(section_sentences)} sentences, "
+            f"{len(breakpoints)} breakpoints"
+        )
+
+        # Build chunks from this section
+        current_chunk_sentences: list[str] = []
+        overlap_buffer: Deque[str] = deque(
+            maxlen=overlap_sentences if overlap_sentences > 0 else None
+        )
+        num_overlap_sentences = 0
+
+        def _save_chunk():
+            nonlocal chunk_id, num_overlap_sentences
+            if current_chunk_sentences:
+                chunk_text = " ".join(current_chunk_sentences)
+                chunks.append(_create_chunk_dict(
+                    text=chunk_text,
+                    context=context,
+                    book_name=book_name,
+                    chunk_id=chunk_id,
+                    std_coefficient=std_coefficient,
+                ))
+                chunk_id += 1
+
+                if overlap_sentences > 0:
+                    overlap_buffer.clear()
+                    overlap_buffer.extend(current_chunk_sentences[-overlap_sentences:])
+
+                num_overlap_sentences = 0
+
+        def _start_with_overlap() -> list[str]:
+            nonlocal num_overlap_sentences
+            if overlap_sentences > 0 and len(overlap_buffer) > 0:
+                num_overlap_sentences = len(overlap_buffer)
+                return list(overlap_buffer)
+            num_overlap_sentences = 0
+            return []
+
+        for i, sentence in enumerate(section_sentences):
+            # Check if this is a semantic breakpoint (skip index 0)
+            is_breakpoint = i in breakpoint_set and i > 0
 
             # If breakpoint, save current chunk and start new one
             if is_breakpoint and current_chunk_sentences:
                 has_new_content = len(current_chunk_sentences) > num_overlap_sentences
                 if has_new_content:
-                    _save_current_chunk()
-                    current_chunk_sentences = _start_new_chunk_with_overlap()
+                    _save_chunk()
+                    current_chunk_sentences = _start_with_overlap()
 
             # Handle oversized sentences
             if count_tokens(sentence) > max_tokens:
-                # Save current chunk first
                 if current_chunk_sentences:
-                    _save_current_chunk()
-                    current_chunk_sentences = _start_new_chunk_with_overlap()
+                    _save_chunk()
+                    current_chunk_sentences = _start_with_overlap()
 
-                # Split oversized sentence
-                # Note: No overlap between split parts (they're from the same sentence)
                 parts = split_oversized_sentence(sentence, max_tokens)
                 for part in parts[:-1]:
                     current_chunk_sentences.append(part)
-                    _save_current_chunk()
-                    # Start fresh, no overlap for split parts
+                    _save_chunk()
                     current_chunk_sentences = []
                     num_overlap_sentences = 0
-                # Keep last part for next iteration
                 sentence = parts[-1]
 
             # Try adding sentence to current chunk
@@ -296,20 +315,17 @@ def create_semantic_chunks(
             if count_tokens(test_text) <= max_tokens:
                 current_chunk_sentences.append(sentence)
             else:
-                # Doesn't fit - save and start new chunk
                 has_new_content = len(current_chunk_sentences) > num_overlap_sentences
-
                 if has_new_content:
-                    _save_current_chunk()
-                    current_chunk_sentences = _start_new_chunk_with_overlap()
+                    _save_chunk()
+                    current_chunk_sentences = _start_with_overlap()
                     current_chunk_sentences.append(sentence)
                 else:
-                    # Only overlap, drop it and add sentence
                     current_chunk_sentences = [sentence]
                     num_overlap_sentences = 0
 
-    # Save final chunk
-    _save_current_chunk()
+        # Save final chunk for this section
+        _save_chunk()
 
     return chunks
 

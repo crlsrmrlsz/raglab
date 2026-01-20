@@ -4,6 +4,12 @@
 
 Semantic chunking splits text at topic boundaries detected by embedding similarity, creating chunks that preserve conceptual coherence rather than splitting mid-argument. Unlike fixed-size chunking, it adapts to content structure.
 
+Here **Breakpoint-based semantic chunking**, with **standard deviation** as reference is implemented, using these parameters:
+- **Max token limit**: 8192, embedding model max. To leave room for semantic chunk to group as needed.
+- **Sentecen overlap**: 2, same as in section chunking.
+- **Std coefficient**: 2std and 3std chunks were generated to compare results.
+
+
 ## Semantic Chunking Approaches
 
 [Qu et al. 2024](https://arxiv.org/abs/2410.13070) identifies two main approaches:
@@ -13,11 +19,26 @@ Semantic chunking splits text at topic boundaries detected by embedding similari
 
 [LangChain](https://python.langchain.com/api_reference/experimental/text_splitter/langchain_experimental.text_splitter.SemanticChunker.html) and [LlamaIndex](https://developers.llamaindex.ai/python/examples/node_parsers/semantic_chunking/) both implement **breakpoint-based** chunking as their primary semantic chunking approach.
 
+### Embedding Scope: Section vs Document
+
+LangChain/LlamaIndex embed the **entire document** at once—suited for short documents (articles, pages). For books with chapters/sections, this implementation uses **section-scope**:
+
+| Scope | When to use |
+|-------|-------------|
+| **Document** (LangChain) | Short documents where cross-section relationships matter |
+| **Section** (this impl) | Books/long documents where sections represent coherent topics |
+
+**Why section-scope for books:**
+1. Authors create sections to group coherent topics—a strong structural prior
+2. Cross-section comparison introduces noise (unrelated topics may have similar embeddings about the same entities)
+3. The std deviation threshold needs a homogeneous distribution; mixing topics creates multimodal distributions
+4. [Qu et al. 2024](https://arxiv.org/abs/2410.13070) found semantic chunking helps most on content with "high topic diversity"—which exists *within* sections (sub-topics), not across them
+
 ---
 
 ## Breakpoint Detection: Why Standard Deviation?
 
-After evaluating threshold methods, standard deviation-based detection was chosen:
+After evaluating threshold methods for breakpoint detection, standard deviation-based detection was chosen:
 
 | Approach | Description |
 |----------|-------------|
@@ -31,71 +52,33 @@ The formula `similarity < mean - (k × std)` treats low similarities as statisti
 
 ## Algorithm
 
-The input is NLP-segmented paragraphs with context (book > section). The algorithm embeds sentences, detects semantic breakpoints, then groups sentences into chunks.
+The input is NLP-segmented paragraphs with context (book > section). The algorithm groups sentences by section, then embeds and detects breakpoints at section scope.
 
 ```
 For each document:
-  1. Load NLP-segmented paragraphs
-  2. Embed all sentences (batch API call)
-  3. Compute cosine similarity between adjacent sentences
-  4. Calculate mean and std of all similarities
-  5. Mark breakpoints where similarity < mean - (k × std)
+  Phase 1: Group by section
+    For each paragraph:
+      Aggregate sentences into sections[context]
 
-  For each sentence:
-    If context changed (new section):
-      Save current_chunk
-      Start new chunk (no overlap across sections)
+  Phase 2: Process each section
+    For each section:
+      1. Embed ALL sentences in section (batch API call)
+      2. Compute cosine similarity between adjacent sentences
+      3. Calculate mean and std of similarities
+      4. Mark breakpoints where similarity < mean - (k × std)
 
-    If breakpoint detected:
-      Save current_chunk
-      Start new chunk with last 2 sentences (overlap)
+      For each sentence:
+        If breakpoint detected:
+          Save current_chunk
+          Start new chunk with last 2 sentences (overlap)
 
-    If (current_chunk + sentence) > MAX_TOKENS:
-      Save current_chunk
-      Start new chunk with last 2 sentences (overlap)
+        If (current_chunk + sentence) > MAX_TOKENS:
+          Save current_chunk
+          Start new chunk with last 2 sentences (overlap)
 
-    Append sentence to current_chunk
+        Append sentence to current_chunk
 ```
 
-### Parameters
-
-- **Chunk size:** 800 tokens (max). Enforces upper limit regardless of similarity scores
-- **Overlap:** 2 sentences. Maintains context continuity between chunks
-- **std_coefficient:** Controls sensitivity (see table below)
-
-| Coefficient | Effect |
-|-------------|--------|
-| `k = 3.0` | Conservative: only extreme similarity drops trigger splits (99.7% CI) |
-| `k = 2.0` | More sensitive: smaller chunks, more splits (95% CI) |
-| `k = 4.0` | Very conservative: larger chunks, fewer splits |
-
-### Core Implementation
-
-```python
-def compute_similarity_breakpoints(sentences, std_coefficient=3.0):
-    """Find semantic breakpoints using standard deviation."""
-
-    # Embed and normalize
-    embeddings = embed_texts(sentences)
-    normalized = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-
-    # Compute adjacent similarities
-    similarities = [np.dot(normalized[i], normalized[i + 1])
-                    for i in range(len(normalized) - 1)]
-
-    # Statistical cutoff
-    cutoff = np.mean(similarities) - (std_coefficient * np.std(similarities))
-
-    # Mark breakpoints
-    breakpoints = [0]
-    for i, sim in enumerate(similarities):
-        if sim < cutoff:
-            breakpoints.append(i + 1)
-
-    return breakpoints
-```
-
----
 
 ## Corpus Analysis
 
@@ -171,23 +154,11 @@ The same content handled differently by each strategy:
 </small>
 </details>
 
+
 **Key difference:** Section chunking splits at 800 tokens regardless of content, creating a 91-token orphan chunk. Semantic chunking recognizes no significant topic shift occurs and keeps the conceptual unit intact (840 tokens, slightly over limit but semantically coherent).
 
----
 
-## Usage
 
-```bash
-# Default (coefficient = 3.0)
-python -m src.stages.run_stage_4_chunking --strategy semantic
-
-# Custom coefficient
-python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0
-```
-
-Output: `data/processed/05_final_chunks/semantic_std{coefficient}/`
-
----
 
 ## Navigation
 
