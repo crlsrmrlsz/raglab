@@ -82,6 +82,32 @@ Anthropic tested on short documents (papers, articles) where the full document f
 
 **Trade-off**: This implementation uses **section titles** instead of full document context. Section titles often contain the exact disambiguation terms needed (e.g., "Ventral Striatum: Pleasure and Reward") at a fraction of the token cost. The LLM's job is to connect the chunk's content to these section title concepts.
 
+**This implementation's prompt:**
+
+```
+<book>
+{book_title}
+</book>
+
+<sections>
+{sections_context}
+</sections>
+
+<chunk>
+{chunk_text}
+</chunk>
+
+Please give a short succinct context to situate this chunk within the book
+for the purposes of improving search retrieval of the chunk. Use key terms
+from the section titles that help identify what this chunk is about.
+Answer only with the succinct context and nothing else.
+```
+
+Key differences from Anthropic's prompt:
+- **`<book>`** instead of `<document>`: Uses the **book title** (e.g., "Behave, The Biology of Humans at Our Best Worst (Robert M. Sapolsky)") which the LLM may recognize, providing implicit context about the work's themes and domain
+- **`<sections>`** instead of full document: Provides 2 sections before + 2 after the current section, showing topic flow (~100 tokens vs ~200K tokens)
+- **"Use key terms from the section titles"**: Explicit instruction to leverage section title terminology for disambiguation
+
 
 
 ## Algorithm
