@@ -2,248 +2,126 @@
 
 [← Semantic Chunking](semantic-chunking.md) | [Home](../../README.md)
 
+Contextual chunking prepends LLM-generated snippets that situate each chunk within the document, improving embedding quality by disambiguating entities and connecting isolated content to its broader context.
+
+While section and semantic chunking optimize *where* to split text, contextual chunking addresses *what information is lost* after splitting—the document-level context that makes chunks meaningful.
+
+Here **Anthropic's Contextual Retrieval** approach is implemented as a post-processing step on section chunks, using these parameters:
+- **Neighbor chunks**: 2 before + 2 after for local context
+- **Max snippet tokens**: 100, brief disambiguation not a summary
+- **Model**: gpt-4o-mini, cost-efficient for simple contextualization
+
+
+
+## Research Background
+
 > **Source:** [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) | September 2024
 
-Prepends LLM-generated context to each chunk, improving embedding quality by disambiguating entities and situating content within the document.
-
-**Type:** Index-time chunking | **LLM Calls:** 1 per chunk | **Tokens/Chunk:** ~900
-
----
-
-## Diagram
-
-```mermaid
-flowchart TB
-    subgraph INPUT["Section Chunks"]
-        CHUNK["Original chunk:<br/>'The company's revenue<br/>grew by 3% in Q2...'"]
-    end
-
-    subgraph CONTEXT["Context Gathering"]
-        NEIGHBORS["Gather 2 chunks<br/>before + 2 after"]
-        META["Book name +<br/>section path"]
-    end
-
-    subgraph LLM["LLM Generation"]
-        PROMPT["Generate 2-3 sentence<br/>context snippet"]
-        SNIPPET["'This chunk from ACME Corp's<br/>2023 annual report discusses<br/>quarterly performance...'"]
-    end
-
-    subgraph OUTPUT["Contextualized Chunk"]
-        FINAL["[Context snippet]<br/>Original text"]
-    end
-
-    CHUNK --> NEIGHBORS --> META --> PROMPT --> SNIPPET --> FINAL
-
-    style PROMPT fill:#ede7f6,stroke:#512da8,stroke-width:2px
-    style SNIPPET fill:#ede7f6,stroke:#512da8,stroke-width:2px
-```
-
----
-
-## Theory
-
-### The Core Problem
-
-Traditional chunking loses document-level context that's critical for accurate retrieval:
-
-```
-Original chunk:
-"The company's revenue grew by 3% in Q2, driven primarily by
-expansion into Asian markets."
-
-Problem: Which company? What year? What's the overall trend?
-```
-
-When embedded, this chunk is semantically similar to ANY revenue growth discussion, making precise retrieval difficult when the user asks about a specific company.
-
-### Research Background
-
-Anthropic's September 2024 research quantified this problem:
+Anthropic's research quantified how much document-level context is lost during chunking:
 
 <div align="center">
 
 | Approach | Retrieval Failure Rate | Improvement |
 |----------|----------------------|-------------|
-| Standard chunking | Baseline | - |
+| Standard chunking | Baseline | — |
 | Contextual chunking | **-35%** | Top-20 retrieval |
 | + BM25 hybrid + reranking | **-67%** | Combined approach |
 
 </div>
 
-**Key insight from Anthropic:** The embedding model encodes *what words are in the chunk* but not *what the chunk is about*. Adding a contextual snippet that explicitly states the chunk's semantic role bridges this gap.
+**Key insight:** The embedding model encodes *what words are in the chunk* but not *what the chunk is about*. Adding a contextual snippet that explicitly states the chunk's semantic role bridges this gap.
 
-### The Transformation
 
-```
-Before: "The company's revenue grew by 3% in Q2..."
-         ↓ embedding
-         [vector similar to any revenue discussion]
 
-After:  "[This chunk from ACME Corp's 2023 annual report,
-         specifically the Financial Performance section
-         discussing quarterly results.]
-         The company's revenue grew by 3% in Q2..."
-         ↓ embedding
-         [vector captures: ACME, 2023, Q2, financial context]
-```
+## Why Section Chunks as Source
 
----
+This implementation uses section chunks as input rather than implementing a new splitting algorithm:
 
-## Implementation in RAGLab
+1. **Composability** — Section chunks already respect document structure (800 tokens, 2-sentence overlap). Contextual enrichment is a separate concern.
+2. **Reusability** — Could apply the same approach to semantic chunks if needed.
+3. **Debugging** — Preserves `original_text` separately, enabling comparison and reprocessing.
 
-### Algorithm
 
-```
-For each chunk in document:
-  1. Gather neighboring chunks (2 before + 2 after)
-  2. Build context from: book_name, section_path, neighbors
-  3. Call LLM: "Generate 2-3 sentences situating this chunk"
-  4. Prepend snippet: "[{snippet}] {original_text}"
-  5. Re-compute token count
-```
 
-### Key Design Decisions
+## Differences from Anthropic's Approach
 
 <div align="center">
 
-| Decision | Value | Rationale |
-|----------|-------|-----------|
-| **Neighbor count** | 2 each direction | Captures local context without excessive tokens |
-| **Temperature** | 0.3 | Low for factual accuracy, high enough to vary phrasing |
-| **Max snippet tokens** | 100 | Brief context, not a summary |
-| **Store original_text** | Yes | Enables debugging and reprocessing |
+| Aspect | Anthropic | This Implementation |
+|--------|-----------|---------------------|
+| **Document context** | Full document in prompt | 2 neighbor chunks (token efficiency) |
+| **Section metadata** | Not mentioned | Includes hierarchical path (Book > Chapter > Section) |
+| **Original preservation** | Not mentioned | Stores `original_text` and `contextual_snippet` separately |
 
 </div>
 
-### Differences from Anthropic's Approach
 
-1. **Neighbor-based context**: We use 2 chunks before/after instead of full document context (token efficiency)
-2. **Section path metadata**: Include hierarchical path like "Book > Chapter > Section" in prompt
-3. **Dual storage**: Keep both original and contextualized text for comparison
 
-### Context Gathering
+## Algorithm
 
-```python
-# src/rag_pipeline/chunking/contextual_chunker.py
+The input is section chunks from `section/{book}.json`. The algorithm enriches each chunk with LLM-generated context.
 
-def gather_document_context(
-    chunks: List[Dict],
-    current_index: int,
-    neighbor_count: int = 2,
-    max_context_tokens: int = 2000,
-) -> str:
-    """Gather text from neighboring chunks as document context."""
-    start_idx = max(0, current_index - neighbor_count)
-    end_idx = min(len(chunks), current_index + neighbor_count + 1)
+```
+For each document:
+  1. Load existing chunks from section/ folder
 
-    context_parts = []
-    for i in range(start_idx, end_idx):
-        if i != current_index:
-            chunk_text = chunks[i].get("text", "")
-            section = chunks[i].get("section", "")
-            if chunk_text:
-                if section:
-                    context_parts.append(f"[{section}] {chunk_text}")
-                else:
-                    context_parts.append(chunk_text)
-
-    return "\n\n".join(context_parts)
+  For each chunk:
+    1. Gather neighboring chunks (2 before + 2 after)
+    2. Build prompt with: book_name, section_path, neighbors, chunk_text
+    3. Call LLM: "Give 2-3 sentences situating this chunk"
+    4. Prepend snippet: "[{snippet}] {original_text}"
+    5. Re-compute token count
+    6. Save with original_text preserved
 ```
 
-### Snippet Generation
 
-```python
-def generate_contextual_snippet(
-    chunk: Dict,
-    document_context: str,
-    model: str = "openai/gpt-4o-mini",
-    max_tokens: int = 100,
-) -> str:
-    """Generate a contextual snippet for a chunk using LLM."""
-    prompt = CONTEXTUAL_PROMPT.format(
-        document_context=document_context,
-        chunk_text=chunk.get("text", ""),
-        book_name=chunk.get("book_id", "Unknown"),
-        context_path=chunk.get("context", ""),
-    )
 
-    return call_chat_completion(
-        messages=[{"role": "user", "content": prompt}],
-        model=model,
-        temperature=0.3,
-        max_tokens=max_tokens,
-    ).strip()
+## Example: Section vs Contextual Chunking
+
+The same content handled by each strategy:
+
+<details>
+<summary><strong>Section Chunking: 672 tokens</strong></summary>
+<small>
+
+**Original chunk** — No document-level context:
+```json
+{
+  "chunk_id": "Brain and behavior...::chunk_549",
+  "context": "Brain and behavior... > CHAPTER 13 Emotions > Ventral Striatum: Pleasure and Reward",
+  "text": "In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat, hoping to study the effects of stimulation on its movements. However, the results were unexpected: the rat began returning again and again to the place in the cage where it received stimulation, as if strongly rewarded for doing so (Olds & Milner, 1954). Surprised to see this effect, Olds and Milner then tried providing the rat with a lever that would trigger stimulation. The rat soon began pressing this lever repeatedly, hundreds of times an hour, often to the exclusion of all other activities. The effects of the stimulation bore all the behavioral hallmarks of intense reward. X-rays and postmortem examinations eventually revealed that the electrode had missed its intended target and instead had reached a region known as the septal area, near the ventral striatum. In a series of experiments and later in televised demonstrations, Olds and Milner showed rats braving severe electric shocks to obtain stimulation and engaging in self-stimulation so fervently as to reach the point of starvation. As a result, this region, and its nearby connections through the medial forebrain bundle, soon became popularized as the so-called 'pleasure center of the brain' (Olds & Milner, 1954). Over the next two decades, studies provided evidence that these same regions have a similar function in human beings who underwent neurosurgical implantation of DBS electrodes for the treatment of psychiatric and neurological illnesses...",
+  "token_count": 672,
+  "chunking_strategy": "sequential_overlap_2"
+}
 ```
 
----
+</small>
+</details>
 
-## Performance in This Pipeline
+<details>
+<summary><strong>Contextual Chunking: 759 tokens (+87 from snippet)</strong></summary>
+<small>
 
-### Key Finding: Best Answer Correctness Across Query Types
+**Enriched chunk** — LLM-generated context prepended:
+```json
+{
+  "chunk_id": "Brain and behavior...::chunk_549",
+  "context": "Brain and behavior... > CHAPTER 13 Emotions > Ventral Striatum: Pleasure and Reward",
+  "text": "[This chunk provides background on the discovery of the ventral striatum's role in pleasure and reward, which is a key focus of this chapter on the neuroscience of emotions. It describes early experiments on electrical stimulation of the ventral striatum in rats and how this led to the identification of this region as the \"pleasure center of the brain\", a finding that has also been observed in humans undergoing deep brain stimulation for psychiatric disorders.] In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat...",
+  "token_count": 759,
+  "chunking_strategy": "contextual",
+  "original_text": "In 1954, at McGill University in Montreal...",
+  "contextual_snippet": "This chunk provides background on the discovery of the ventral striatum's role in pleasure and reward..."
+}
+```
 
-From comprehensive evaluation across 102 configurations:
+</small>
+</details>
 
-<div align="center">
 
-| Metric | Contextual | Section | RAPTOR | Semantic 0.3 |
-|--------|------------|---------|--------|--------------|
-| Single-Concept Correctness | **59.1%** | 57.6% | 57.9% | 54.1% |
-| Cross-Domain Correctness | **48.8%** | 47.9% | 48.4% | 48.0% |
-| Single-Concept Recall | **96.3%** | 92.9% | 96.1% | 93.3% |
+**Key difference:** The snippet explicitly names "ventral striatum," "pleasure and reward," "neuroscience of emotions," and "deep brain stimulation"—terms the embedding model can now use for disambiguation. A query about "brain reward mechanisms" will match this chunk more precisely than the original, which never explicitly states its topic.
 
-</div>
 
-**Primary Takeaway:** Contextual chunking achieves the **highest answer correctness** on both single-concept and cross-domain queries. The LLM-generated context helps the embedding model understand what each chunk IS ABOUT, not just what words it contains.
-
-### Why Recall Correlates with Correctness
-
-The evaluation revealed a critical insight: **recall matters more than precision for answer quality**.
-
-<div align="center">
-
-| Strategy | Precision | Recall | Answer Correctness |
-|----------|-----------|--------|-------------------|
-| Semantic 0.3 | **73.4%** (1st) | 93.3% | 54.1% (4th) |
-| Contextual | 71.7% (2nd) | **96.3%** (1st) | **59.1%** (1st) |
-
-</div>
-
-The generator LLM can filter irrelevant context (low precision is recoverable) but cannot invent missing information (low recall is unrecoverable).
-
-### Synergy with GraphRAG
-
-Contextual + GraphRAG achieves the highest answer correctness (61.7% single-concept) because they operate on orthogonal dimensions:
-- **Contextual**: Intra-document clarity (what is this chunk about?)
-- **GraphRAG**: Inter-document connections (how do concepts relate?)
-
----
-
-## Cost Analysis
-
-For 19 books with ~5,000 total chunks:
-- **Model**: `gpt-4o-mini` (~$0.15/1M input, ~$0.60/1M output)
-- **Input**: ~2000 tokens/call (context + prompt)
-- **Output**: ~80 tokens/call (snippet)
-- **Total cost**: ~$2-3 for full corpus
-- **Indexing time**: ~2-3 hours (rate-limited by API calls)
-
----
-
-## When to Use
-
-<div align="center">
-
-| Scenario | Recommendation |
-|----------|----------------|
-| Production deployments | Use contextual for best answer quality |
-| Ambiguous content | Pronouns, partial references need disambiguation |
-| Multi-document corpora | Distinguish "the company" across different sources |
-| Hybrid search | BM25 benefits from added keywords in context |
-| **Avoid when** | Cost-sensitive prototyping, frequently changing corpus |
-
-</div>
-
----
 
 ## Navigation
 
