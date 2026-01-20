@@ -86,20 +86,20 @@ Comparison of semantic chunking with two coefficient values:
 
 | Corpus | Coefficient | Chunks | Avg Tokens | Median | Single-Chunk Sections |
 |--------|-------------|--------|------------|--------|----------------------|
-| **Neuroscience** | k=3.0 | 3,419 | 652 | 475 | 3,296 / 3,321 (99%) |
-| **Neuroscience** | k=2.0 | 3,854 | 584 | 428 | 2,923 / 3,321 (88%) |
-| **Philosophy** | k=3.0 | 576 | 1,324 | 382 | 532 / 545 (98%) |
-| **Philosophy** | k=2.0 | 741 | 1,044 | 471 | 455 / 545 (83%) |
+| **Neuroscience** | k=3.0 | 3,352 | 665 | 490 | 3,167 / 3,219 (98%) |
+| **Neuroscience** | k=2.0 | 4,830 | 479 | 346 | 2,143 / 3,219 (67%) |
+| **Philosophy** | k=3.0 | 573 | 1,331 | 375 | 534 / 545 (98%) |
+| **Philosophy** | k=2.0 | 854 | 916 | 392 | 411 / 545 (75%) |
 
 </div>
 
 ### Comparative Analysis
 
-**k=3.0 (conservative):** Only statistically extreme similarity drops trigger splits. Result: 99% neuroscience and 98% philosophy sections remain as single chunks. Fewer total chunks, larger average size.
+**k=3.0 (conservative):** Only statistically extreme similarity drops trigger splits. Result: 98% of sections in both corpora remain as single chunks. Fewer total chunks, larger average size.
 
-**k=2.0 (sensitive):** Triggers on smaller similarity drops (95% CI vs 99.7% CI). Result: 13% more chunks for neuroscience, 29% more for philosophy. Single-chunk rate drops to 88% and 83% respectively. Average tokens decrease ~10-20%.
+**k=2.0 (sensitive):** Triggers on smaller similarity drops (95% CI vs 99.7% CI). Result: 44% more chunks for neuroscience, 49% more for philosophy. Single-chunk rate drops to 67% and 75% respectively. Average tokens decrease ~28-31%.
 
-**vs Section Chunking:** [Section chunking](section-chunking.md) produces 71% (neuroscience) and 64% (philosophy) single-chunk sections—splitting purely on token limits. Both semantic coefficients preserve significantly more content within chunks by only splitting at topic boundaries.
+**vs Section Chunking:** [Section chunking](section-chunking.md) produces 71% (neuroscience) and 64% (philosophy) single-chunk sections—splitting purely on token limits. Semantic k=3.0 preserves significantly more content within chunks by only splitting at topic boundaries, while k=2.0 creates more granular chunks comparable to section chunking but at semantically meaningful boundaries.
 
 ### Example: Section vs Semantic Chunking
 
