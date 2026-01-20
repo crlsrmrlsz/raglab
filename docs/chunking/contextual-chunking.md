@@ -130,20 +130,20 @@ For each document:
 
 ## Example: Semantic vs Contextual Chunking
 
-The same content handled by each strategy:
+The same content handled by each strategy (same chunk as in [section-chunking.md](section-chunking.md)):
 
 <details>
-<summary><strong>Semantic Chunking (std=2): 672 tokens</strong></summary>
+<summary><strong>Semantic Chunking (std=2): 649 tokens</strong></summary>
 <small>
 
 **Original chunk** — No document-level context:
 ```json
 {
-  "chunk_id": "Brain and behavior...::chunk_549",
+  "chunk_id": "Brain and behavior...::chunk_647",
   "context": "Brain and behavior... > CHAPTER 13 Emotions > Ventral Striatum: Pleasure and Reward",
   "section": "Ventral Striatum: Pleasure and Reward",
   "text": "In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat, hoping to study the effects of stimulation on its movements. However, the results were unexpected: the rat began returning again and again to the place in the cage where it received stimulation, as if strongly rewarded for doing so (Olds & Milner, 1954). Surprised to see this effect, Olds and Milner then tried providing the rat with a lever that would trigger stimulation. The rat soon began pressing this lever repeatedly, hundreds of times an hour, often to the exclusion of all other activities. The effects of the stimulation bore all the behavioral hallmarks of intense reward. X-rays and postmortem examinations eventually revealed that the electrode had missed its intended target and instead had reached a region known as the septal area, near the ventral striatum. In a series of experiments and later in televised demonstrations, Olds and Milner showed rats braving severe electric shocks to obtain stimulation and engaging in self-stimulation so fervently as to reach the point of starvation. As a result, this region, and its nearby connections through the medial forebrain bundle, soon became popularized as the so-called 'pleasure center of the brain' (Olds & Milner, 1954). Over the next two decades, studies provided evidence that these same regions have a similar function in human beings who underwent neurosurgical implantation of DBS electrodes for the treatment of psychiatric and neurological illnesses...",
-  "token_count": 672,
+  "token_count": 649,
   "chunking_strategy": "semantic_std2"
 }
 ```
@@ -152,20 +152,20 @@ The same content handled by each strategy:
 </details>
 
 <details>
-<summary><strong>Contextual Chunking: 732 tokens (+60 from snippet)</strong></summary>
+<summary><strong>Contextual Chunking: 709 tokens (+60 from snippet)</strong></summary>
 <small>
 
 **Enriched chunk** — LLM-generated context from book and section title:
 ```json
 {
-  "chunk_id": "Brain and behavior...::chunk_549",
+  "chunk_id": "Brain and behavior...::chunk_647",
   "context": "Brain and behavior... > CHAPTER 13 Emotions > Ventral Striatum: Pleasure and Reward",
   "section": "Ventral Striatum: Pleasure and Reward",
-  "text": "[This chunk describes the 1954 discovery by Olds and Milner of the brain's 'pleasure center' through electrode stimulation in rats, a foundational experiment in understanding the ventral striatum's role in reward and motivation within the neuroscience of emotions.] In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat...",
-  "token_count": 732,
+  "text": "[This chunk discusses the role of the ventral striatum in pleasure and reward, highlighting foundational experiments by Olds and Milner, the implications for human neuroimaging studies, and the potential therapeutic applications of deep brain stimulation (DBS) in treating severe depression and restoring the capacity for pleasure.] In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat...",
+  "token_count": 709,
   "chunking_strategy": "contextual",
-  "original_text": "In 1954, at McGill University in Montreal...",
-  "contextual_snippet": "This chunk describes the 1954 discovery by Olds and Milner of the brain's 'pleasure center'..."
+  "original_text": "In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat...",
+  "contextual_snippet": "This chunk discusses the role of the ventral striatum in pleasure and reward, highlighting foundational experiments by Olds and Milner, the implications for human neuroimaging studies, and the potential therapeutic applications of deep brain stimulation (DBS) in treating severe depression and restoring the capacity for pleasure."
 }
 ```
 
@@ -177,7 +177,7 @@ The same content handled by each strategy:
 </details>
 
 
-**Key difference:** The snippet explicitly names "ventral striatum," "pleasure center," "reward and motivation," and "neuroscience of emotions"—terms derived from the section title that the embedding model can now use for disambiguation. A query about "brain reward mechanisms" will match this chunk more precisely than the original, which never explicitly states its topic.
+**Key difference:** The snippet explicitly names "ventral striatum," "pleasure and reward," "Olds and Milner," "deep brain stimulation (DBS)," and "treating severe depression"—terms derived from the section title and the chunk's content that the embedding model can now use for disambiguation. A query about "brain reward mechanisms" or "DBS for depression" will match this chunk more precisely than the original, which never explicitly states its topic.
 
 
 
