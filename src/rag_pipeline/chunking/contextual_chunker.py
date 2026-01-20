@@ -27,12 +27,12 @@ up to 67% with BM25 hybrid + reranking.
 ## Library Usage
 
 - src.shared.openrouter_client: LLM calls for context generation
-- Uses section chunking as baseline (loads from section/ folder)
+- Uses semantic chunking (std=2) as baseline (loads from semantic_std2/ folder)
 - Reuses chunk structure, only modifies text field
 
 ## Data Flow
 
-1. Load existing chunks from DIR_FINAL_CHUNKS/section/{book}.json
+1. Load existing chunks from DIR_FINAL_CHUNKS/semantic_std2/{book}.json
 2. Build section list (unique sections in order)
 3. For each chunk:
    a. Get surrounding section titles as context
@@ -239,11 +239,11 @@ def process_single_file(
 ) -> tuple[str, int, int, bool]:
     """Process a single book's chunks with contextual enrichment.
 
-    Loads existing section chunks, builds section list, generates
+    Loads existing semantic chunks (std=2), builds section list, generates
     contextual snippets using section titles, and saves output.
 
     Args:
-        file_path: Path to input JSON file (section chunks).
+        file_path: Path to input JSON file (semantic chunks).
         model: OpenRouter model ID for context generation.
         overwrite_context: Context for handling existing file overwrites.
 
@@ -312,13 +312,13 @@ def run_contextual_chunking(
     model: str = CONTEXTUAL_MODEL,
     overwrite_context: Optional[OverwriteContext] = None,
 ) -> dict[str, int]:
-    """Process all section chunks with contextual enrichment.
+    """Process all semantic chunks with contextual enrichment.
 
-    Main entry point for contextual chunking strategy. Reads section chunks
-    and adds LLM-generated contextual snippets using section titles as context.
+    Main entry point for contextual chunking strategy. Reads semantic chunks
+    (std=2) and adds LLM-generated contextual snippets using section titles.
 
-    Note: This is a POST-PROCESSING step on section chunks, not a new
-    chunking algorithm. Run section chunking first if needed.
+    Note: This is a POST-PROCESSING step on semantic chunks, not a new
+    chunking algorithm. Run semantic chunking first if needed.
 
     Args:
         model: OpenRouter model ID for context generation.
@@ -328,24 +328,24 @@ def run_contextual_chunking(
         Dict mapping book names to chunk counts (only processed files).
 
     Raises:
-        FileNotFoundError: If section chunks don't exist.
+        FileNotFoundError: If semantic chunks (std=2) don't exist.
         Exception: Re-raises any exception from processing (fail-fast).
     """
-    # Input: section chunks
-    section_dir = Path(DIR_FINAL_CHUNKS) / "section"
+    # Input: semantic chunks (std=2) - better coherence than section chunks
+    input_dir = Path(DIR_FINAL_CHUNKS) / "semantic_std2"
 
-    if not section_dir.exists():
+    if not input_dir.exists():
         raise FileNotFoundError(
-            f"Section chunks not found at {section_dir}. "
-            "Run section chunking first: python -m src.stages.run_stage_4_chunking --strategy section"
+            f"Semantic chunks not found at {input_dir}. "
+            "Run semantic chunking first: python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0"
         )
 
-    input_files = list(section_dir.glob("*.json"))
+    input_files = list(input_dir.glob("*.json"))
 
     if not input_files:
         raise FileNotFoundError(
-            f"No chunk files found in {section_dir}. "
-            "Run section chunking first."
+            f"No chunk files found in {input_dir}. "
+            "Run semantic chunking first."
         )
 
     results = {}
@@ -353,7 +353,7 @@ def run_contextual_chunking(
     total_snippets = 0
 
     logger.info("Starting contextual chunking (section-title based)...")
-    logger.info(f"Processing {len(input_files)} files from section/")
+    logger.info(f"Processing {len(input_files)} files from semantic_std2/")
     logger.info(f"Output folder: {CONTEXTUAL_FOLDER}/")
     logger.info(f"Context model: {model}")
     logger.info(f"Section window: {CONTEXTUAL_SECTION_WINDOW} before + after")

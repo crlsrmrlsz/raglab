@@ -25,7 +25,11 @@ This document explains common and general considerations about chunking, but the
 
 ## Dependencies
 
-It is important to note that advanced chunking strategies RAPTOR and Contextual are based on Baseline (section chunks). So decisions in section-based chunking, like max chunk size, condition the advanced techniques results.
+It is important to note that advanced chunking strategies have dependencies:
+- **RAPTOR** builds on section chunks (baseline)
+- **Contextual** builds on semantic chunks (std=2) for better coherence
+
+So decisions in earlier chunking stages condition the advanced techniques results.
 
 <div align="center">
     <img src="../../assets/chunk_dependencies.png" alt="Chunk Strategies Dependencies">
@@ -88,7 +92,7 @@ python -m src.stages.run_stage_4_chunking --strategy section
 # Semantic - No dependencies, specify threshold
 python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4
 
-# Contextual - Requires section chunks first
+# Contextual - Requires semantic chunks (std=2) first
 python -m src.stages.run_stage_4_chunking --strategy contextual
 
 # RAPTOR - Requires section chunks first (Stage 4.5)

@@ -6,7 +6,7 @@ Contextual chunking prepends LLM-generated snippets that situate each chunk with
 
 While section and semantic chunking optimize *where* to split text, contextual chunking addresses *what information is lost* after splitting—the document-level context that makes chunks meaningful.
 
-Here [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) approach is implemented as a **post-processing step on section chunks**, using these parameters:
+Here [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) approach is implemented as a **post-processing step on semantic chunks (std=2)**, using these parameters:
 - **Section window**: 2 sections before + 2 after for topic flow context
 - **Max snippet tokens**: 100, brief disambiguation not a summary
 - **Model**: gpt-4o-mini, cost-efficient for simple contextualization
@@ -86,11 +86,11 @@ Anthropic tested on short documents (papers, articles) where the full document f
 
 ## Algorithm
 
-The input is section chunks from `section/{book}.json`. The algorithm enriches each chunk with LLM-generated context using surrounding section titles.
+The input is semantic chunks (std=2) from `semantic_std2/{book}.json`. Semantic chunks are used instead of section chunks because they split at topic boundaries rather than token limits, avoiding orphan chunks and preserving argument coherence.
 
 ```
 For each document:
-  Load existing chunks from section/ folder
+  Load existing chunks from semantic_std2/ folder
   Build section list (unique section titles in document order)
 
   For each chunk:
@@ -116,12 +116,12 @@ The arrow (→) marks the current chunk's section. This provides the LLM with to
 
 
 
-## Example: Section vs Contextual Chunking
+## Example: Semantic vs Contextual Chunking
 
 The same content handled by each strategy:
 
 <details>
-<summary><strong>Section Chunking: 672 tokens</strong></summary>
+<summary><strong>Semantic Chunking (std=2): 672 tokens</strong></summary>
 <small>
 
 **Original chunk** — No document-level context:
@@ -131,7 +131,7 @@ The same content handled by each strategy:
   "context": "Brain and behavior... > CHAPTER 13 Emotions > Ventral Striatum: Pleasure and Reward",
   "text": "In 1954, at McGill University in Montreal, Canada, the psychologists James Olds and Peter Milner implanted a pair of electrodes in the brain of a rat, hoping to study the effects of stimulation on its movements. However, the results were unexpected: the rat began returning again and again to the place in the cage where it received stimulation, as if strongly rewarded for doing so (Olds & Milner, 1954). Surprised to see this effect, Olds and Milner then tried providing the rat with a lever that would trigger stimulation. The rat soon began pressing this lever repeatedly, hundreds of times an hour, often to the exclusion of all other activities. The effects of the stimulation bore all the behavioral hallmarks of intense reward. X-rays and postmortem examinations eventually revealed that the electrode had missed its intended target and instead had reached a region known as the septal area, near the ventral striatum. In a series of experiments and later in televised demonstrations, Olds and Milner showed rats braving severe electric shocks to obtain stimulation and engaging in self-stimulation so fervently as to reach the point of starvation. As a result, this region, and its nearby connections through the medial forebrain bundle, soon became popularized as the so-called 'pleasure center of the brain' (Olds & Milner, 1954). Over the next two decades, studies provided evidence that these same regions have a similar function in human beings who underwent neurosurgical implantation of DBS electrodes for the treatment of psychiatric and neurological illnesses...",
   "token_count": 672,
-  "chunking_strategy": "sequential_overlap_2"
+  "chunking_strategy": "semantic_std2"
 }
 ```
 
@@ -177,6 +177,6 @@ The same content handled by each strategy:
 **Next:** [RAPTOR](raptor.md) — Hierarchical summarization tree
 
 **Related:**
-- [Section Chunking](section-chunking.md) — Prerequisite (contextual builds on section chunks)
-- [Semantic Chunking](semantic-chunking.md) — Embedding-based boundaries alternative
+- [Semantic Chunking](semantic-chunking.md) — Prerequisite (contextual builds on semantic std=2 chunks)
+- [Section Chunking](section-chunking.md) — Token-based baseline alternative
 - [Chunking Overview](README.md) — Strategy comparison
