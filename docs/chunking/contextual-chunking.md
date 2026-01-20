@@ -6,7 +6,7 @@ Contextual chunking prepends LLM-generated snippets that situate each chunk with
 
 While section and semantic chunking optimize *where* to split text, contextual chunking addresses *what information is lost* after splitting—the document-level context that makes chunks meaningful.
 
-Here **Anthropic's Contextual Retrieval** approach is implemented as a post-processing step on section chunks, using these parameters:
+Here [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) approach is implemented as a **post-processing step on section chunks**, using these parameters:
 - **Neighbor chunks**: 2 before + 2 after for local context
 - **Max snippet tokens**: 100, brief disambiguation not a summary
 - **Model**: gpt-4o-mini, cost-efficient for simple contextualization
@@ -14,8 +14,6 @@ Here **Anthropic's Contextual Retrieval** approach is implemented as a post-proc
 
 
 ## Research Background
-
-> **Source:** [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) | September 2024
 
 Anthropic's research quantified how much document-level context is lost during chunking:
 
@@ -31,15 +29,6 @@ Anthropic's research quantified how much document-level context is lost during c
 
 **Key insight:** The embedding model encodes *what words are in the chunk* but not *what the chunk is about*. Adding a contextual snippet that explicitly states the chunk's semantic role bridges this gap.
 
-
-
-## Why Section Chunks as Source
-
-This implementation uses section chunks as input rather than implementing a new splitting algorithm:
-
-1. **Composability** — Section chunks already respect document structure (800 tokens, 2-sentence overlap). Contextual enrichment is a separate concern.
-2. **Reusability** — Could apply the same approach to semantic chunks if needed.
-3. **Debugging** — Preserves `original_text` separately, enabling comparison and reprocessing.
 
 
 
@@ -63,15 +52,15 @@ The input is section chunks from `section/{book}.json`. The algorithm enriches e
 
 ```
 For each document:
-  1. Load existing chunks from section/ folder
+  Load existing chunks from section/ folder
 
   For each chunk:
-    1. Gather neighboring chunks (2 before + 2 after)
-    2. Build prompt with: book_name, section_path, neighbors, chunk_text
-    3. Call LLM: "Give 2-3 sentences situating this chunk"
-    4. Prepend snippet: "[{snippet}] {original_text}"
-    5. Re-compute token count
-    6. Save with original_text preserved
+    Gather neighboring chunks (2 before + 2 after)
+    Build prompt with: book_name, section_path, neighbors, chunk_text
+    Call LLM: "Give 2-3 sentences situating this chunk"
+    Prepend snippet: "[{snippet}] {original_text}"
+    Re-compute token count
+    Save with original_text preserved
 ```
 
 
