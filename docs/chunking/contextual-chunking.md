@@ -15,6 +15,8 @@ Here [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/conte
 
 ## Research Background
 
+> **Source:** [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) (September 2024)
+
 Anthropic's research quantified how much document-level context is lost during chunking:
 
 <div align="center">
@@ -29,20 +31,58 @@ Anthropic's research quantified how much document-level context is lost during c
 
 **Key insight:** The embedding model encodes *what words are in the chunk* but not *what the chunk is about*. Adding a contextual snippet that explicitly states the chunk's semantic role bridges this gap.
 
+### Anthropic's Implementation
+
+Anthropic passes the **entire document** to the LLM for each chunk, using [prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) to avoid re-processing the document for every chunk. The document is cached after the first chunk, making subsequent calls ~90% cheaper.
+
+**Anthropic's exact prompt:**
+
+```
+<document>
+{{WHOLE_DOCUMENT}}
+</document>
+
+Here is the chunk we want to situate within the whole document
+<chunk>
+{{CHUNK_CONTENT}}
+</chunk>
+
+Please give a short succinct context to situate this chunk within the overall
+document for the purposes of improving search retrieval of the chunk.
+Answer only with the succinct context and nothing else.
+```
+
+**Implementation details** (from [LlamaIndex's cookbook](https://developers.llamaindex.ai/python/examples/cookbooks/contextual_retrieval/)):
+- **Model**: Claude 3 Haiku (fast, cheap)
+- **Output**: 50-100 tokens per chunk
+- **Cost with caching**: ~$1 per million document tokens
+- **Document size assumption**: < 200K tokens (~500 pages)
+
+The generated context is prepended directly to the chunk text before embedding.
+
 
 
 
 ## Differences from Anthropic's Approach
 
+Anthropic tested on short documents (papers, articles) where the full document fits in context. This corpus contains **books** (300-800 pages, 150K-400K tokens) where full-document context is impractical:
+
+1. **Cost**: A 600-page book × 700 chunks = massive token usage even with caching
+2. **Noise**: 99% of a textbook is irrelevant to any given chunk (other chapters)
+3. **Structure**: Books have deep hierarchy (chapters → sections) that papers lack
+
 <div align="center">
 
 | Aspect | Anthropic | This Implementation |
 |--------|-----------|---------------------|
-| **Document context** | Full document in prompt | 2 neighbor chunks (token efficiency) |
-| **Section metadata** | Not mentioned | Includes hierarchical path (Book > Chapter > Section) |
+| **Document context** | Full document (~8K-50K tokens) | 2 neighbor chunks (~1.6K tokens) |
+| **Document size** | Papers, articles (<500 pages) | Books (300-800 pages) |
+| **Section metadata** | Not mentioned | Includes `Book > Chapter > Section` path |
 | **Original preservation** | Not mentioned | Stores `original_text` and `contextual_snippet` separately |
 
 </div>
+
+**Trade-off**: This implementation sacrifices full-document awareness for cost efficiency, partially compensating with hierarchical metadata (`context_path`).
 
 
 
