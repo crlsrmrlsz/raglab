@@ -93,13 +93,56 @@ For each book:
 
 <div align="center">
 
-| Category | Books | Leaves | Summary Levels | Example |
-|----------|-------|--------|----------------|---------|
-| **Large** | 5 | 500-880 | 3 (L1→L2→L3) | Cognitive Neuroscience: 881→38→7→3 |
-| **Medium** | 6 | 250-500 | 2 (L1→L2) | Letters from a Stoic: 416→21→4 |
-| **Short** | 8 | 70-160 | 2 (L1→L2) | Tao Te Ching: 129→14→3 |
+| Category | Books | Leaves | Levels | Level Breakdown Example |
+|----------|-------|--------|--------|-------------------------|
+| **Large** | 6 | 400-960 | 3 | Biopsychology: 959→41→6→2 |
+| **Medium** | 7 | 130-340 | 2 | Thinking Fast: 333→20→4 |
+| **Small** | 4 | 40-100 | 2 | Enchiridion: 74→10→3 |
+| **Tiny** | 2 | 23-28 | 1 | Wisdom of Life: 28→4 |
 
 </div>
+
+
+
+## Example: Chunk Hierarchy
+
+This example from *Letters from a Stoic* shows how a leaf chunk connects to progressively broader summaries:
+
+```mermaid
+flowchart TB
+    subgraph L2["Level 2 — Book Theme (4 clusters)"]
+        S2["The letters explore philosophical themes:<br/>value of time, nature of friendship,<br/>pursuit of a virtuous life"]
+    end
+
+    subgraph L1["Level 1 — Section Theme (8 clusters)"]
+        S1["Seneca addresses Lucilius, encouraging<br/>wisdom and virtue while resisting<br/>temptations of societal approval"]
+    end
+
+    subgraph L0["Level 0 — Leaf Chunk"]
+        C["<b>LXVI. ON VARIOUS ASPECTS OF VIRTUE</b><br/><i>'Whenever the virtue in each one is equal,<br/>the inequality in their other attributes<br/>is not apparent...'</i>"]
+    end
+
+    S2 --> S1
+    S1 --> C
+
+    style L2 fill:#fff3e0,stroke:#ef6c00
+    style L1 fill:#e3f2fd,stroke:#1565c0
+    style L0 fill:#e8f5e9,stroke:#2e7d32
+```
+
+**Leaf (Level 0)** — Section: *LXVI. ON VARIOUS ASPECTS OF VIRTUE* (106 tokens)
+> "Whenever the virtue in each one is equal, the inequality in their other attributes is not apparent. For all other things are not parts, but merely accessories. Would any man judge his children so unfairly as to care more for a healthy son than for one who was sickly..."
+
+**Level 1 Summary** — Cluster of 41 chunks (150 tokens)
+> "In this philosophical discourse, the speaker addresses Lucilius, encouraging him to pursue wisdom and virtue while resisting the temptations of societal approval and material desires. The speaker emphasizes the importance of self-reliance and inner strength..."
+
+**Level 2 Summary** — Cluster of 4 L1 summaries (151 tokens)
+> "The text is a collection of letters from the Stoic philosopher Seneca, addressed to his friend Lucilius. These letters explore various philosophical themes, particularly the value of time, the nature of friendship, and the pursuit of a virtuous life..."
+
+The hierarchy enables queries at different granularities:
+- *"What does Seneca say about comparing virtues?"* → retrieves the leaf
+- *"What is Seneca's advice to Lucilius?"* → retrieves L1 summary
+- *"What are the main themes in Letters from a Stoic?"* → retrieves L2 summary
 
 
 
