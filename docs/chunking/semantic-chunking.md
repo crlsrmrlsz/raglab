@@ -80,7 +80,7 @@ For each document:
 
 Comparison of semantic chunking with two coefficient values:
 
-![Chunk Size Distribution](assets/semantic-chunking-distribution.png)
+![Chunk Size Distribution](../../assets/semantic-chunking-distribution.png)
 
 <div align="center">
 

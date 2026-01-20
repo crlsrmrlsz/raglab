@@ -53,20 +53,6 @@ For each document:
 
 
 
-### Core Function
-
-```python
-# src/rag_pipeline/chunking/section_chunker.py
-
-def create_chunks_from_paragraphs(
-    paragraphs: list[dict],
-    book_name: str,
-    max_tokens: int = MAX_CHUNK_TOKENS,  # from config.py (800)
-    overlap_sentences: int = OVERLAP_SENTENCES  # from config.py (2)
-) -> list[dict]:
-```
-
-
 
 <details>
 <summary><strong>Example Chunk</strong></summary>
