@@ -125,22 +125,22 @@ def contextual_strategy(
     """Contextual chunking (Anthropic-style).
 
     Algorithm:
-    - Load existing section chunks (baseline)
-    - For each chunk, gather neighboring chunks as context
+    - Load existing semantic_std2 chunks (topic-aligned boundaries)
+    - For each chunk, use book title and section title as context
     - Call LLM to generate 50-100 token contextual snippet
     - Prepend snippet to chunk text before embedding
 
     Use case: Better disambiguation, improved retrieval for complex queries.
     Anthropic reports 35% failure reduction (recall@20).
 
-    Note: Requires section chunks to exist first. Run section strategy
-    if contextual/ folder is empty.
+    Note: Requires semantic_std2 chunks to exist first. Run semantic strategy
+    with --std-coefficient 2.0 if contextual/ folder is empty.
 
     Note: Requires LLM API calls for each chunk (costs ~$0.50-1.00 for corpus).
 
     Args:
         model: OpenRouter model ID for context generation.
-            Default: anthropic/claude-3-haiku (fast, cheap).
+            Default: gpt-4o-mini (fast, cheap).
         overwrite_context: Context for handling existing file overwrites.
 
     Returns:
