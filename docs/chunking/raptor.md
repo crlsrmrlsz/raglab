@@ -119,13 +119,13 @@ Summary:
 
 This example from *Brain and Behavior* (the same chunk used in [Semantic Chunking](semantic-chunking.md)) traces a single leaf chunk through its parent summaries up to the tree root.
 
-**Tree Path:** `chunk_676` → `L1_cluster_23` → `L2_cluster_1` → `L3_cluster_0` (root)
+**Tree Path:** `chunk_676` → `L1_cluster_4` → `L2_cluster_4` → `L3_cluster_1` (root)
 
 <details>
 <summary><strong>chunk_676 (Level 0 — Leaf): 521 tokens</strong></summary>
 <small>
 
-**Section:** *Why Motivation Matters* | **Parent:** `L1_cluster_23`
+**Section:** *Why Motivation Matters* | **Parent:** `L1_cluster_4`
 
 > Staying alive is a balancing act. From the moment an animal opens its eyes in the morning, it is faced with a series of dilemmas. Should I spend my time foraging for food and building my energy supplies? Or is it more important to find a source of water? Is it too cold to go outside today, even if I am hungry? Am I safe from predators here, or do I need to find a better shelter? Are there too many rivals in this territory? Should I drive them away and defend my food supply, even if it means going hungry and risking injury? And what about the all-important goal of reproduction? How important is it to find a mate if going outside to find one involves a risk of getting eaten? With so many needs to meet, the brain needs to have some way of setting its priorities. Get the balance right, and the prize is survival and many offspring, who will probably have brains as crafty as your own. Get the balance wrong, and your kind of brain will in time go extinct. As one might imagine, the brain's current architecture for priority setting developed early on (at least half a billion years ago, as you may recall from Chapter 2) and has remained remarkably stable ever since. Many of the basic needs of a living creature have changed little, even as animals have moved from water to the land and diversified into thousands of species, one of which now has the intelligence to study its own brain's motivational mechanisms. It is worth mentioning here that the circuitry of what we usually mean by 'intelligence' is a relatively new addition to an ancient basic brain plan. So-called 'general intelligence' is also a different function from priority-setting. Intelligence is about being able to predict the outside-world consequences of your actions: for example, what sequence of button presses on your computer will result in your email being sent to the intended recipient. High intelligence typically refers to the ability to make accurate predictions about outside-world events based on one's actions: for example, reliably predicting which answers on a multiple-choice test will result in a response of 'correct.' Motivation is more akin to judgment: the ability to make accurate predictions about what is most important in any given scenario. Of course, intelligence and judgment do not always go together. A person may have a high ability to memorize textbook content and predict the most appropriate answers on a test. However, this same person may have difficulty assigning the most appropriate priority level to reading the textbook over sending emails in the nights leading up to the examination and perform poorly on the examination as a result.
 
@@ -133,39 +133,39 @@ This example from *Brain and Behavior* (the same chunk used in [Semantic Chunkin
 </details>
 
 <details>
-<summary><strong>L1_cluster_23 (Level 1 Summary): 150 tokens</strong></summary>
+<summary><strong>L1_cluster_4 (Level 1 Summary): 172 tokens</strong></summary>
 <small>
 
-**Children:** 13 chunks | **Parent:** `L2_cluster_1`
+**Children:** 13 chunks | **Parent:** `L2_cluster_4`
 
-> All living organisms have essential survival needs, and their bodies must maintain a narrow range of physical parameters to sustain life. Disruptions in energy supply, water levels, or temperature can halt vital biochemical processes. The brain plays a crucial role in maintaining homeostasis, which is the process of keeping internal parameters balanced. The hypothalamus, a key brain structure, contains neurons that regulate basic drives such as hunger, thirst, temperature control, sexual arousal, and sleep. These drives help balance energy intake with consumption, water intake with dehydration, and temperature regulation. The hypothalamus is organized into distinct nuclei, each responsible for specific functions related to these drives. For example, certain nuclei coordinate feeding, regulate satiety, and manage heat generation or shedding
+> All living organisms have essential survival needs, which are maintained through the process of homeostasis. The hypothalamus plays a crucial role in regulating internal parameters, such as hunger, thirst, temperature, and sleep, through its various nuclei. It receives input from the body's internal state and bloodstream composition, allowing it to coordinate autonomic, endocrine, and behavioral responses to maintain balance. For example, when dehydrated, the hypothalamus can increase heart rate and stimulate the release of antidiuretic hormone to conserve water. Additionally, it generates motivational signals that prompt the cerebral cortex to plan actions, such as foraging for water. The interplay between internal drives and external incentives shapes complex behaviors necessary for survival. Dopaminergic neurons in the midbrain help prioritize these competing drives, influencing decision-making and behavioral responses essential for survival and reproduction.
 
 </small>
 </details>
 
 <details>
-<summary><strong>L2_cluster_1 (Level 2 Summary): 152 tokens</strong></summary>
+<summary><strong>L2_cluster_4 (Level 2 Summary): 180 tokens</strong></summary>
 <small>
 
-**Children:** 8 L1 clusters | **Parent:** `L3_cluster_0`
+**Children:** 5 L1 clusters | **Parent:** `L3_cluster_1`
 
-> The cerebellum, often called the "little brain," is vital for correcting and coordinating movements, particularly when they stray from their intended path. It contains more neurons than the entire cerebrum and is organized into folia, lobules, and lobes, which enhance neuronal communication. The cerebellar cortex has three layers: the granule cell layer, the Purkinje cell layer, and the molecular layer. Inputs from the brainstem connect to excitatory and inhibitory interneurons, with Purkinje cells serving as the primary output neurons that fine-tune motor activity by sending signals to various brain regions. Damage to the cerebellum can disrupt smooth and coordinated movements. Dopaminergic neurons are essential for reward, motivation, and
+> All living organisms require essential survival needs, maintained through homeostasis, with the hypothalamus playing a key role in regulating hunger, thirst, temperature, and sleep. It coordinates responses to internal states and external stimuli, such as increasing heart rate and releasing antidiuretic hormone during dehydration. The interplay between internal drives and external incentives influences complex behaviors necessary for survival, with dopaminergic neurons in the midbrain prioritizing these competing drives. Additionally, cognitive biases, such as anchoring and confirmation bias, can lead to irrational decision-making, influenced by emotional factors rather than rationality. The theory of mind, crucial for social interactions, is supported by neural mechanisms like mirror neurons and the fusiform face area. Emotions are processed by the limbic system, with theories evolving to recognize the integration of various systems. Understanding these mechanisms is vital for addressing emotional disorders and improving decision-making strategies.
 
 </small>
 </details>
 
 <details>
-<summary><strong>L3_cluster_0 (Level 3 — Root): 152 tokens</strong></summary>
+<summary><strong>L3_cluster_1 (Level 3 — Root): 173 tokens</strong></summary>
 <small>
 
-**Children:** 3 L2 clusters | **Parent:** none (root)
+**Children:** 4 L2 clusters | **Parent:** none (root)
 
-> The cerebellum, often referred to as the "little brain," plays a crucial role in correcting and coordinating movements, especially when they deviate from their intended trajectory. It is densely packed with neurons, containing more than the entire cerebrum, and is structured into folia, lobules, and lobes, which facilitate effective neuronal communication. The cerebellar cortex consists of three distinct layers: the granule cell layer, the Purkinje cell layer, and the molecular layer. Inputs from the brainstem connect to both excitatory and inhibitory interneurons, with Purkinje cells acting as the primary output neurons. These cells fine-tune motor activity by transmitting signals to various brain regions. Damage to the cerebellum can lead to
+> Nearly 70% of jail inmates have a history of substance abuse, underscoring the shortcomings of the War on Drugs, which emphasizes supply over the neurological aspects of addiction. Addiction distorts motivation, leading individuals to prioritize substances over essential needs. Current treatments, including counseling and medications, often result in limited long-term success and high relapse rates. New strategies, such as studying brain circuitry and potential treatments like immunization and ibogaine, are being explored. The text also discusses the emotional impacts of neurological interventions, as seen in cases like Susanna, a Parkinson's patient who experienced sadness during deep brain stimulation. Furthermore, the hypothalamus regulates essential survival needs, while cognitive biases can lead to irrational decisions influenced by emotions. Understanding the intricate relationship between brain function, emotions, and language acquisition is crucial for improving treatment strategies for neurological and psychiatric disorders.
 
 </small>
 </details>
 
-**Observation:** L1 stays topically coherent with the leaf (survival needs → homeostasis → hypothalamus). At L2/L3, clusters merge diverse neuroscience content—motivation/reward joins with motor control (cerebellum). This is expected: higher levels capture book-wide themes rather than chapter-specific content.
+**Observation:** L1 stays topically coherent with the leaf (survival needs → homeostasis → hypothalamus → dopaminergic neurons). At L2/L3, clusters merge diverse neuroscience content—motivation joins with cognitive biases, emotion processing, and addiction. This is expected: higher levels capture book-wide themes rather than chapter-specific content.
 
 The hierarchy enables queries at different granularities:
 - *"What survival dilemmas do animals face?"* → retrieves the leaf chunk
