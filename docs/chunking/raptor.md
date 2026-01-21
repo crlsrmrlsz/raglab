@@ -137,12 +137,18 @@ flowchart TB
 ```
 
 **Leaf (Level 0)** — Section: *Why Motivation Matters* (521 tokens)
-> "Staying alive is a balancing act. From the moment an animal opens its eyes in the morning, it is faced with a series of dilemmas. Should I spend my time foraging for food and building my energy supplies? Or is it more important to find a source of water?..."
+> "Staying alive is a balancing act. From the moment an animal opens its eyes in the morning, it is faced with a series of dilemmas. Should I spend my time foraging for food and building my energy supplies? Or is it more important to find a source of water? Is it too cold to go outside today, even if I am hungry? Am I safe from predators here, or do I need to find a better shelter?..."
 
 **Level 1 Summary** — Cluster of 13 chunks (150 tokens)
-> "All living organisms have essential survival needs, and their bodies must maintain a narrow range of physical parameters to sustain life. The brain plays a crucial role in maintaining homeostasis. The hypothalamus contains neurons that regulate basic drives such as hunger, thirst, temperature control, sexual arousal, and sleep..."
+> "All living organisms have essential survival needs, and their bodies must maintain a narrow range of physical parameters to sustain life. Disruptions in energy supply, water levels, or temperature can halt vital biochemical processes. The brain plays a crucial role in maintaining homeostasis, which is the process of keeping internal parameters balanced. The hypothalamus, a key brain structure, contains neurons that regulate basic drives such as hunger, thirst, temperature control, sexual arousal, and sleep. These drives help balance energy intake with consumption, water intake with dehydration, and temperature regulation. The hypothalamus is organized into distinct nuclei, each responsible for specific functions related to these drives. For example, certain nuclei coordinate feeding, regulate satiety, and manage heat generation or shedding"
 
-**Level 2-3 Summaries** — At higher levels, clusters merge diverse content from across the book. The L2/L3 summaries for this chunk combine motivation/reward content with motor control (cerebellum), reflecting how RAPTOR groups semantically related neuroscience topics.
+**Level 2 Summary** — Cluster of 8 L1 summaries (152 tokens)
+> "The cerebellum, often called the 'little brain,' is vital for correcting and coordinating movements, particularly when they stray from their intended path. It contains more neurons than the entire cerebrum and is organized into folia, lobules, and lobes, which enhance neuronal communication. The cerebellar cortex has three layers: the granule cell layer, the Purkinje cell layer, and the molecular layer. Inputs from the brainstem connect to excitatory and inhibitory interneurons, with Purkinje cells serving as the primary output neurons that fine-tune motor activity by sending signals to various brain regions. Damage to the cerebellum can disrupt smooth and coordinated movements. Dopaminergic neurons are essential for reward, motivation, and"
+
+**Level 3 Summary** — Cluster of 3 L2 summaries (152 tokens)
+> "The cerebellum, often referred to as the 'little brain,' plays a crucial role in correcting and coordinating movements, especially when they deviate from their intended trajectory. It is densely packed with neurons, containing more than the entire cerebrum, and is structured into folia, lobules, and lobes, which facilitate effective neuronal communication. The cerebellar cortex consists of three distinct layers: the granule cell layer, the Purkinje cell layer, and the molecular layer. Inputs from the brainstem connect to both excitatory and inhibitory interneurons, with Purkinje cells acting as the primary output neurons. These cells fine-tune motor activity by transmitting signals to various brain regions. Damage to the cerebellum can lead to"
+
+Note how L2/L3 summaries merge diverse content from across the book—combining motivation/reward with motor control (cerebellum). This reflects how RAPTOR clusters semantically related neuroscience topics at higher abstraction levels.
 
 The hierarchy enables queries at different granularities:
 - *"What survival dilemmas do animals face?"* → retrieves the leaf chunk
