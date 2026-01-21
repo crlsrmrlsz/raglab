@@ -85,6 +85,17 @@ For each book:
   Return all nodes (leaves + summaries)
 ```
 
+**Summary prompt:**
+```
+Write a concise summary (~100-150 words) of the following content.
+Include key details but ensure all sentences are complete. Do not end mid-sentence.
+
+Content:
+{context}
+
+Summary:
+```
+
 **Output:** Average summary = 131 tokens (~72% compression). Average children per parent = 6.7 chunks.
 
 
