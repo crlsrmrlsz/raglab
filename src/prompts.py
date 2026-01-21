@@ -71,14 +71,22 @@ CONTEXTUAL_PROMPT = """<book>
 {chunk_text}
 </chunk>
 
-Please give a short succinct context to situate this chunk within the book for the purposes of improving search retrieval of the chunk. Use key terms from the section title that help identify what this chunk is about. Answer only with the succinct context and nothing else."""
+Write a brief context (1-2 sentences, ~50-80 words) to situate this chunk within the book for search retrieval.
+Use key terms from the section title. Ensure sentences are complete - do not end mid-sentence.
+Answer only with the context, nothing else."""
 
 
 # =============================================================================
 # RAPTOR PROMPTS
 # =============================================================================
 
-RAPTOR_SUMMARY_PROMPT = "Write a summary of the following, including as many key details as possible: {context}:"
+RAPTOR_SUMMARY_PROMPT = """Write a concise summary (~100-150 words) of the following content.
+Include key details but ensure all sentences are complete. Do not end mid-sentence.
+
+Content:
+{context}
+
+Summary:"""
 
 
 # =============================================================================
@@ -112,10 +120,12 @@ This community was detected via the Leiden algorithm and contains semantically r
 Community entities and their relationships:
 {community_context}
 
-Write a comprehensive summary (2-3 paragraphs) that:
+Write a summary (2-3 short paragraphs, ~150-200 words) that:
 1. Identifies the main theme or topic connecting these entities
 2. Explains the key relationships and how concepts interact
 3. Highlights important details, names, and specific findings
+
+Ensure all sentences are complete. Do not end mid-sentence.
 
 Summary:"""
 

@@ -7,7 +7,7 @@ Contextual chunking prepends LLM-generated snippets that situate each chunk with
 While section and semantic chunking optimize *where* to split text, contextual chunking addresses *what information is lost* after splitting—the document-level context that makes chunks meaningful.
 
 Here [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) approach is implemented as a **post-processing step on semantic chunks (std=2)**, using these parameters:
-- **Max snippet tokens**: 100, brief disambiguation not a summary
+- **Max snippet tokens**: 150, brief disambiguation with buffer for complete sentences
 - **Model**: gpt-4o-mini, cost-efficient for simple contextualization
 
 

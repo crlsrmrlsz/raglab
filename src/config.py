@@ -494,7 +494,8 @@ SEMANTIC_STD_COEFFICIENT = 3.0  # Standard deviations below mean for breakpoint
 CONTEXTUAL_MODEL = "openai/gpt-4o-mini"
 
 # Maximum tokens for the contextual snippet (output limit)
-CONTEXTUAL_MAX_SNIPPET_TOKENS = 100
+# Increased from 100 to allow room for complete sentences
+CONTEXTUAL_MAX_SNIPPET_TOKENS = 150
 
 # CONTEXTUAL_PROMPT is imported from src/prompts.py (see bottom of file)
 
@@ -655,7 +656,8 @@ RAPTOR_MAX_CLUSTERS = 50  # Maximum K for BIC search
 RAPTOR_CLUSTER_PROBABILITY_THRESHOLD = 0.3  # Soft assignment threshold
 
 # Summarization parameters
-RAPTOR_MAX_SUMMARY_TOKENS = 150  # Output limit (paper avg: 131)
+# Increased from 150 to allow room for complete sentences
+RAPTOR_MAX_SUMMARY_TOKENS = 200  # Output limit (paper avg: 131, buffer for sentence completion)
 RAPTOR_MAX_CONTEXT_TOKENS = 8000  # Input context limit for LLM
 
 # RAPTOR_SUMMARY_PROMPT is imported from src/prompts.py (see bottom of file)
@@ -745,7 +747,8 @@ GRAPHRAG_LEIDEN_SEED = 42           # Fixed seed for deterministic results
 GRAPHRAG_LEIDEN_CONCURRENCY = 1     # Single-threaded for reproducibility
 
 # Community summarization parameters
-GRAPHRAG_MAX_SUMMARY_TOKENS = 200   # Max tokens per community summary
+# Increased from 200 to allow room for complete sentences
+GRAPHRAG_MAX_SUMMARY_TOKENS = 300   # Max tokens per community summary (buffer for sentence completion)
 GRAPHRAG_MAX_CONTEXT_TOKENS = 6000  # Max input tokens for summarization
 
 # GraphRAG prompts are imported from src/prompts.py (see bottom of file):
