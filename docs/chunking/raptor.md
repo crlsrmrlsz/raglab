@@ -106,43 +106,48 @@ For each book:
 
 ## Example: Chunk Hierarchy
 
-This example from *Letters from a Stoic* shows how a leaf chunk connects to progressively broader summaries:
+This example from *Brain and Behavior* (the same chunk used in [semantic-chunking.md](semantic-chunking.md)) shows how a leaf chunk connects to progressively broader summaries:
 
 ```mermaid
 flowchart TB
-    subgraph L2["Level 2 — Book Theme (4 clusters)"]
-        S2["The letters explore philosophical themes:<br/>value of time, nature of friendship,<br/>pursuit of a virtuous life"]
+    subgraph L3["Level 3 — Book-Wide (3 clusters)"]
+        S3["Cerebellum coordinates movement...<br/>Dopaminergic neurons essential for<br/>reward, motivation..."]
     end
 
-    subgraph L1["Level 1 — Section Theme (8 clusters)"]
-        S1["Seneca addresses Lucilius, encouraging<br/>wisdom and virtue while resisting<br/>temptations of societal approval"]
+    subgraph L2["Level 2 — Cross-Chapter (8 clusters)"]
+        S2["Cerebellum corrects movements...<br/>Dopaminergic neurons essential for<br/>reward, motivation..."]
+    end
+
+    subgraph L1["Level 1 — Chapter Theme (13 chunks)"]
+        S1["Living organisms have survival needs...<br/>Brain maintains homeostasis...<br/>Hypothalamus regulates basic drives:<br/>hunger, thirst, temperature, sleep"]
     end
 
     subgraph L0["Level 0 — Leaf Chunk"]
-        C["<b>LXVI. ON VARIOUS ASPECTS OF VIRTUE</b><br/><i>'Whenever the virtue in each one is equal,<br/>the inequality in their other attributes<br/>is not apparent...'</i>"]
+        C["<b>Why Motivation Matters</b><br/><i>'Staying alive is a balancing act.<br/>From the moment an animal opens<br/>its eyes in the morning...'</i>"]
     end
 
+    S3 --> S2
     S2 --> S1
     S1 --> C
 
+    style L3 fill:#fce4ec,stroke:#c2185b
     style L2 fill:#fff3e0,stroke:#ef6c00
     style L1 fill:#e3f2fd,stroke:#1565c0
     style L0 fill:#e8f5e9,stroke:#2e7d32
 ```
 
-**Leaf (Level 0)** — Section: *LXVI. ON VARIOUS ASPECTS OF VIRTUE* (106 tokens)
-> "Whenever the virtue in each one is equal, the inequality in their other attributes is not apparent. For all other things are not parts, but merely accessories. Would any man judge his children so unfairly as to care more for a healthy son than for one who was sickly..."
+**Leaf (Level 0)** — Section: *Why Motivation Matters* (521 tokens)
+> "Staying alive is a balancing act. From the moment an animal opens its eyes in the morning, it is faced with a series of dilemmas. Should I spend my time foraging for food and building my energy supplies? Or is it more important to find a source of water?..."
 
-**Level 1 Summary** — Cluster of 41 chunks (150 tokens)
-> "In this philosophical discourse, the speaker addresses Lucilius, encouraging him to pursue wisdom and virtue while resisting the temptations of societal approval and material desires. The speaker emphasizes the importance of self-reliance and inner strength..."
+**Level 1 Summary** — Cluster of 13 chunks (150 tokens)
+> "All living organisms have essential survival needs, and their bodies must maintain a narrow range of physical parameters to sustain life. The brain plays a crucial role in maintaining homeostasis. The hypothalamus contains neurons that regulate basic drives such as hunger, thirst, temperature control, sexual arousal, and sleep..."
 
-**Level 2 Summary** — Cluster of 4 L1 summaries (151 tokens)
-> "The text is a collection of letters from the Stoic philosopher Seneca, addressed to his friend Lucilius. These letters explore various philosophical themes, particularly the value of time, the nature of friendship, and the pursuit of a virtuous life..."
+**Level 2-3 Summaries** — At higher levels, clusters merge diverse content from across the book. The L2/L3 summaries for this chunk combine motivation/reward content with motor control (cerebellum), reflecting how RAPTOR groups semantically related neuroscience topics.
 
 The hierarchy enables queries at different granularities:
-- *"What does Seneca say about comparing virtues?"* → retrieves the leaf
-- *"What is Seneca's advice to Lucilius?"* → retrieves L1 summary
-- *"What are the main themes in Letters from a Stoic?"* → retrieves L2 summary
+- *"What survival dilemmas do animals face?"* → retrieves the leaf chunk
+- *"How does the brain regulate basic drives?"* → retrieves L1 summary
+- *"What brain systems are covered in this textbook?"* → retrieves L2/L3 summaries
 
 
 
