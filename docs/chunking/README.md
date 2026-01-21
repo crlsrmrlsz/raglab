@@ -23,19 +23,6 @@ This document explains common and general considerations about chunking, but the
 - **[RAPTOR](raptor.md)** — Hierarchical summarization tree
 
 
-## Dependencies
-
-It is important to note that advanced chunking strategies have dependencies:
-- **RAPTOR** builds on section chunks (baseline)
-- **Contextual** builds on semantic chunks (std=2) for better coherence
-
-So decisions in earlier chunking stages condition the advanced techniques results.
-
-<div align="center">
-    <img src="../../assets/chunk_dependencies.png" alt="Chunk Strategies Dependencies">
-</div>
-
-
 
 ## Why Custom Implementation
 
