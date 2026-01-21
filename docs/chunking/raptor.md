@@ -42,7 +42,7 @@ The core insight is combining dimensionality reduction with probabilistic cluste
 2. **GMM** (Gaussian Mixture Model) clusters the reduced embeddings, using **BIC** (Bayesian Information Criterion) to automatically select K—balancing fit vs complexity to avoid both under- and over-clustering
 3. **LLM summarization** generates a summary for each cluster, creating parent nodes
 4. **Recursion** repeats on the summaries until the tree stops growing
-5. **Collapsed tree retrieval** queries all nodes (leaves + summaries) together; similarity naturally selects the appropriate abstraction level
+5. **Collapsed tree retrieval** queries all nodes (leaves + summaries) together; similarity naturally selects the appropriate abstraction level (the paper tested this against layer-by-layer tree traversal and found collapsed tree with top-k=20 performed best)
 
 The choice of GMM over K-means is deliberate: GMM provides soft clustering where a chunk about "stress and cortisol" can belong to both "neuroscience" AND "health effects" clusters, while K-means forces hard assignment.
 
