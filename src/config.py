@@ -861,5 +861,5 @@ from src.prompts import (
 )
 
 # Number of hypothetical documents to generate for HyDE
-# Paper recommends K=5 for robustness, but K=2 reduces cost/latency
-HYDE_K = 2
+# Paper recommends K=5 for robustness via embedding averaging
+HYDE_K = 5

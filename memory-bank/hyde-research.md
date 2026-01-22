@@ -175,12 +175,12 @@ The previous prompt listed specific philosophy schools (Stoicism, Taoism, etc.) 
 2. **"classical wisdom essay"** - Matches all 10 philosophy books without naming specific schools
 3. **Minimal specification** - Avoids over-constraining LLM output, following paper's key finding
 
-**RAGLab Implementation (K=2):**
+**RAGLab Implementation (K=5):**
 
-RAGLab uses K=2 hypothetical passages (reduced from paper's K=5 for faster response) and includes the original query in the embedding average.
+RAGLab uses K=5 hypothetical passages (matching the paper) and includes the original query in the embedding average.
 
 At retrieval time:
-1. Generate K=2 hypothetical passages (temperature 0.7)
+1. Generate K=5 hypothetical passages (temperature 0.7)
 2. Embed original query + all K passages
 3. Average the embedding vectors (element-wise mean)
 4. Use averaged vector for pure semantic search (alpha=1.0)

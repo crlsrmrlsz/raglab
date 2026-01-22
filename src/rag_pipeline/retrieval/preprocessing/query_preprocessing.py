@@ -97,9 +97,9 @@ def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> lis
         List of k hypothetical passages. Embeddings should be averaged downstream.
 
     Example:
-        >>> passages = hyde_prompt("Why do we procrastinate?", k=2)
+        >>> passages = hyde_prompt("Why do we procrastinate?", k=5)
         >>> len(passages)
-        2
+        5
         >>> passages[0]
         "Procrastination stems from temporal discounting..."
     """

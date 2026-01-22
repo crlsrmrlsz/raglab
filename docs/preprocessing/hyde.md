@@ -103,7 +103,7 @@ Paragraph:
 
 ## RAGLab Implementation
 
-RAGLab uses K=2 hypothetical passages (reduced from K=5 for faster response) and includes the original query in the embedding average.
+RAGLab uses K=5 hypothetical passages (matching the paper) and includes the original query in the embedding average.
 
 ```python
 HYDE_PROMPT = """Please write a passage from a neuroscience textbook or classical wisdom essay to answer the question.
