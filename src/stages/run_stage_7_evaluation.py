@@ -89,6 +89,10 @@ from src.config import (
 )
 from src.evaluation import run_evaluation
 from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_arg
+from src.rag_pipeline.retrieval.preprocessing.strategy_config import (
+    get_strategy_config,
+    is_valid_combination,
+)
 
 # Comprehensive evaluation imports (lazy-loaded in function)
 COMPREHENSIVE_QUESTIONS_FILE = PROJECT_ROOT / "src" / "evaluation" / "comprehensive_questions.json"
@@ -456,7 +460,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
     import time
     from src.ui.services.search import list_collections, extract_strategy_from_collection
     from src.rag_pipeline.retrieval.preprocessing.strategies import list_strategies
-    from src.config import get_valid_preprocessing_strategies, list_search_types
+    from src.config import get_valid_preprocessing_strategies
     from src.evaluation.schemas import FailedCombinationsReport
 
     # Generate timestamp early for consistent naming across log, checkpoint, and results
@@ -478,8 +482,9 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
 
     # Get all dimensions
     collections = list_collections()
-    search_types = list_search_types()  # ["keyword", "hybrid"]
-    hybrid_alphas = [0.5, 1.0]  # Only used when search_type="hybrid"
+    # Alpha controls search balance: 0.0=keyword, 0.5=hybrid, 1.0=semantic
+    # No separate search_type dimension - alpha subsumes it
+    alpha_values = [0.0, 0.5, 1.0]
     top_k_values = [10, 20]
     all_strategies = list_strategies()
 
@@ -503,42 +508,46 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         logger.error("No RAG collections found in Weaviate. Run stage 6 first.")
         return
 
-    # Build base combinations: (collection, search_type, alpha, strategy)
-    # For keyword: alpha is always 0.0 (unused but stored for consistency)
-    # For hybrid: test each alpha value
+    # Build base combinations: (collection, alpha, strategy)
+    # Uses StrategyConfig constraints to filter invalid combinations
     # top_k will be the innermost loop for caching optimization
     base_combinations = []
+    skipped_combinations = []
     for collection in collections:
         collection_strategy = extract_strategy_from_collection(collection)
         valid_preprocessing = get_valid_preprocessing_strategies(collection_strategy)
-        for search_type in search_types:
-            if search_type == "keyword":
-                # Keyword search: alpha is ignored, use 0.0 as placeholder
-                for strategy in all_strategies:
-                    if strategy in valid_preprocessing:
-                        base_combinations.append((collection, search_type, 0.0, strategy))
-            else:  # hybrid
-                # Hybrid search: test each alpha value
-                for alpha in hybrid_alphas:
-                    for strategy in all_strategies:
-                        if strategy in valid_preprocessing:
-                            base_combinations.append((collection, search_type, alpha, strategy))
+        for alpha in alpha_values:
+            for strategy in all_strategies:
+                # Check collection compatibility (existing logic)
+                if strategy not in valid_preprocessing:
+                    skipped_combinations.append(
+                        (collection, alpha, strategy, f"{strategy} incompatible with {collection_strategy}")
+                    )
+                    continue
+                # Check alpha constraint via StrategyConfig
+                is_valid, error_msg = is_valid_combination(strategy, collection_strategy, alpha)
+                if is_valid:
+                    # search_type is always "hybrid" - alpha controls balance
+                    base_combinations.append((collection, "hybrid", alpha, strategy))
+                else:
+                    skipped_combinations.append((collection, alpha, strategy, error_msg))
 
     # Calculate total combinations (base * top_k values)
     total_combinations = len(base_combinations) * len(top_k_values)
-    # Count expected valid combinations for logging
-    num_keyword = len(collections) * len(all_strategies)  # keyword x all strategies (filtered later)
-    num_hybrid = len(collections) * len(hybrid_alphas) * len(all_strategies)  # hybrid x alphas x strategies
 
     # Log what we're testing
     logger.info(f"Testing {total_combinations} valid combinations:")
     logger.info(f"  Collections ({len(collections)}): {collections}")
-    logger.info(f"  Search types ({len(search_types)}): {search_types}")
-    logger.info(f"  Alphas for hybrid ({len(hybrid_alphas)}): {hybrid_alphas}")
+    logger.info(f"  Alpha values ({len(alpha_values)}): {alpha_values}")
     logger.info(f"  Top-K values ({len(top_k_values)}): {top_k_values}")
     logger.info(f"  Preprocessing strategies ({len(all_strategies)}): {all_strategies}")
     logger.info(f"  Base combinations: {len(base_combinations)} (top_k is innermost loop for caching)")
-    logger.info(f"  Note: graphrag only valid with section/contextual collections")
+    logger.info(f"  Skipped invalid: {len(skipped_combinations)}")
+    if skipped_combinations:
+        for coll, alpha, strat, reason in skipped_combinations[:5]:
+            logger.info(f"    - {strat} + alpha={alpha} on {coll}: {reason}")
+        if len(skipped_combinations) > 5:
+            logger.info(f"    ... and {len(skipped_combinations) - 5} more")
 
     # Run all valid combinations
     all_results = []
@@ -667,8 +676,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
                 "results": all_results,
                 "grid_params": {
                     "collections": collections,
-                    "search_types": search_types,
-                    "hybrid_alphas": hybrid_alphas,
+                    "alpha_values": alpha_values,
                     "top_k_values": top_k_values,
                     "strategies": all_strategies,
                 },
@@ -686,8 +694,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
     # Build grid parameters for report
     grid_params = {
         "collections": collections,
-        "search_types": search_types,
-        "hybrid_alphas": hybrid_alphas,
+        "alpha_values": alpha_values,
         "top_k_values": top_k_values,
         "strategies": all_strategies,
         "valid_combinations_count": total_combinations,

@@ -474,57 +474,50 @@ def retrieve_contexts(
             client.close()
 
     # =========================================================================
-    # HYDE: K=5 hypotheticals with embedding averaging (paper recommendation)
-    # Note: For keyword search_type, HyDE still transforms the query but uses BM25
+    # HYDE: Paper-aligned implementation (arXiv:2212.10496)
+    # - Averages embeddings: original_query + K hypotheticals
+    # - Uses pure semantic search (alpha=1.0, no BM25 component)
     # =========================================================================
     if preprocessed and preprocessed.strategy_used == "hyde":
-        generated_queries = preprocessed.generated_queries or []
-        hyde_passages = [q.get("query", "") for q in generated_queries if q.get("type") == "hyde" and q.get("query")]
+        from src.rag_pipeline.retrieval.preprocessing.strategy_config import (
+            get_strategy_config,
+        )
 
-        if len(hyde_passages) > 1:
-            logger.info(f"  [hyde] {len(hyde_passages)} hypotheticals (search_type={search_type})")
+        config = get_strategy_config("hyde")
+        generated_queries = preprocessed.generated_queries or []
+
+        # Extract ALL queries for embedding (original + hypotheticals per paper)
+        all_queries = [
+            q.get("query", "")
+            for q in generated_queries
+            if q.get("query")
+        ]
+
+        if len(all_queries) > 1:
+            # Paper requirement: pure semantic search (alpha=1.0)
+            hyde_alpha = config.alpha_constraint.fixed_value
+            logger.info(
+                f"  [hyde] Averaging {len(all_queries)} embeddings "
+                f"(original + hypotheticals), alpha={hyde_alpha}"
+            )
 
             client = get_client()
             try:
-                if search_type == "keyword":
-                    # For keyword search, use HyDE passages as search queries with RRF
-                    from src.rag_pipeline.retrieval.rrf import reciprocal_rank_fusion
+                from src.rag_pipeline.embedding.embedder import embed_texts
 
-                    result_lists = []
-                    query_types = []
-                    per_query_k = max(top_k * 2, 20)
+                # Embed and average ALL queries (original + hypotheticals)
+                embeddings = embed_texts(all_queries)
+                avg_embedding = [sum(col) / len(col) for col in zip(*embeddings)]
 
-                    for i, passage in enumerate(hyde_passages):
-                        results = query_bm25(
-                            client=client,
-                            query_text=passage,
-                            top_k=per_query_k,
-                            collection_name=collection_name,
-                        )
-                        result_lists.append(results)
-                        query_types.append(f"hyde_{i}")
-
-                    rrf_result = reciprocal_rank_fusion(
-                        result_lists=result_lists,
-                        query_types=query_types,
-                        top_k=initial_k,
-                    )
-                    results = rrf_result.results
-                else:
-                    # For hybrid search, average embeddings (original HyDE paper approach)
-                    from src.rag_pipeline.embedding.embedder import embed_texts
-
-                    embeddings = embed_texts(hyde_passages)
-                    avg_embedding = [sum(col) / len(col) for col in zip(*embeddings)]
-
-                    results = query_hybrid(
-                        client=client,
-                        query_text=preprocessed.original_query,
-                        top_k=initial_k,
-                        alpha=alpha,
-                        collection_name=collection_name,
-                        precomputed_embedding=avg_embedding,
-                    )
+                # Use pure semantic search (alpha=1.0 enforced by config)
+                results = query_hybrid(
+                    client=client,
+                    query_text=preprocessed.original_query,
+                    top_k=initial_k,
+                    alpha=hyde_alpha,  # 1.0 - pure semantic, no BM25
+                    collection_name=collection_name,
+                    precomputed_embedding=avg_embedding,
+                )
 
                 results = apply_reranking_if_enabled(
                     results, preprocessed.original_query, top_k, use_reranking

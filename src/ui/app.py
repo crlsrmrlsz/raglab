@@ -37,6 +37,9 @@ from src.config import (
     PREPROCESSING_MODEL,
     get_valid_preprocessing_strategies,
 )
+from src.rag_pipeline.retrieval.preprocessing.strategy_config import (
+    get_strategy_config,
+)
 from src.ui.services.search import search_chunks, get_available_collections, CollectionInfo
 from src.rag_pipeline.retrieval.preprocessing import preprocess_query
 from src.rag_pipeline.generation.answer_generator import generate_answer
@@ -405,30 +408,48 @@ else:
     selected_collection = None
 
 # -----------------------------------------------------------------------------
-# Retrieval (always visible)
+# Retrieval (constraint-aware based on selected strategy)
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("### Retrieval")
 
-search_type = st.sidebar.radio(
-    "Search Type",
-    options=["vector", "hybrid"],
-    index=1,
-    format_func=lambda x: "Semantic" if x == "vector" else "Hybrid",
-    help="Hybrid = vector + keyword matching.",
-    horizontal=True,
-)
+# Get strategy config for alpha constraints
+strategy_config = get_strategy_config(selected_strategy)
+alpha_constraint = strategy_config.alpha_constraint
 
-if search_type == "hybrid":
+# Render alpha control based on constraint
+if alpha_constraint.mode == "fixed":
+    # Strategy requires specific alpha (e.g., HyDE requires alpha=1.0)
+    alpha = alpha_constraint.fixed_value
+    if alpha == 1.0:
+        alpha_label = "Semantic"
+    elif alpha == 0.0:
+        alpha_label = "Keyword"
+    else:
+        alpha_label = f"Hybrid ({alpha})"
+    st.sidebar.caption(f"Search: **{alpha_label}** (required by {selected_strategy})")
+elif alpha_constraint.mode == "range":
+    # Strategy allows alpha within range
+    alpha = st.sidebar.slider(
+        "Alpha",
+        min_value=alpha_constraint.min_value,
+        max_value=alpha_constraint.max_value,
+        value=alpha_constraint.get_default(),
+        step=0.1,
+        help="0 = keyword only, 1 = semantic only",
+    )
+else:
+    # Strategy allows any alpha
     alpha = st.sidebar.slider(
         "Alpha",
         min_value=0.0,
         max_value=1.0,
         value=0.5,
         step=0.1,
-        help="0 = keyword only, 1 = vector only",
+        help="0 = keyword only, 1 = semantic only",
     )
-else:
-    alpha = 0.5
+
+# Always use hybrid search type (alpha controls the balance)
+search_type = "hybrid"
 
 top_k = st.sidebar.slider(
     "Results",

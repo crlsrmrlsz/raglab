@@ -77,16 +77,18 @@ def hyde_strategy(query: str, model: Optional[str] = None) -> PreprocessedQuery:
     Hypothetical Document Embeddings (HyDE) generates plausible answers
     to the query, then searches for real passages similar to these answers.
     Multiple hypotheticals improve retrieval robustness by covering
-    diverse phrasings and perspectives. Embeddings are averaged downstream.
+    diverse phrasings and perspectives.
 
-    Research: arXiv:2212.10496 - Outperforms unsupervised dense retrievers
+    Paper Alignment (arXiv:2212.10496):
+    - Embeddings averaged: original_query + K hypotheticals
+    - Search mode: Pure semantic (alpha=1.0, no BM25 component)
 
     Args:
         query: The user's original query.
         model: Model for HyDE LLM call.
 
     Returns:
-        PreprocessedQuery with K hypothetical passages in generated_queries.
+        PreprocessedQuery with original + K hypotheticals in generated_queries.
         search_query contains first passage for backward compatibility.
     """
     start_time = time.time()
@@ -98,11 +100,17 @@ def hyde_strategy(query: str, model: Optional[str] = None) -> PreprocessedQuery:
 
     elapsed_ms = (time.time() - start_time) * 1000
 
+    # Paper alignment: include original query + hypotheticals for embedding averaging
+    # The retrieval layer will average embeddings of ALL entries in generated_queries
+    generated_queries = [{"type": "original", "query": query}]
+    for passage in hyde_passages:
+        generated_queries.append({"type": "hyde", "query": passage})
+
     return PreprocessedQuery(
         original_query=query,
-        search_query=hyde_passages[0],  # First for backward compatibility
+        search_query=hyde_passages[0],  # First hypothetical for backward compatibility
         hyde_passage=hyde_passages[0],  # Keep first for logging
-        generated_queries=[{"type": "hyde", "query": p} for p in hyde_passages],
+        generated_queries=generated_queries,  # Original + hypotheticals for averaging
         strategy_used="hyde",
         preprocessing_time_ms=elapsed_ms,
         model=model,
