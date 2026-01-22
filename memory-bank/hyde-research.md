@@ -155,84 +155,40 @@ Let queries determine natural topic balance. Forced splits constrain generation.
 
 ---
 
-## 8. Implementation: Paper-Aligned Prompt with K=5 Averaging (Updated Dec 2024)
+## 8. Implementation: Paper-Aligned Prompt (Updated Jan 2025)
 
 ### Current HyDE Prompt
 ```python
-HYDE_PROMPT = """Please write a short passage drawing on insights from brain science and classical philosophy (Stoicism, Taoism, Confucianism, Schopenhauer, Gracian) to answer the question.
+HYDE_PROMPT = """Please write a passage from a neuroscience textbook or classical wisdom essay to answer the question.
 
 Question: {query}
 
 Passage:"""
 ```
 
-### December 2024 Update: Dual-Domain + K=5 Implementation
+### January 2025 Update: Minimal Prompt Following Paper Pattern
 
-Following the paper's recommendation for robust retrieval, we now generate **5 hypothetical passages** and average their embeddings.
+The previous prompt listed specific philosophy schools (Stoicism, Taoism, etc.) which risked template bias. The new prompt follows the paper's pattern exactly: **document type + domain, nothing more**.
 
 **Prompt Design Rationale:**
-1. **"Drawing on insights from..."** - Explicitly requests cross-domain synthesis for our mixed corpus
-2. **Parenthetical tradition hints** - "(Stoicism, Taoism, Confucianism, Schopenhauer, Gracian)" provides specific corpus cues without vocabulary lists
-3. **Covers all 10 philosophy books:**
-   - Stoicism: Seneca, Epictetus (2 books), Marcus Aurelius
-   - Taoism: Lao Tzu (Tao te ching)
-   - Confucianism: Confucius (The Analects)
-   - Schopenhauer: 3 books (Essays and Aphorisms, Counsels and Maxims, Wisdom of Life)
-   - Gracian: The Pocket Oracle and Art of Prudence
+1. **"neuroscience textbook"** - Matches the 9 scientific books (Sapolsky, Kahneman, Gazzaniga, etc.)
+2. **"classical wisdom essay"** - Matches all 10 philosophy books without naming specific schools
+3. **Minimal specification** - Avoids over-constraining LLM output, following paper's key finding
 
-**K=5 Multi-Hypothetical Implementation:**
-```python
-def hyde_prompt(query: str, model: str, k: int = 5) -> List[str]:
-    """Generate k hypothetical documents for query."""
-    passages = []
-    for _ in range(k):
-        response = call_chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            model=model,
-            temperature=0.7,  # Paper default for diversity
-        )
-        passages.append(response.strip())
-    return passages
-```
+**RAGLab Implementation (K=2):**
+
+RAGLab uses K=2 hypothetical passages (reduced from paper's K=5 for faster response) and includes the original query in the embedding average.
 
 At retrieval time:
-1. Embed all K passages using the same embedding model
-2. Average the embedding vectors (element-wise mean)
-3. Use averaged vector for hybrid search
-4. Original query still used for BM25 keyword matching
-
-**Why K=5 Averaging?**
-- Paper finding: Multiple hypotheticals improve retrieval robustness
-- Different passages capture different phrasings and perspectives
-- Averaging creates a more centered representation in embedding space
-- Reduces impact of any single hallucination
-
-### Previous Design Rationale
-
-This prompt follows the paper's approach for **domain-specific retrieval**:
-
-| Paper Template | Our Adaptation |
-|----------------|----------------|
-| SciFact: "Please write a **scientific paper passage**..." | "Please write a short passage drawing on insights from **brain science and classical philosophy**..." |
-| FiQA: "Please write a **financial article passage**..." | Same pattern: domain cue in task description |
+1. Generate K=2 hypothetical passages (temperature 0.7)
+2. Embed original query + all K passages
+3. Average the embedding vectors (element-wise mean)
+4. Use averaged vector for pure semantic search (alpha=1.0)
 
 **Key decisions aligned with paper:**
-
-1. **Temperature 0.7**: Matches paper for diverse hypothetical generation.
-
-2. **Minimal instructions**: Single sentence prompt to avoid template bias.
-
-3. **Domain + tradition hints**: Specific enough to match corpus vocabulary, general enough to avoid overfitting.
-
-4. **K=5 averaging**: Paper's recommended approach for robust retrieval.
-
-### Dense Bottleneck Principle
-
-The encoder (trained on real documents) compresses passages into fixed-size vectors:
-- Captures semantic essence (topics, concepts, relationships)
-- Discards noise (specific wrong facts, hallucinations)
-- This is why length constraints are unnecessary - trust the encoder
-- K=5 averaging further smooths out individual passage noise
+- **Temperature 0.7**: Matches paper for diverse hypothetical generation
+- **Minimal prompt**: Document type + domain only, avoiding template bias
+- **Embedding averaging**: Smooths out individual passage variance
 
 ---
 
