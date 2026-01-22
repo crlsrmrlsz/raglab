@@ -12,7 +12,7 @@ The key insight: the hypothetical doesn't need to be factually correct—it just
 
 **When it struggles:** Topics the LLM doesn't know well (it can't write a useful hypothetical), simple keyword searches where BM25 works fine, and time-sensitive applications (adds ~1-2s latency per query).
 
----
+
 
 ## The HyDE Paper and Official Implementation
 
@@ -99,23 +99,22 @@ Paragraph:
 
 **Temperature 0.7 balances diversity and relevance.** Lower temperatures produce repetitive outputs; higher temperatures may drift off-topic.
 
----
+
 
 ## RAGLab Implementation
 
 RAGLab uses K=2 hypothetical passages (reduced from K=5 for faster response) and includes the original query in the embedding average.
 
 ```python
-HYDE_PROMPT = """Please write a short passage drawing on insights from brain science and classical philosophy (Stoicism, Taoism, Confucianism, Schopenhauer, Gracian) to answer the question.
+HYDE_PROMPT = """Please write a passage from a neuroscience textbook or classical wisdom essay to answer the question.
 
 Question: {query}
 
 Passage:"""
 ```
 
-The parenthetical hints (Stoicism, Taoism, etc.) give the LLM cues about the corpus without constraining vocabulary. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms the query into document-like embeddings.
+This follows the paper's pattern: document type + domain, nothing more. "Neuroscience textbook" matches the scientific books; "classical wisdom essay" matches the Stoics, Schopenhauer, Taoism, etc. without naming specific schools. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms the query into document-like embeddings.
 
----
 
 ## Navigation
 

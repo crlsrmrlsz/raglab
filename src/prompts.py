@@ -14,7 +14,7 @@ Contains all prompts used for:
 # QUERY PREPROCESSING PROMPTS
 # =============================================================================
 
-HYDE_PROMPT = """Please write a short passage drawing on insights from brain science and classical philosophy (Stoicism, Taoism, Confucianism, Schopenhauer, Gracian) to answer the question.
+HYDE_PROMPT = """Please write a passage from a neuroscience textbook or classical wisdom essay to answer the question.
 
 Question: {query}
 
