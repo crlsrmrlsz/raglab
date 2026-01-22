@@ -180,8 +180,52 @@ def search_chunks(
     rrf_data = None
     graph_metadata = None
 
-    # Multi-query path: execute all queries and merge with RRF
-    if multi_queries and len(multi_queries) > 1:
+    # =========================================================================
+    # HyDE: Paper-aligned embedding averaging (arXiv:2212.10496)
+    # - Embed original query + K hypotheticals
+    # - Average embeddings element-wise
+    # - Single search with averaged embedding (NOT RRF)
+    # - Pure semantic search (alpha=1.0)
+    # =========================================================================
+    if strategy == "hyde" and multi_queries and len(multi_queries) > 1:
+        from src.rag_pipeline.embedding.embedder import embed_texts
+        from src.rag_pipeline.retrieval.preprocessing.strategy_config import get_strategy_config
+
+        config = get_strategy_config("hyde")
+        hyde_alpha = config.alpha_constraint.fixed_value  # 1.0
+
+        # Extract all queries for embedding (original + hypotheticals)
+        all_queries = [q.get("query", "") for q in multi_queries if q.get("query")]
+        logger.info(
+            f"[hyde] Paper-aligned: averaging {len(all_queries)} embeddings, alpha={hyde_alpha}"
+        )
+
+        # Embed and average
+        embeddings = embed_texts(all_queries)
+        avg_embedding = [sum(col) / len(col) for col in zip(*embeddings)]
+
+        # Single search with averaged embedding
+        client = get_client()
+        try:
+            initial_k = RERANK_INITIAL_K if use_reranking else top_k
+            results = query_hybrid(
+                client=client,
+                query_text=query,  # Original query for BM25 component (ignored at alpha=1.0)
+                top_k=initial_k,
+                alpha=hyde_alpha,  # 1.0 - pure semantic, no BM25
+                collection_name=collection_name,
+                precomputed_embedding=avg_embedding,
+            )
+
+            # Apply reranking if enabled
+            results, rerank_data = apply_reranking_with_metadata(
+                results, query, top_k, use_reranking
+            )
+        finally:
+            client.close()
+
+    # Multi-query path for decomposition: execute all queries and merge with RRF
+    elif multi_queries and len(multi_queries) > 1:
         # Get more candidates for reranking to work with
         initial_k = RERANK_INITIAL_K if use_reranking else top_k
 
