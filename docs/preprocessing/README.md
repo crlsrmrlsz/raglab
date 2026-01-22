@@ -28,6 +28,8 @@ Each preprocessing strategy addresses a specific failure mode.
 
 ## Strategy Comparison
 
+Each strategy targets a specific retrieval failure mode with a distinct mechanism. The table below provides a quick reference; detailed explanations follow for each technique. See individual pages for implementation details and evaluation results.
+
 ### Preprocessing (Before Search)
 
 <div align="center">
@@ -41,6 +43,14 @@ Each preprocessing strategy addresses a specific failure mode.
 
 </div>
 
+**How each technique improves retrieval:**
+
+- **HyDE (Hypothetical Document Embeddings)**: Bridges the semantic gap between how users ask questions and how documents express answers. Instead of embedding the question directly, an LLM generates a hypothetical answer, which is then embedded. This "answer-shaped" embedding lands closer to actual answer chunks in vector space, improving recall for queries where question-document vocabulary differs significantly.
+
+- **Decomposition**: Handles multi-aspect queries by breaking a complex question into independent sub-questions, each retrieving its own set of chunks. Results are merged using Reciprocal Rank Fusion (RRF). This prevents any single aspect from dominating retrieval and ensures coverage across all facets of a compound question.
+
+- **GraphRAG**: Synthesizes information across documents by leveraging a pre-built knowledge graph. Entity extraction identifies key concepts in the query, which are matched to graph communities (clusters of related entities). Community summaries provide corpus-wide context that no individual chunk contains, enabling answers to thematic or comparative questions.
+
 ### Reranking (After Search)
 
 <div align="center">
@@ -51,6 +61,10 @@ Each preprocessing strategy addresses a specific failure mode.
 | [**Cross-Encoder**](reranking.md) | Recall vs precision tradeoff | ~1s CPU |
 
 </div>
+
+**How reranking improves retrieval:**
+
+- **Cross-Encoder**: Initial retrieval (BM25 or hybrid) optimizes for recall—casting a wide net to avoid missing relevant documents. A cross-encoder then re-scores candidates by jointly encoding query and passage together, enabling fine-grained semantic comparison. This boosts precision by pushing truly relevant chunks to the top while demoting tangentially related results.
 
 Anthropic found that **hybrid search + reranking reduces retrieval failures by 67%** compared to vector-only search.
 
