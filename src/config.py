@@ -863,3 +863,7 @@ from src.prompts import (
 # Number of hypothetical documents to generate for HyDE
 # Paper recommends K=5 for robustness via embedding averaging
 HYDE_K = 5
+
+# Max tokens per hypothetical passage
+# Paper uses short passages (~100-150 tokens, 2-3 sentences)
+HYDE_MAX_TOKENS = 150

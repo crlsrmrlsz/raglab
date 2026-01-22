@@ -30,7 +30,7 @@ from typing import Optional
 import requests
 from pydantic import ValidationError as PydanticValidationError
 
-from src.config import PREPROCESSING_MODEL, HYDE_PROMPT, DECOMPOSITION_PROMPT, HYDE_K
+from src.config import PREPROCESSING_MODEL, HYDE_PROMPT, DECOMPOSITION_PROMPT, HYDE_K, HYDE_MAX_TOKENS
 from src.shared.files import setup_logging
 from src.shared.openrouter_client import call_chat_completion, call_structured_completion
 from src.rag_pipeline.retrieval.preprocessing.schemas import (
@@ -119,7 +119,7 @@ def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> lis
                 messages=messages,
                 model=model,
                 temperature=0.7,  # Paper uses 0.7 for diverse hypothetical documents
-                # No max_tokens constraint - paper lets LLM generate naturally, encoder filters noise
+                max_tokens=HYDE_MAX_TOKENS,  # Paper uses short passages (~150 tokens)
             )
             response_text = response.strip()
             if response_text:  # Only add non-empty responses
