@@ -2,27 +2,9 @@
 
 [← Preprocessing Overview](README.md) | [Home](../../README.md)
 
-[HyDE technique](https://arxiv.org/abs/2212.10496) addresses the fundamental semantic gap between user queries and document embeddings. It solves this by generating a *hypothetical answer* to the query first, then searching for real documents similar to that answer. This bridges the structural gap because both the hypothetical and real documents share declarative form.
+**The problem:** Questions and documents live in different semantic spaces. A query like "What causes stress to affect memory?" uses interrogative, conversational language, while relevant documents use declarative, scientific prose ("Chronic cortisol elevation impairs hippocampal neurogenesis..."). These vectors end up distant in embedding space despite high topical relevance.
 
-
-
-## The Core Problem
-
-Questions and documents live in different semantic spaces—interrogative vs. declarative structure, conversational vs. scientific vocabulary. HyDE bridges this gap:
-
-```
-Question: "What causes stress to affect memory?"
-          ↓ embedding
-          [query vector - interrogative, conversational]
-          ✗ distant from document vectors
-
-          ↓ LLM generates hypothetical answer
-Hypothetical: "Stress triggers cortisol release, which affects
-               the hippocampus and impairs memory consolidation..."
-          ↓ embedding
-          [hypothetical vector - declarative, scientific]
-          ✓ matches document space
-```
+**The solution:** [HyDE](https://arxiv.org/abs/2212.10496) generates a *hypothetical answer* first, then searches for real documents similar to that answer. The hypothetical shares declarative structure and domain vocabulary with real documents, bridging the semantic gap.
 
 
 
