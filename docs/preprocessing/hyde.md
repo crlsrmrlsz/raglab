@@ -111,9 +111,12 @@ Paragraph:
 
 ## RAGLab Implementation
 
-RAGLab uses K=5 hypothetical passages (matching the paper) and includes the original query in the embedding average.
+RAGLab follows the paper's parameters and includes the original query in the embedding average. Configuration in `src/config.py`:
 
 ```python
+HYDE_K = 5              # Number of hypothetical passages (paper default)
+HYDE_MAX_TOKENS = 150   # Short passages, 2-3 sentences (paper uses ~100-150)
+
 HYDE_PROMPT = """Please write a passage from a neuroscience textbook or classical wisdom essay to answer the question.
 
 Question: {query}
@@ -121,7 +124,7 @@ Question: {query}
 Passage:"""
 ```
 
-This follows the paper's pattern: document type + domain, nothing more. "Neuroscience textbook" matches the scientific books; "classical wisdom essay" matches the Stoics, Schopenhauer, Taoism, etc. without naming specific schools. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms the query into document-like embeddings.
+The prompt follows the paper's pattern: document type + domain, nothing more. "Neuroscience textbook" matches the scientific books; "classical wisdom essay" matches the Stoics, Schopenhauer, Taoism, etc. without naming specific schools. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms the query into document-like embeddings.
 
 
 ## Navigation
