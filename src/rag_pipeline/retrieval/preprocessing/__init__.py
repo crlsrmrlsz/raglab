@@ -18,6 +18,7 @@ from src.rag_pipeline.retrieval.preprocessing.strategies import (
 )
 from src.rag_pipeline.retrieval.preprocessing.retrieval_helpers import (
     execute_hyde_retrieval,
+    execute_search,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "STRATEGIES",
     # Retrieval helpers
     "execute_hyde_retrieval",
+    "execute_search",
 ]

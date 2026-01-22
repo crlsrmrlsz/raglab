@@ -275,244 +275,79 @@ def retrieve_contexts(
     search_type: str = "hybrid",
 ) -> list[str]:
     """
-    Retrieve relevant contexts from Weaviate for a question.
+    Retrieve relevant contexts from Weaviate using strategy-based retrieval.
 
-    This function implements strategy-aware retrieval with configurable search type:
-    1. search_type determines HOW to search (keyword BM25 vs hybrid)
-    2. preprocessing_strategy determines query transformation (HyDE, decomposition, graphrag)
-
-    These are orthogonal dimensions:
-    - search_type: "keyword" (BM25 only) or "hybrid" (vector + BM25)
-    - preprocessing: "none", "hyde", "decomposition", "graphrag"
+    This function uses the RetrievalStrategy pattern to handle different
+    preprocessing strategies, eliminating complex conditional logic.
 
     Args:
-        question: The user's question (or preprocessed search_query).
+        question: The user's question.
         top_k: Number of chunks to return after reranking.
         collection_name: Override collection name.
         use_reranking: If True, apply cross-encoder reranking.
-                       Retrieves 50 candidates and reranks to top_k.
-                       If False, directly returns top_k from search.
-        alpha: Hybrid search balance (0.5=balanced, 1.0=vector). Only used for hybrid.
-        preprocessed: PreprocessedQuery from strategy, enables strategy-aware
-                     retrieval for decomposition (RRF) and graphrag (Neo4j).
+        alpha: Hybrid search balance (0.5=balanced, 1.0=vector).
+        preprocessed: PreprocessedQuery from strategy (used to determine strategy_id).
         search_type: "keyword" for pure BM25, "hybrid" for vector+BM25 (default).
 
     Returns:
         List of context strings from retrieved chunks.
 
     Technical Notes:
-        - Hybrid search combines vector similarity with BM25 keyword matching
-        - Keyword search uses pure BM25 (no embeddings)
-        - Decomposition uses RRF to merge results from 3-4 sub-queries
-        - GraphRAG boosts chunks found via Neo4j entity traversal
+        - Strategies encapsulate their own retrieval logic:
+          - StandardRetrieval: Direct search
+          - HyDERetrieval: Embedding averaging
+          - DecompositionRetrieval: Multi-query RRF
+          - GraphRAGRetrieval: Graph + vector hybrid
         - Cross-encoder reranking improves precision by 20-35%
     """
-    from src.rag_pipeline.indexing.weaviate_query import query_bm25
+    from src.rag_pipeline.retrieval.strategy_protocol import RetrievalContext
+    from src.rag_pipeline.retrieval.strategy_factory import get_strategy
 
     collection_name = collection_name or get_collection_name()
 
-    # Determine initial retrieval size
+    # Determine strategy from preprocessed query
+    strategy_id = "none"
+    if preprocessed:
+        strategy_id = preprocessed.strategy_used
+
+    logger.info(f"  [retrieve_contexts] strategy={strategy_id}, search_type={search_type}")
+
+    # Get Neo4j driver if needed for GraphRAG
+    neo4j_driver = None
+    if strategy_id == "graphrag":
+        try:
+            from src.graph.neo4j_client import get_driver
+            neo4j_driver = get_driver()
+        except Exception as e:
+            logger.warning(f"  [retrieve_contexts] Neo4j driver unavailable: {e}")
+
+    # Build retrieval context
+    client = get_client()
     initial_k = 50 if use_reranking else top_k
 
-    # Helper function to execute search based on search_type
-    def execute_search(client, query_text: str, k: int, precomputed_embedding=None):
-        """Execute keyword or hybrid search based on search_type."""
-        if search_type == "keyword":
-            return query_bm25(
-                client=client,
-                query_text=query_text,
-                top_k=k,
-                collection_name=collection_name,
-            )
-        else:  # hybrid
-            return query_hybrid(
-                client=client,
-                query_text=query_text,
-                top_k=k,
-                alpha=alpha,
-                collection_name=collection_name,
-                precomputed_embedding=precomputed_embedding,
-            )
-
-    # =========================================================================
-    # DECOMPOSITION: Multi-query with RRF merge
-    # =========================================================================
-    if preprocessed and preprocessed.strategy_used == "decomposition":
-        generated_queries = preprocessed.generated_queries or []
-        if len(generated_queries) > 1:
-            logger.info(f"  [decomposition] Executing {len(generated_queries)} queries with RRF merge (search_type={search_type})")
-
-            # Import RRF infrastructure from UI search service
-            from src.rag_pipeline.retrieval.rrf import reciprocal_rank_fusion
-
-            client = get_client()
-            try:
-                result_lists = []
-                query_types = []
-
-                # Execute each sub-query using configured search_type
-                per_query_k = max(top_k * 2, 20)
-                for q in generated_queries:
-                    query_text = q.get("query", "")
-                    query_type = q.get("type", "unknown")
-
-                    if not query_text:
-                        continue
-
-                    results = execute_search(client, query_text, per_query_k)
-
-                    result_lists.append(results)
-                    query_types.append(query_type)
-
-                # Merge with RRF
-                rrf_result = reciprocal_rank_fusion(
-                    result_lists=result_lists,
-                    query_types=query_types,
-                    top_k=initial_k,
-                )
-                results = rrf_result.results
-
-                # Apply reranking if enabled (using helper for consistency)
-                results = apply_reranking_if_enabled(
-                    results, preprocessed.original_query, top_k, use_reranking
-                )
-
-                return [r.text for r in results]
-
-            finally:
-                client.close()
-
-    # =========================================================================
-    # GRAPHRAG: Hybrid graph + vector retrieval
-    # =========================================================================
-    if preprocessed and preprocessed.strategy_used == "graphrag":
-        if search_type == "keyword":
-            logger.warning("  [graphrag] GraphRAG is designed for vector search; keyword search may be suboptimal")
-        logger.info(f"  [graphrag] Executing hybrid graph + vector retrieval (search_type={search_type})")
-
-        client = get_client()
-        try:
-            # First, get results using configured search_type
-            search_results = execute_search(client, question, initial_k)
-
-            # Convert SearchResult to dicts for hybrid_graph_retrieval
-            result_dicts = [
-                {
-                    "chunk_id": r.chunk_id,
-                    "book_id": r.book_id,
-                    "section": r.section,
-                    "context": r.context,
-                    "text": r.text,
-                    "token_count": r.token_count,
-                    "similarity": r.score,
-                }
-                for r in search_results
-            ]
-
-            # Merge with Neo4j graph traversal (with map-reduce for global queries)
-            try:
-                from src.graph.neo4j_client import get_driver
-                from src.graph.query import hybrid_graph_retrieval_with_map_reduce
-
-                driver = get_driver()
-                try:
-                    merged_results, graph_meta = hybrid_graph_retrieval_with_map_reduce(
-                        query=preprocessed.original_query,
-                        driver=driver,
-                        vector_results=result_dicts,
-                        top_k=initial_k,
-                        use_map_reduce=True,
-                    )
-
-                    boosted_count = graph_meta.get("boosted_count", 0)
-                    query_type = graph_meta.get("query_type", "local")
-                    logger.info(f"  [graphrag] {boosted_count} graph-boosted results, query_type={query_type}")
-
-                    # Log map-reduce results for global queries
-                    if graph_meta.get("map_reduce_result"):
-                        mr = graph_meta["map_reduce_result"]
-                        logger.info(
-                            f"  [graphrag] Map-reduce: {len(mr.get('communities_used', []))} communities, "
-                            f"{mr.get('total_time_ms', 0):.0f}ms"
-                        )
-
-                    # Apply reranking if enabled (on merged results)
-                    if use_reranking and merged_results:
-                        # Convert dicts back to SearchResult for reranker
-                        from src.rag_pipeline.indexing.weaviate_query import SearchResult
-                        rerank_input = [
-                            SearchResult(
-                                chunk_id=r.get("chunk_id", ""),
-                                book_id=r.get("book_id", ""),
-                                section=r.get("section", ""),
-                                context=r.get("context", ""),
-                                text=r.get("text", ""),
-                                token_count=r.get("token_count", 0),
-                                score=r.get("similarity", 0.0),
-                            )
-                            for r in merged_results
-                        ]
-                        reranked = apply_reranking_if_enabled(
-                            rerank_input, preprocessed.original_query, top_k, use_reranking
-                        )
-                        return [r.text for r in reranked]
-
-                    return [r.get("text", "") for r in merged_results[:top_k]]
-
-                finally:
-                    driver.close()
-
-            except Exception as e:
-                # Fallback to search-only if Neo4j fails
-                logger.warning(f"  [graphrag] Neo4j retrieval failed: {e}, using search-only")
-                search_results = apply_reranking_if_enabled(
-                    search_results, preprocessed.original_query, top_k, use_reranking
-                )
-                return [r.text for r in search_results[:top_k]]
-
-        finally:
-            client.close()
-
-    # =========================================================================
-    # HYDE: Paper-aligned implementation (arXiv:2212.10496)
-    # Uses shared helper for consistency with UI code
-    # =========================================================================
-    if preprocessed and preprocessed.strategy_used == "hyde":
-        generated_queries = preprocessed.generated_queries or []
-
-        if len(generated_queries) > 1:
-            from src.rag_pipeline.retrieval.preprocessing import execute_hyde_retrieval
-
-            client = get_client()
-            try:
-                results, _ = execute_hyde_retrieval(
-                    client=client,
-                    original_query=preprocessed.original_query,
-                    generated_queries=generated_queries,
-                    top_k=top_k,
-                    collection_name=collection_name,
-                    use_reranking=use_reranking,
-                    initial_k=initial_k,
-                    return_metadata=False,  # CLI doesn't need metadata
-                )
-                return [r.text for r in results]
-            finally:
-                client.close()
-
-    # =========================================================================
-    # DEFAULT: Standard search (for none and fallback)
-    # =========================================================================
-    client = get_client()
+    context = RetrievalContext(
+        client=client,
+        collection_name=collection_name,
+        top_k=top_k,
+        use_reranking=use_reranking,
+        initial_k=initial_k,
+        alpha=alpha,
+        search_type=search_type,
+        neo4j_driver=neo4j_driver,
+    )
 
     try:
-        results = execute_search(client, question, initial_k)
+        # Get strategy instance and execute (polymorphic dispatch)
+        retrieval_strategy = get_strategy(strategy_id)
+        result = retrieval_strategy.execute(question, context)
 
-        # Apply cross-encoder reranking if enabled (using helper for consistency)
-        results = apply_reranking_if_enabled(results, question, top_k, use_reranking)
+        # Return just the text for evaluation
+        return [r.text for r in result.results]
 
-        return [r.text for r in results]
     finally:
         client.close()
+        if neo4j_driver:
+            neo4j_driver.close()
 
 
 def generate_answer(

@@ -12,6 +12,11 @@ Both UI and CLI need to execute HyDE retrieval with:
 
 Previously this logic was duplicated (~35 lines each). Now it's shared.
 
+## Shared Helpers
+
+- execute_search(): Common search dispatcher (hybrid vs vector)
+- execute_hyde_retrieval(): HyDE with embedding averaging
+
 ## Data Flow
 
 PreprocessedQuery → execute_hyde_retrieval() → (results, optional_metadata)
@@ -25,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import weaviate
 
 from src.rag_pipeline.embedding.embedder import embed_texts
-from src.rag_pipeline.indexing.weaviate_query import query_hybrid, SearchResult
+from src.rag_pipeline.indexing.weaviate_query import query_hybrid, query_similar, SearchResult
 from src.rag_pipeline.retrieval.preprocessing.strategy_config import get_strategy_config
 from src.rag_pipeline.retrieval.reranking_utils import (
     apply_reranking_if_enabled,
@@ -35,8 +40,52 @@ from src.shared.files import setup_logging
 
 if TYPE_CHECKING:
     from src.rag_pipeline.retrieval.reranking import RerankResult
+    from src.rag_pipeline.retrieval.strategy_protocol import RetrievalContext
 
 logger = setup_logging(__name__)
+
+
+def execute_search(
+    context: "RetrievalContext",
+    query_text: str,
+    top_k: int,
+    alpha: Optional[float] = None,
+    precomputed_embedding: Optional[list[float]] = None,
+) -> list[SearchResult]:
+    """Execute search based on context.search_type.
+
+    This is a shared helper to reduce code duplication across strategies.
+    It encapsulates the common pattern of dispatching between hybrid and
+    vector-only search based on search_type.
+
+    Args:
+        context: Retrieval context with client and settings.
+        query_text: Query to search for.
+        top_k: Number of results to retrieve.
+        alpha: Override alpha (uses context.alpha if None).
+        precomputed_embedding: Optional precomputed embedding (for HyDE).
+
+    Returns:
+        List of SearchResult objects.
+    """
+    use_alpha = alpha if alpha is not None else context.alpha
+
+    if context.search_type == "hybrid":
+        return query_hybrid(
+            client=context.client,
+            query_text=query_text,
+            top_k=top_k,
+            alpha=use_alpha,
+            collection_name=context.collection_name,
+            precomputed_embedding=precomputed_embedding,
+        )
+    else:
+        return query_similar(
+            client=context.client,
+            query_text=query_text,
+            top_k=top_k,
+            collection_name=context.collection_name,
+        )
 
 
 def execute_hyde_retrieval(

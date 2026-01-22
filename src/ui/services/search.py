@@ -3,6 +3,20 @@
 Provides semantic search with optional cross-encoder reranking.
 This module wraps the vector_db query functions for use in the Streamlit UI.
 
+## Architecture: Strategy Pattern for Retrieval
+
+The search service uses the RetrievalStrategy pattern to handle different
+preprocessing strategies (none, hyde, decomposition, graphrag). Each strategy
+encapsulates its own retrieval logic:
+
+- **StandardRetrieval**: Direct Weaviate search (no preprocessing)
+- **HyDERetrieval**: Generate hypotheticals → average embeddings → single search
+- **DecompositionRetrieval**: Break into sub-questions → parallel searches → RRF merge
+- **GraphRAGRetrieval**: Extract entities → vector search → graph traversal → RRF merge
+
+This eliminates the confusing conditional logic that previously checked
+`if strategy == "hyde" and multi_queries and len(multi_queries) > 1:`.
+
 ## Search Types
 
 1. **Vector (Semantic)**: Uses embedding similarity to find related content.
@@ -38,8 +52,12 @@ logger = setup_logging(__name__)
 from src.rag_pipeline.indexing import get_client, query_similar, query_hybrid, SearchResult
 from src.rag_pipeline.retrieval.reranking_utils import apply_reranking_with_metadata
 
-# Import RRF for multi-query merging
+# Import RRF for backward compatibility (search_multi_query still exists)
 from src.rag_pipeline.retrieval.rrf import reciprocal_rank_fusion, RRFResult
+
+# Import strategy pattern components
+from src.rag_pipeline.retrieval.strategy_protocol import RetrievalContext, RetrievalResult
+from src.rag_pipeline.retrieval.strategy_factory import get_strategy
 
 
 @dataclass
@@ -136,28 +154,26 @@ def search_chunks(
     alpha: float = 0.5,
     collection_name: Optional[str] = None,
     use_reranking: bool = False,
-    multi_queries: Optional[list[dict[str, str]]] = None,
+    multi_queries: Optional[list[dict[str, str]]] = None,  # DEPRECATED: kept for backward compat
     strategy: Optional[str] = None,
 ) -> SearchOutput:
     """
-    Search Weaviate for relevant chunks with optional reranking and RRF merging.
+    Search Weaviate for relevant chunks using strategy-based retrieval.
 
-    This is the main search function for the UI. It connects to Weaviate,
-    executes the search (or multiple searches for multi-query), optionally
-    applies cross-encoder reranking, and returns results as dictionaries.
+    This is the main search function for the UI. It uses the RetrievalStrategy
+    pattern to handle different preprocessing strategies, eliminating the
+    confusing conditional logic that previously checked multi_queries.
 
     Args:
-        query: User's search query (used for reranking even in multi-query mode).
+        query: User's search query.
         top_k: Number of results to return.
         search_type: Either "vector" (semantic) or "hybrid" (vector + keyword).
         alpha: For hybrid search, balance between vector (1.0) and keyword (0.0).
         collection_name: Override collection (for future multi-collection).
         use_reranking: If True, apply cross-encoder reranking for better accuracy.
-                       This is slower but significantly improves result quality.
-        multi_queries: If provided, execute all queries and merge with RRF.
-                       Expected format: [{"type": "neuro", "query": "..."}, ...]
-        strategy: Preprocessing strategy name. If "graphrag", enables hybrid
-                  graph+vector retrieval via Neo4j.
+        multi_queries: DEPRECATED. Kept for backward compatibility but ignored.
+                       Strategies now handle their own query generation.
+        strategy: Preprocessing strategy name ("none", "hyde", "decomposition", "graphrag").
 
     Returns:
         SearchOutput with results list and optional rerank_data/rrf_data/graph_metadata.
@@ -170,135 +186,79 @@ def search_chunks(
         >>> output = search_chunks("What is consciousness?", search_type="hybrid")
         >>> results = output.results
         >>>
+        >>> # With HyDE strategy (embedding averaging)
+        >>> output = search_chunks("What is consciousness?", strategy="hyde")
+        >>>
         >>> # With GraphRAG strategy
         >>> output = search_chunks("What is dopamine?", strategy="graphrag")
         >>> print(output.graph_metadata["query_entities"])
     """
     collection_name = collection_name or get_collection_name()
-    logger.info(f"[search_chunks] Using collection: {collection_name}")
-    rerank_data = None
-    rrf_data = None
-    graph_metadata = None
+    strategy_id = strategy or "none"
 
-    # =========================================================================
-    # HyDE: Paper-aligned embedding averaging (arXiv:2212.10496)
-    # Uses shared helper for consistency with CLI evaluation code
-    # =========================================================================
-    if strategy == "hyde" and multi_queries and len(multi_queries) > 1:
-        from src.rag_pipeline.retrieval.preprocessing import execute_hyde_retrieval
+    logger.info(f"[search_chunks] strategy={strategy_id}, collection={collection_name}")
 
-        client = get_client()
-        try:
-            initial_k = RERANK_INITIAL_K if use_reranking else top_k
-            results, rerank_data = execute_hyde_retrieval(
-                client=client,
-                original_query=query,
-                generated_queries=multi_queries,
-                top_k=top_k,
-                collection_name=collection_name,
-                use_reranking=use_reranking,
-                initial_k=initial_k,
-                return_metadata=True,  # UI needs metadata for logging
-            )
-        finally:
-            client.close()
-
-    # Multi-query path for decomposition: execute all queries and merge with RRF
-    elif multi_queries and len(multi_queries) > 1:
-        # Get more candidates for reranking to work with
-        initial_k = RERANK_INITIAL_K if use_reranking else top_k
-
-        results, rrf_data = search_multi_query(
-            queries=multi_queries,
-            top_k=initial_k,
-            search_type=search_type,
-            alpha=alpha,
-            collection_name=collection_name,
-        )
-
-        # Apply cross-encoder reranking to merged results (using helper for consistency)
-        results, rerank_data = apply_reranking_with_metadata(
-            results, query, top_k, use_reranking
-        )
-
-    else:
-        # Single-query path (original behavior)
-        client = get_client()
-
-        try:
-            # Determine how many candidates to retrieve
-            initial_k = RERANK_INITIAL_K if use_reranking else top_k
-
-            # Execute search based on type
-            if search_type == "hybrid":
-                results: list[SearchResult] = query_hybrid(
-                    client=client,
-                    query_text=query,
-                    top_k=initial_k,
-                    alpha=alpha,
-                    collection_name=collection_name,
-                )
-            else:
-                results: list[SearchResult] = query_similar(
-                    client=client,
-                    query_text=query,
-                    top_k=initial_k,
-                    collection_name=collection_name,
-                )
-
-            # Apply cross-encoder reranking if enabled (using helper for consistency)
-            results, rerank_data = apply_reranking_with_metadata(
-                results, query, top_k, use_reranking
-            )
-
-        finally:
-            client.close()
-
-    # Convert SearchResult objects to dicts for Streamlit
-    result_dicts = [
-        {
-            "chunk_id": r.chunk_id,
-            "book_id": r.book_id,
-            "section": r.section,
-            "context": r.context,
-            "text": r.text,
-            "token_count": r.token_count,
-            "similarity": r.score,
-            "is_summary": r.is_summary,
-            "tree_level": r.tree_level,
-        }
-        for r in results
-    ]
-
-    # GraphRAG: Merge vector results with Neo4j graph traversal (with map-reduce for global queries)
-    if strategy == "graphrag":
+    # Get Neo4j driver if needed for GraphRAG
+    neo4j_driver = None
+    if strategy_id == "graphrag":
         try:
             from src.graph.neo4j_client import get_driver
-            from src.graph.query import hybrid_graph_retrieval_with_map_reduce
-
-            driver = get_driver()
-            try:
-                result_dicts, graph_metadata = hybrid_graph_retrieval_with_map_reduce(
-                    query=query,
-                    driver=driver,
-                    vector_results=result_dicts,
-                    top_k=top_k,
-                    use_map_reduce=True,
-                )
-            finally:
-                driver.close()
+            neo4j_driver = get_driver()
         except Exception as e:
-            # Log error but don't fail search - fall back to vector-only results
-            import logging
-            logging.getLogger(__name__).warning(f"GraphRAG retrieval failed: {e}")
-            graph_metadata = {"error": str(e)}
+            logger.warning(f"[search_chunks] Neo4j driver unavailable for GraphRAG: {e}")
 
-    return SearchOutput(
-        results=result_dicts,
-        rerank_data=rerank_data,
-        rrf_data=rrf_data,
-        graph_metadata=graph_metadata,
+    # Build retrieval context
+    client = get_client()
+    initial_k = RERANK_INITIAL_K if use_reranking else top_k
+
+    context = RetrievalContext(
+        client=client,
+        collection_name=collection_name,
+        top_k=top_k,
+        use_reranking=use_reranking,
+        initial_k=initial_k,
+        alpha=alpha,
+        search_type=search_type,
+        neo4j_driver=neo4j_driver,
     )
+
+    try:
+        # Get strategy instance and execute (polymorphic dispatch)
+        retrieval_strategy = get_strategy(strategy_id)
+        result = retrieval_strategy.execute(query, context)
+
+        # Convert SearchResult objects to dicts for Streamlit
+        result_dicts = [
+            {
+                "chunk_id": r.chunk_id,
+                "book_id": r.book_id,
+                "section": r.section,
+                "context": r.context,
+                "text": r.text,
+                "token_count": r.token_count,
+                "similarity": r.score,
+                "is_summary": r.is_summary,
+                "tree_level": r.tree_level,
+            }
+            for r in result.results
+        ]
+
+        # Extract metadata from strategy result
+        rerank_data = result.metadata.get("rerank_data")
+        rrf_data = result.metadata.get("rrf_data")
+        graph_metadata = result.metadata.get("graph_metadata")
+
+        return SearchOutput(
+            results=result_dicts,
+            rerank_data=rerank_data,
+            rrf_data=rrf_data,
+            graph_metadata=graph_metadata,
+        )
+
+    finally:
+        client.close()
+        if neo4j_driver:
+            neo4j_driver.close()
 
 
 def list_collections() -> list[str]:
