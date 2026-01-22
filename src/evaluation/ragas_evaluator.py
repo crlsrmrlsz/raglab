@@ -475,54 +475,26 @@ def retrieve_contexts(
 
     # =========================================================================
     # HYDE: Paper-aligned implementation (arXiv:2212.10496)
-    # - Averages embeddings: original_query + K hypotheticals
-    # - Uses pure semantic search (alpha=1.0, no BM25 component)
+    # Uses shared helper for consistency with UI code
     # =========================================================================
     if preprocessed and preprocessed.strategy_used == "hyde":
-        from src.rag_pipeline.retrieval.preprocessing.strategy_config import (
-            get_strategy_config,
-        )
-
-        config = get_strategy_config("hyde")
         generated_queries = preprocessed.generated_queries or []
 
-        # Extract ALL queries for embedding (original + hypotheticals per paper)
-        all_queries = [
-            q.get("query", "")
-            for q in generated_queries
-            if q.get("query")
-        ]
-
-        if len(all_queries) > 1:
-            # Paper requirement: pure semantic search (alpha=1.0)
-            hyde_alpha = config.alpha_constraint.fixed_value
-            logger.info(
-                f"  [hyde] Averaging {len(all_queries)} embeddings "
-                f"(original + hypotheticals), alpha={hyde_alpha}"
-            )
+        if len(generated_queries) > 1:
+            from src.rag_pipeline.retrieval.preprocessing import execute_hyde_retrieval
 
             client = get_client()
             try:
-                from src.rag_pipeline.embedding.embedder import embed_texts
-
-                # Embed and average ALL queries (original + hypotheticals)
-                embeddings = embed_texts(all_queries)
-                avg_embedding = [sum(col) / len(col) for col in zip(*embeddings)]
-
-                # Use pure semantic search (alpha=1.0 enforced by config)
-                results = query_hybrid(
+                results, _ = execute_hyde_retrieval(
                     client=client,
-                    query_text=preprocessed.original_query,
-                    top_k=initial_k,
-                    alpha=hyde_alpha,  # 1.0 - pure semantic, no BM25
+                    original_query=preprocessed.original_query,
+                    generated_queries=generated_queries,
+                    top_k=top_k,
                     collection_name=collection_name,
-                    precomputed_embedding=avg_embedding,
+                    use_reranking=use_reranking,
+                    initial_k=initial_k,
+                    return_metadata=False,  # CLI doesn't need metadata
                 )
-
-                results = apply_reranking_if_enabled(
-                    results, preprocessed.original_query, top_k, use_reranking
-                )
-
                 return [r.text for r in results]
             finally:
                 client.close()

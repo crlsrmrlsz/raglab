@@ -182,44 +182,23 @@ def search_chunks(
 
     # =========================================================================
     # HyDE: Paper-aligned embedding averaging (arXiv:2212.10496)
-    # - Embed original query + K hypotheticals
-    # - Average embeddings element-wise
-    # - Single search with averaged embedding (NOT RRF)
-    # - Pure semantic search (alpha=1.0)
+    # Uses shared helper for consistency with CLI evaluation code
     # =========================================================================
     if strategy == "hyde" and multi_queries and len(multi_queries) > 1:
-        from src.rag_pipeline.embedding.embedder import embed_texts
-        from src.rag_pipeline.retrieval.preprocessing.strategy_config import get_strategy_config
+        from src.rag_pipeline.retrieval.preprocessing import execute_hyde_retrieval
 
-        config = get_strategy_config("hyde")
-        hyde_alpha = config.alpha_constraint.fixed_value  # 1.0
-
-        # Extract all queries for embedding (original + hypotheticals)
-        all_queries = [q.get("query", "") for q in multi_queries if q.get("query")]
-        logger.info(
-            f"[hyde] Paper-aligned: averaging {len(all_queries)} embeddings, alpha={hyde_alpha}"
-        )
-
-        # Embed and average
-        embeddings = embed_texts(all_queries)
-        avg_embedding = [sum(col) / len(col) for col in zip(*embeddings)]
-
-        # Single search with averaged embedding
         client = get_client()
         try:
             initial_k = RERANK_INITIAL_K if use_reranking else top_k
-            results = query_hybrid(
+            results, rerank_data = execute_hyde_retrieval(
                 client=client,
-                query_text=query,  # Original query for BM25 component (ignored at alpha=1.0)
-                top_k=initial_k,
-                alpha=hyde_alpha,  # 1.0 - pure semantic, no BM25
+                original_query=query,
+                generated_queries=multi_queries,
+                top_k=top_k,
                 collection_name=collection_name,
-                precomputed_embedding=avg_embedding,
-            )
-
-            # Apply reranking if enabled
-            results, rerank_data = apply_reranking_with_metadata(
-                results, query, top_k, use_reranking
+                use_reranking=use_reranking,
+                initial_k=initial_k,
+                return_metadata=True,  # UI needs metadata for logging
             )
         finally:
             client.close()

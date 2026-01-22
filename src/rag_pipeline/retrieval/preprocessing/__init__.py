@@ -16,6 +16,9 @@ from src.rag_pipeline.retrieval.preprocessing.strategies import (
     list_strategies,
     STRATEGIES,
 )
+from src.rag_pipeline.retrieval.preprocessing.retrieval_helpers import (
+    execute_hyde_retrieval,
+)
 
 __all__ = [
     # Core types
@@ -28,4 +31,6 @@ __all__ = [
     "get_strategy",
     "list_strategies",
     "STRATEGIES",
+    # Retrieval helpers
+    "execute_hyde_retrieval",
 ]
