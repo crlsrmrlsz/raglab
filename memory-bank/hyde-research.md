@@ -1,20 +1,8 @@
-# HyDE (Hypothetical Document Embeddings) Research
+# HyDE (Hypothetical Document Embeddings) 
 
-**Date:** December 24, 2024
-**Purpose:** Research findings for improving the HyDE prompt in RAGLab
 
----
 
-## 1. Foundational Paper
-
-**Title:** "Precise Zero-Shot Dense Retrieval without Relevance Labels"
-**Authors:** Luyu Gao, Xueguang Ma, Jimmy Lin, Jamie Callan
-**ArXiv:** [2212.10496](https://arxiv.org/abs/2212.10496)
-**Published:** ACL 2023 (Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics)
-
-### Core Concept
-
-HyDE transforms queries into hypothetical documents that capture relevance patterns. The key insight is that the contrastive encoder's "dense bottleneck" filters out incorrect details from the generated hypothetical document, while preserving semantic relevance.
+[HyDE](https://arxiv.org/abs/2212.10496) transforms queries into hypothetical documents that capture relevance patterns. The key insight is that the contrastive encoder's "dense bottleneck" filters out incorrect details from the generated hypothetical document, while preserving semantic relevance.
 
 **How it works:**
 1. Given a query, prompt an LLM to generate a hypothetical document that would answer it
@@ -22,7 +10,7 @@ HyDE transforms queries into hypothetical documents that capture relevance patte
 3. Use this embedding to find similar real documents in the vector store
 4. The encoder naturally filters hallucinated content through the embedding space
 
-### Key Findings from the Paper
+**Key Findings from the Paper**
 
 1. **Minimal prompts work best** - Under-specification hurts, but over-specification causes template bias
 2. **Task-specific document type** - Mention document type (passage, paper, article) without overspecifying vocabulary
@@ -30,9 +18,8 @@ HyDE transforms queries into hypothetical documents that capture relevance patte
 4. **Dense bottleneck filters hallucinations** - The encoder filters incorrect details through embedding space
 5. **Embeddings do the heavy lifting** - Trust the contrastive encoder, not the prompt
 
----
 
-## 2. Original Prompt Templates
+### Original Prompt Templates
 
 From the official implementation ([texttron/hyde](https://github.com/texttron/hyde) - `src/hyde/promptor.py`):
 
@@ -47,27 +34,11 @@ From the official implementation ([texttron/hyde](https://github.com/texttron/hy
 | **Arguana** | `"Please write a counter argument for the passage. Passage: {}"` |
 | **Mr-TyDi** | `"Please write a passage in {} to answer the question in detail. Question: {}"` |
 
-**Key observations:**
-- All prompts are extremely minimal (1-2 sentences)
-- They specify document type (passage, scientific paper, financial article, news)
-- No examples provided
-- No vocabulary lists or specific terminology
-- Temperature 0.7 used for generation
 
----
 
 ## 3. Technical Parameters
 
-From the paper and implementations:
-
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| **Temperature** | 0.7 | Higher creativity for diverse hypotheticals |
-| **Number of hypotheticals (K)** | 5 (default) | Multiple hypotheticals averaged in embedding space |
-| **Embedding averaging** | Mean of K embeddings | Creates more robust query representation |
-| **Max tokens** | 100-150 | Short passages (2-3 sentences) |
-
-**Note:** Single hypothetical works well for most applications; K=5 averaging is optional optimization.
+The paper uses temperature 0.7 to encourage diverse hypothetical generation while avoiding excessive randomness. For improved robustness, it recommends generating K=5 hypothetical passages and averaging their embeddings element-wise—this creates a more centered representation in embedding space that reduces the impact of any single hallucination. Output length is kept short (100-150 tokens, roughly 2-3 sentences) since the embedding model compresses semantic meaning regardless of length. A single hypothetical works well for most applications; K=5 averaging is an optional optimization for higher-stakes retrieval.
 
 ---
 
