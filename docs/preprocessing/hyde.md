@@ -2,156 +2,129 @@
 
 [← Preprocessing Overview](README.md) | [Home](../../README.md)
 
-**The problem:** Questions and documents live in different semantic spaces. A query like "What causes stress to affect memory?" uses interrogative, conversational language, while relevant documents use declarative, scientific prose ("Chronic cortisol elevation impairs hippocampal neurogenesis..."). These vectors end up distant in embedding space despite high topical relevance.
+## Introduction
 
-**The solution:** [HyDE](https://arxiv.org/abs/2212.10496) generates a *hypothetical answer* first, then searches for real documents similar to that answer. The hypothetical shares declarative structure and domain vocabulary with real documents, bridging the semantic gap.
+Dense retrieval systems face a fundamental semantic mismatch: user queries and document content occupy different regions in embedding space. A question like "What causes stress to affect memory?" uses interrogative, conversational language, while relevant documents use declarative, scientific prose ("Chronic cortisol elevation impairs hippocampal neurogenesis..."). Even when the topics align perfectly, these stylistic differences push vectors apart, degrading retrieval quality.
 
+[HyDE](https://arxiv.org/abs/2212.10496) (Hypothetical Document Embeddings) solves this by generating a *hypothetical answer* before searching. Rather than embedding the question directly, the system prompts an instruction-following LLM to write a passage that *would* answer the query. This hypothetical document shares declarative structure and domain vocabulary with real corpus documents, bridging the semantic gap. The key insight is that the hypothetical doesn't need to be factually correct—it only needs to be *semantically similar* to relevant documents.
 
-
-## Paper Approach
-
-**Paper:** "Precise Zero-Shot Dense Retrieval without Relevance Labels"
-**Authors:** Gao, Ma, Lin, Callan (CMU / Waterloo)
-**Published:** ACL 2023 ([arXiv:2212.10496](https://arxiv.org/abs/2212.10496))
-
-<div align="center">
-
-| Benchmark | Contriever (baseline) | HyDE | Improvement |
-|-----------|----------------------|------|-------------|
-| MS MARCO | 20.6 NDCG@10 | 26.6 | +29% |
-| TREC-DL19 | 45.2 | 55.4 | +23% |
-| NQ | 25.4 | 35.0 | +38% |
-
-</div>
-
-The paper's algorithm:
-1. **Instruct** an instruction-following LLM (e.g., InstructGPT) to generate a hypothetical document
-2. **Encode** the hypothetical using an unsupervised contrastive encoder (e.g., Contriever)
-3. **Search** for real documents similar to the hypothetical embedding
-
-### Original Prompts
-
-From the official implementation ([texttron/hyde](https://github.com/texttron/hyde)):
-
-<div align="center">
-
-| Task | Prompt |
-|------|--------|
-| **Web Search** | "Please write a passage to answer the question. Question: {}" |
-| **SciFact** | "Please write a scientific paper passage to support/refute the claim. Claim: {}" |
-| **TREC-COVID** | "Please write a scientific paper passage to answer the question. Question: {}" |
-| **FiQA** | "Please write a financial article passage to answer the question. Question: {}" |
-| **Arguana** | "Please write a counter argument for the passage. Passage: {}" |
-
-</div>
-
-Key observations:
-- All prompts are **minimal** (1-2 sentences)
-- They specify **document type** (passage, scientific paper, financial article)
-- **No examples** provided
-- **No vocabulary lists** or specific terminology
-
-### Key Findings
-
-<div align="center">
-
-| Finding | Explanation |
-|---------|-------------|
-| **Minimal prompts work best** | Over-specification causes template bias, limiting embedding diversity |
-| **Document type matters** | Mention "passage", "paper", "article" but don't overspecify vocabulary |
-| **Temperature 0.7** | Provides sufficient creativity for diverse hypotheticals |
-| **Dense bottleneck filters hallucinations** | The encoder discards incorrect details, preserving semantic essence |
-| **K=5 averaging improves robustness** | Multiple hypotheticals capture different phrasings and perspectives |
-
-</div>
-
-**The dense bottleneck principle:** The embedding model (trained on real documents) compresses text into fixed-dimension vectors. This compression acts as a filter:
-- **Preserved**: Topics, concepts, semantic relationships
-- **Filtered**: Specific wrong facts, hallucinated details
-
-The hypothetical doesn't need to be *correct*—it needs to be *semantically similar* to relevant documents.
-
-### Technical Parameters
-
-<div align="center">
-
-| Parameter | Paper Value | Rationale |
-|-----------|-------------|-----------|
-| **Temperature** | 0.7 | Higher creativity for diverse hypotheticals |
-| **Number of hypotheticals (K)** | 5 | Multiple hypotheticals averaged in embedding space |
-| **Embedding combination** | Element-wise mean | Creates more robust query representation |
-| **Max tokens** | ~100-150 | Short passages (2-3 sentences) |
-
-</div>
+HyDE excels in **zero-shot scenarios** where no task-specific training data exists, handling vague or ambiguous queries that need context enrichment, and bridging vocabulary gaps when users phrase questions differently than documents describe answers. It works well for complex semantic queries and multilingual retrieval across diverse domains. However, HyDE struggles when the LLM lacks knowledge about the topic (a "knowledge bottleneck"), adds latency due to LLM generation before search, and may underperform on simple keyword queries where traditional BM25 works just as well.
 
 ---
 
-## Implementation in RAGLab
+## The HyDE Paper and Official Implementation
 
-### Algorithm
+**Paper:** "Precise Zero-Shot Dense Retrieval without Relevance Labels"
+**Authors:** Luyu Gao, Xueguang Ma, Jimmy Lin, Jamie Callan (CMU / Waterloo)
+**Published:** ACL 2023 ([arXiv:2212.10496](https://arxiv.org/abs/2212.10496))
+**Official Implementation:** [texttron/hyde](https://github.com/texttron/hyde)
 
-```
-1. Receive user query
-2. Generate K hypothetical answer passages (K=2 in RAGLab)
-   For i = 1 to K:
-      a. Call LLM with HYDE_PROMPT.format(query=query)
-      b. Temperature = 0.7
-      c. Collect passage_i
-3. Embed original query + all K passages (paper requirement)
-4. Average embeddings (element-wise mean)
-   avg_embedding[j] = (1/(K+1)) * Σ embedding[i][j]
-5. Search Weaviate with pure semantic search (alpha=1.0)
-   - No BM25 component (paper uses dense retrieval only)
-```
+The authors recognized that creating fully zero-shot dense retrieval systems without relevance labels remained difficult. Rather than trying to learn query and document encoders simultaneously, HyDE sidesteps this challenge by transforming queries into document-like text before encoding. The approach uses an instruction-following language model (InstructGPT in the original experiments) to generate hypothetical documents, then encodes them with an unsupervised contrastive encoder (Contriever) to find similar real documents in the corpus.
 
-### Processing Flow
+The paper's algorithm generates multiple hypothetical documents (K=5 by default) using temperature 0.7 to ensure diversity, embeds each one, and averages the resulting vectors element-wise before searching. This averaging creates a more robust query representation that captures different phrasings and perspectives while smoothing out individual hallucinations. The generated passages are typically short (100-150 tokens, roughly 2-3 sentences).
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│        User Query: "Why do we procrastinate?"               │
-└────────────────────────────┬────────────────────────────────┘
-                             ↓
-              ┌──────────────────────────────┐
-              │  hyde_prompt(query, k=2)     │
-              │  Temperature: 0.7            │
-              └──────────────┬───────────────┘
-                             ↓
-    ┌────────────────────────┼────────────────────────┐
-    ↓                        ↓                        ↓
-┌────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│ Original:  │    │ Hypothetical 1:     │    │ Hypothetical 2:     │
-│ "Why do we │    │ "Procrastination    │    │ "Temporal           │
-│ procras-   │    │ stems from limbic   │    │ discounting causes  │
-│ tinate?"   │    │ override..."        │    │ us to prefer..."    │
-└─────┬──────┘    └─────────┬───────────┘    └──────────┬──────────┘
-      ↓                     ↓                          ↓
-[embed_original]    [embed_hyp_1]              [embed_hyp_2]
-[0.08, 0.41, ...]   [0.12, 0.45, ...]          [0.14, 0.43, ...]
-      └─────────────────────┼──────────────────────────┘
-                            ↓
-                 ┌─────────────────────┐
-                 │ Average Embeddings  │
-                 │ (original + K hyps) │
-                 │ [0.11, 0.43, ...]   │
-                 └─────────┬───────────┘
-                           ↓
-                 ┌─────────────────────┐
-                 │ query_hybrid(       │
-                 │   vector=avg_embed, │
-                 │   alpha=1.0         │  ← Pure semantic
-                 │ )                   │
-                 └─────────┬───────────┘
-                           ↓
-                 ┌─────────────────────┐
-                 │ Top-K Chunks        │
-                 └─────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Generation ["1. Hypothetical Document Generation"]
+        Q[User Query] --> LLM[Instruction-Following LLM<br/>e.g., InstructGPT]
+        LLM --> H1[Hypothetical Doc 1]
+        LLM --> H2[Hypothetical Doc 2]
+        LLM --> H3[Hypothetical Doc 3]
+        LLM --> H4[Hypothetical Doc 4]
+        LLM --> H5[Hypothetical Doc 5]
+
+        style LLM fill:#e1f5fe
+        note1[Temperature: 0.7<br/>Max tokens: ~100-150]
+    end
+
+    subgraph Encoding ["2. Encoding & Averaging"]
+        H1 --> E1[Embed]
+        H2 --> E2[Embed]
+        H3 --> E3[Embed]
+        H4 --> E4[Embed]
+        H5 --> E5[Embed]
+
+        E1 --> AVG[Element-wise Mean]
+        E2 --> AVG
+        E3 --> AVG
+        E4 --> AVG
+        E5 --> AVG
+
+        style AVG fill:#fff3e0
+        note2[Unsupervised Contrastive Encoder<br/>e.g., Contriever]
+    end
+
+    subgraph Retrieval ["3. Dense Retrieval"]
+        AVG --> VEC[Averaged Query Vector]
+        VEC --> SIM[Cosine Similarity Search]
+        SIM --> DOCS[Retrieved Documents]
+
+        style DOCS fill:#e8f5e9
+        note3[Dense bottleneck filters<br/>hallucinated details]
+    end
 ```
 
-### RAGLab Prompt
+The **dense bottleneck principle** is central to why HyDE works despite generating potentially incorrect content. The contrastive encoder was trained on real documents and compresses text into fixed-dimension vectors. This compression acts as a filter: it preserves topics, concepts, and semantic relationships while discarding specific wrong facts and hallucinated details. The hypothetical document captures *relevance patterns*—what a good answer should look like structurally and thematically—even when its specific claims are fabricated.
 
+On benchmarks, HyDE significantly outperformed the unsupervised Contriever baseline: +29% on MS MARCO (20.6 → 26.6 NDCG@10), +23% on TREC-DL19 (45.2 → 55.4), and +38% on Natural Questions (25.4 → 35.0). These gains brought zero-shot performance close to fine-tuned retrievers, demonstrating that generation can substitute for supervised training.
+
+### Prompts
+
+The prompts from the official implementation are deliberately minimal—typically a single sentence specifying the document type without vocabulary lists or examples. This brevity is intentional: the paper found that over-specification causes template bias, limiting embedding diversity and reducing retrieval recall.
+
+**Official prompts from [texttron/hyde](https://github.com/texttron/hyde):**
+
+| Task | Prompt |
+|------|--------|
+| **Web Search** | `Please write a passage to answer the question. Question: {}` |
+| **SciFact** | `Please write a scientific paper passage to support/refute the claim. Claim: {}` |
+| **TREC-COVID** | `Please write a scientific paper passage to answer the question. Question: {}` |
+| **FiQA** | `Please write a financial article passage to answer the question. Question: {}` |
+| **Arguana** | `Please write a counter argument for the passage. Passage: {}` |
+| **TREC-News** | `Please write a news passage about the topic. Topic: {}` |
+| **Mr-TyDi** | `Please write a passage in {} to answer the question in detail. Question: {}` |
+
+The pattern is consistent: mention the document type (passage, scientific paper, financial article, news) but avoid specifying vocabulary, structure, or examples. The LLM's general knowledge fills in domain-appropriate language, and the encoder filters out inaccuracies.
+
+**Community implementations follow this pattern:**
+
+[Haystack](https://docs.haystack.deepset.ai/docs/hypothetical-document-embeddings-hyde) uses temperature 0.75, generates 5 hypothetical documents with max 400 tokens each, and averages their embeddings:
+```
+Given a question, generate a paragraph of text that answers the question.
+Question: {{question}}
+Paragraph:
+```
+
+[LangChain](https://docs.langchain.com/oss/javascript/integrations/retrievers/hyde) provides built-in prompt keys (`web_search`, `sci_fact`, `fiqa`, etc.) matching the paper's templates. Their `HypotheticalDocumentEmbedder` class handles generation and embedding averaging:
 ```python
-# src/prompts.py
+from langchain.chains import HypotheticalDocumentEmbedder
 
+embeddings = HypotheticalDocumentEmbedder.from_llm(llm, base_embeddings, "web_search")
+result = embeddings.embed_query("What is the capital of France?")
+```
+
+LlamaIndex similarly provides a `HyDEQueryTransform` that follows the paper's approach, generating hypothetical answers before retrieval.
+
+### Key Findings
+
+The paper established several principles that inform effective HyDE implementation:
+
+**Minimal prompts work best.** Under-specification hurts retrieval, but over-specification causes template bias. The sweet spot is mentioning document type without constraining vocabulary or structure.
+
+**Trust the encoder.** The contrastive encoder's dense bottleneck naturally filters hallucinations while preserving semantic relevance. Extensive prompt engineering to ensure factual accuracy is unnecessary and potentially counterproductive.
+
+**Multiple hypotheticals improve robustness.** Generating K=5 documents and averaging their embeddings captures different phrasings and perspectives, creating a more centered representation in embedding space. Single hypotheticals work but are more sensitive to generation variance.
+
+**Temperature 0.7 balances diversity and relevance.** Higher temperatures produce more varied hypotheticals; lower temperatures risk repetitive outputs that don't explore the semantic space effectively.
+
+---
+
+## RAGLab Implementation
+
+RAGLab adapts HyDE for a domain-specific corpus combining brain science and classical philosophy texts. The implementation generates K=2 hypothetical passages (reduced from the paper's K=5 for latency) and includes the original query in the embedding average, following the paper's recommendation to anchor the representation.
+
+The prompt specifies the dual domain without constraining vocabulary:
+```python
 HYDE_PROMPT = """Please write a short passage drawing on insights from brain science and classical philosophy (Stoicism, Taoism, Confucianism, Schopenhauer, Gracian) to answer the question.
 
 Question: {query}
@@ -159,73 +132,7 @@ Question: {query}
 Passage:"""
 ```
 
-**Design rationale:**
-
-| Decision | Reasoning |
-|----------|-----------|
-| **"Drawing on insights from..."** | Requests cross-domain synthesis matching our mixed corpus |
-| **Parenthetical tradition hints** | Provides corpus cues without vocabulary lists |
-| **Covers all 10 philosophy books** | Stoicism (4), Taoism (1), Confucianism (1), Schopenhauer (3), Gracian (1) |
-| **No examples** | Follows paper's finding that over-specification causes template bias |
-| **Short output expected** | "short passage" guides length without rigid constraints |
-
-### Key Design Decisions
-
-<div align="center">
-
-| Decision | Paper | RAGLab | Rationale |
-|----------|-------|--------|-----------|
-| **Temperature** | 0.7 | 0.7 | Paper default for diverse hypotheticals |
-| **K (hypotheticals)** | 5 | 2 | Balance cost vs. robustness |
-| **Embedding averaging** | query + hypotheticals | query + hypotheticals | Paper requirement for grounding |
-| **Search mode** | Dense only (alpha=1.0) | Dense only (alpha=1.0) | Paper uses pure semantic search |
-| **Prompt style** | Task-specific | Corpus-specific | Domain hints for neuroscience + philosophy books |
-| **Embedding model** | Contriever | text-embedding-3-large | Aligns with our existing embedding pipeline |
-
-</div>
-
-### Alpha Constraint
-
-HyDE requires pure semantic search (`alpha=1.0`). This is enforced via `StrategyConfig`:
-
-```python
-# src/rag_pipeline/retrieval/preprocessing/strategy_config.py
-
-STRATEGY_CONFIGS["hyde"] = StrategyConfig(
-    strategy_id="hyde",
-    alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
-    includes_original_in_embedding=True,  # Paper requirement
-)
-```
-
-The UI automatically hides the alpha slider when HyDE is selected, showing "Search: **Semantic** (required by hyde)" instead.
-
----
-
-## Differences from Paper
-
-| Aspect | Paper | RAGLab | Why |
-|--------|-------|--------|-----|
-| **K value** | 5 | 2 | Cost efficiency—each hypothetical requires an LLM call |
-| **Prompt domain** | Task-specific (SciFact, FiQA) | Corpus-specific (brain science + philosophy) | Matches our 19-book corpus |
-| **Embedding averaging** | query + hypotheticals | query + hypotheticals | Now aligned with paper |
-| **Search mode** | Dense only | Dense only (alpha=1.0) | Now aligned with paper |
-
----
-
-## When HyDE Works Best
-
-**Strong use cases:**
-- Vague or contextually ambiguous questions needing context enrichment
-- Complex queries requiring semantic understanding beyond keywords
-- Questions with different vocabulary than source documents
-- Zero-shot retrieval scenarios (no task-specific training)
-
-**Limitations:**
-- **Knowledge bottleneck**: HyDE struggles when the LLM is unfamiliar with the topic
-- **Simple keyword queries**: Traditional BM25 works just as well with less latency
-- **Highly specialized domains**: Factual precision may suffer from hallucinated vocabulary
-- **Latency**: Requires K LLM calls before search (~1-2s per query)
+The parenthetical tradition hints provide corpus-relevant cues while remaining general enough to avoid template bias. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms the query into document-like embeddings optimized for vector similarity.
 
 ---
 
