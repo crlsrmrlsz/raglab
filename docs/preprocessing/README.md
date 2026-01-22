@@ -18,17 +18,18 @@ Each preprocessing strategy addresses a specific failure mode.
 
 ## Pipeline Overview
 
-![Preprocessing techniques](../../assets/preprocessing.png)
-
 **Three stages:**
 1. **Preprocessing** — Transform query before search (HyDE, Decomposition, GraphRAG)
 2. **Search** — Retrieve candidates from Weaviate (keyword or hybrid)
 3. **Reranking** — Re-score candidates with cross-encoder (optional)
 
 
+![Preprocessing techniques](../../assets/preprocessing.png)
+
+
 ## Strategy Comparison
 
-Each strategy targets a specific retrieval failure mode with a distinct mechanism. The table below provides a quick reference; detailed explanations follow for each technique. See individual pages for implementation details and evaluation results.
+Each strategy targets a specific retrieval failure mode with a distinct mechanism. The table below provides a quick reference; detailed explanations follow for each technique. See individual pages for implementation details.
 
 ### Preprocessing (Before Search)
 
@@ -43,7 +44,7 @@ Each strategy targets a specific retrieval failure mode with a distinct mechanis
 
 </div>
 
-**How each technique improves retrieval:**
+How each technique improves retrieval:
 
 - **HyDE (Hypothetical Document Embeddings)**: Bridges the semantic gap between how users ask questions and how documents express answers. Instead of embedding the question directly, an LLM generates a hypothetical answer, which is then embedded. This "answer-shaped" embedding lands closer to actual answer chunks in vector space, improving recall for queries where question-document vocabulary differs significantly.
 
@@ -62,11 +63,11 @@ Each strategy targets a specific retrieval failure mode with a distinct mechanis
 
 </div>
 
-**How reranking improves retrieval:**
+How reranking improves retrieval:
 
 - **Cross-Encoder**: Initial retrieval (BM25 or hybrid) optimizes for recall—casting a wide net to avoid missing relevant documents. A cross-encoder then re-scores candidates by jointly encoding query and passage together, enabling fine-grained semantic comparison. This boosts precision by pushing truly relevant chunks to the top while demoting tangentially related results.
 
-Anthropic found that **hybrid search + reranking reduces retrieval failures by 67%** compared to vector-only search.
+
 
 
 ## Navigation

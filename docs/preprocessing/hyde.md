@@ -97,12 +97,11 @@ The hypothetical doesn't need to be *correct*—it needs to be *semantically sim
       a. Call LLM with HYDE_PROMPT.format(query=query)
       b. Temperature = 0.7
       c. Collect passage_i
-3. Embed all K passages using text-embedding-3-large
+3. Embed original query + all K passages (paper requirement)
 4. Average embeddings (element-wise mean)
-   avg_embedding[j] = (1/K) * Σ passage_embedding[i][j]
-5. Search Weaviate:
-   - Hybrid: Use averaged vector for semantic + original query for BM25
-   - Keyword: Search each passage via BM25, merge with RRF
+   avg_embedding[j] = (1/(K+1)) * Σ embedding[i][j]
+5. Search Weaviate with pure semantic search (alpha=1.0)
+   - No BM25 component (paper uses dense retrieval only)
 ```
 
 ### Processing Flow
@@ -117,35 +116,35 @@ The hypothetical doesn't need to be *correct*—it needs to be *semantically sim
               │  Temperature: 0.7            │
               └──────────────┬───────────────┘
                              ↓
-         ┌───────────────────┴───────────────────┐
-         ↓                                       ↓
-┌─────────────────────┐             ┌─────────────────────┐
-│ Passage 1:          │             │ Passage 2:          │
-│ "Procrastination    │             │ "Temporal           │
-│ stems from limbic   │             │ discounting causes  │
-│ override of         │             │ us to prefer        │
-│ prefrontal control" │             │ immediate rewards"  │
-└─────────┬───────────┘             └──────────┬──────────┘
-          ↓                                    ↓
-   [embed_passage_1]                    [embed_passage_2]
-   [0.12, 0.45, ...]                    [0.14, 0.43, ...]
-          └─────────────┬──────────────────────┘
-                        ↓
-              ┌─────────────────────┐
-              │ Average Embeddings  │
-              │ [0.13, 0.44, ...]   │
-              └─────────┬───────────┘
-                        ↓
-              ┌─────────────────────┐
-              │ query_hybrid(       │
-              │   vector=avg_embed, │
-              │   query=original    │
-              │ )                   │
-              └─────────┬───────────┘
-                        ↓
-              ┌─────────────────────┐
-              │ Top-K Chunks        │
-              └─────────────────────┘
+    ┌────────────────────────┼────────────────────────┐
+    ↓                        ↓                        ↓
+┌────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│ Original:  │    │ Hypothetical 1:     │    │ Hypothetical 2:     │
+│ "Why do we │    │ "Procrastination    │    │ "Temporal           │
+│ procras-   │    │ stems from limbic   │    │ discounting causes  │
+│ tinate?"   │    │ override..."        │    │ us to prefer..."    │
+└─────┬──────┘    └─────────┬───────────┘    └──────────┬──────────┘
+      ↓                     ↓                          ↓
+[embed_original]    [embed_hyp_1]              [embed_hyp_2]
+[0.08, 0.41, ...]   [0.12, 0.45, ...]          [0.14, 0.43, ...]
+      └─────────────────────┼──────────────────────────┘
+                            ↓
+                 ┌─────────────────────┐
+                 │ Average Embeddings  │
+                 │ (original + K hyps) │
+                 │ [0.11, 0.43, ...]   │
+                 └─────────┬───────────┘
+                           ↓
+                 ┌─────────────────────┐
+                 │ query_hybrid(       │
+                 │   vector=avg_embed, │
+                 │   alpha=1.0         │  ← Pure semantic
+                 │ )                   │
+                 └─────────┬───────────┘
+                           ↓
+                 ┌─────────────────────┐
+                 │ Top-K Chunks        │
+                 └─────────────────────┘
 ```
 
 ### RAGLab Prompt
@@ -178,13 +177,30 @@ Passage:"""
 |----------|-------|--------|-----------|
 | **Temperature** | 0.7 | 0.7 | Paper default for diverse hypotheticals |
 | **K (hypotheticals)** | 5 | 2 | Balance cost vs. robustness |
+| **Embedding averaging** | query + hypotheticals | query + hypotheticals | Paper requirement for grounding |
+| **Search mode** | Dense only (alpha=1.0) | Dense only (alpha=1.0) | Paper uses pure semantic search |
 | **Prompt style** | Task-specific | Corpus-specific | Domain hints for neuroscience + philosophy books |
 | **Embedding model** | Contriever | text-embedding-3-large | Aligns with our existing embedding pipeline |
-| **Search integration** | Dense only | Hybrid | Original query provides BM25 keyword matching |
 
 </div>
 
+### Alpha Constraint
 
+HyDE requires pure semantic search (`alpha=1.0`). This is enforced via `StrategyConfig`:
+
+```python
+# src/rag_pipeline/retrieval/preprocessing/strategy_config.py
+
+STRATEGY_CONFIGS["hyde"] = StrategyConfig(
+    strategy_id="hyde",
+    alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
+    includes_original_in_embedding=True,  # Paper requirement
+)
+```
+
+The UI automatically hides the alpha slider when HyDE is selected, showing "Search: **Semantic** (required by hyde)" instead.
+
+---
 
 ## Differences from Paper
 
@@ -192,8 +208,8 @@ Passage:"""
 |--------|-------|--------|-----|
 | **K value** | 5 | 2 | Cost efficiency—each hypothetical requires an LLM call |
 | **Prompt domain** | Task-specific (SciFact, FiQA) | Corpus-specific (brain science + philosophy) | Matches our 19-book corpus |
-| **Search type** | Dense retrieval only | Hybrid (vector + BM25) | Original query provides keyword matching as fallback |
-| **Keyword fallback** | Not applicable | RRF merge of K passage searches | Principled combination when vector unavailable |
+| **Embedding averaging** | query + hypotheticals | query + hypotheticals | Now aligned with paper |
+| **Search mode** | Dense only | Dense only (alpha=1.0) | Now aligned with paper |
 
 ---
 
