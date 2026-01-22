@@ -2,45 +2,29 @@
 
 [← Preprocessing Overview](README.md) | [Home](../../README.md)
 
-**HyDE addresses the fundamental semantic gap between user queries and document embeddings.** When users ask "What causes stress to affect memory?", the embedding model produces a vector optimized for interrogative structure. Meanwhile, relevant documents use declarative scientific language like "Chronic cortisol elevation impairs hippocampal neurogenesis." These vectors may be distant in embedding space despite high topical relevance.
+[HyDE technique](https://arxiv.org/abs/2212.10496) addresses the fundamental semantic gap between user queries and document embeddings. It solves this by generating a *hypothetical answer* to the query first, then searching for real documents similar to that answer. This bridges the structural gap because both the hypothetical and real documents share declarative form.
 
-The [HyDE technique](https://arxiv.org/abs/2212.10496) solves this by generating a *hypothetical answer* to the query first, then searching for real documents similar to that answer. This bridges the structural gap because both the hypothetical and real documents share declarative form.
 
----
 
 ## The Core Problem
 
-Questions and documents live in different semantic spaces:
+Questions and documents live in different semantic spaces—interrogative vs. declarative structure, conversational vs. scientific vocabulary. HyDE bridges this gap:
 
 ```
 Question: "What causes stress to affect memory?"
           ↓ embedding
-          [query vector - interrogative structure]
+          [query vector - interrogative, conversational]
+          ✗ distant from document vectors
 
-Document: "Chronic cortisol elevation impairs hippocampal
-           neurogenesis and disrupts memory consolidation..."
-          ↓ embedding
-          [document vector - declarative structure]
-```
-
-**Why this matters:**
-- Questions use **interrogative** structure ("What...", "How...", "Why...")
-- Documents use **declarative** structure (statements of fact)
-- **Vocabulary differs**: scientific terms vs. conversational phrasing
-- Embedding models trained on documents may not align well with question patterns
-
-HyDE transforms queries into the same semantic space as documents:
-
-```
-Question: "What causes stress to affect memory?"
           ↓ LLM generates hypothetical answer
 Hypothetical: "Stress triggers cortisol release, which affects
                the hippocampus and impairs memory consolidation..."
           ↓ embedding
-          [hypothetical vector - matches document space!]
+          [hypothetical vector - declarative, scientific]
+          ✓ matches document space
 ```
 
----
+
 
 ## Paper Approach
 
@@ -79,7 +63,7 @@ From the official implementation ([texttron/hyde](https://github.com/texttron/hy
 
 </div>
 
-**Key observations:**
+Key observations:
 - All prompts are **minimal** (1-2 sentences)
 - They specify **document type** (passage, scientific paper, financial article)
 - **No examples** provided
@@ -218,17 +202,7 @@ Passage:"""
 
 </div>
 
-### Code Locations
 
-| Component | File | Lines |
-|-----------|------|-------|
-| HYDE_PROMPT | `src/prompts.py` | 17-21 |
-| HYDE_K config | `src/config.py` | 865 |
-| hyde_prompt() | `src/rag_pipeline/retrieval/preprocessing/query_preprocessing.py` | 80-138 |
-| hyde_strategy() | `src/rag_pipeline/retrieval/preprocessing/strategies.py` | 74-109 |
-| Embedding averaging | `src/evaluation/ragas_evaluator.py` | 514-527 |
-
----
 
 ## Differences from Paper
 
