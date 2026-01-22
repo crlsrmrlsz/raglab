@@ -31,27 +31,35 @@ The algorithm works in three steps:
 
 3. **Search.** Use the averaged vector to find similar real documents via cosine similarity.
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  User Query: "Why do we procrastinate?"                                 │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  LLM generates K=5 hypothetical passages (temperature 0.7)              │
-│                                                                         │
-│  "Procrastination stems from the brain's limbic system overriding..."   │
-│  "Temporal discounting causes us to prefer immediate rewards..."        │
-│  "The prefrontal cortex struggles against emotional impulses..."        │
-│  ... (2 more variations)                                                │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Embed each passage → Average the 5 vectors → Single query vector       │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Cosine similarity search → Retrieved documents                         │
-└─────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph INPUT["1. Query"]
+        Q["'Why do we procrastinate?'"]
+    end
+
+    subgraph GENERATE["2. Generate Hypotheticals (K=5, temp=0.7)"]
+        H1["'Procrastination stems from<br/>the limbic system...'"]
+        H2["'Temporal discounting causes<br/>preference for immediate...'"]
+        H3["'The prefrontal cortex<br/>struggles against...'"]
+        H4["..."]
+        H5["..."]
+    end
+
+    subgraph EMBED["3. Embed & Average"]
+        E["Embed query + all 5 passages"]
+        AVG["Average vectors<br/>→ single query vector"]
+    end
+
+    subgraph SEARCH["4. Retrieve"]
+        S["Cosine similarity search"]
+        D["Retrieved documents"]
+    end
+
+    Q --> H1 & H2 & H3 & H4 & H5
+    H1 & H2 & H3 & H4 & H5 --> E
+    E --> AVG
+    AVG --> S
+    S --> D
 ```
 
 **Why does this work if the hypothetical contains wrong facts?** The embedding model compresses text into a fixed-size vector. This compression preserves *what the text is about* (topics, concepts, themes) but loses specific details. So a hypothetical that says "cortisol impairs memory via the hippocampus" will have an embedding similar to real documents about stress and memory—even if the specific mechanism described is slightly off. The embedding captures the semantic neighborhood, not the factual claims.
