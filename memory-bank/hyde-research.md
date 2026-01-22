@@ -4,13 +4,13 @@
 
 [HyDE](https://arxiv.org/abs/2212.10496) transforms queries into hypothetical documents that capture relevance patterns. The key insight is that the contrastive encoder's "dense bottleneck" filters out incorrect details from the generated hypothetical document, while preserving semantic relevance.
 
-**How it works:**
+How it works:
 1. Given a query, prompt an LLM to generate a hypothetical document that would answer it
 2. Encode this hypothetical document into an embedding vector
 3. Use this embedding to find similar real documents in the vector store
 4. The encoder naturally filters hallucinated content through the embedding space
 
-**Key Findings from the Paper**
+Key Findings from the Paper:
 
 1. **Minimal prompts work best** - Under-specification hurts, but over-specification causes template bias
 2. **Task-specific document type** - Mention document type (passage, paper, article) without overspecifying vocabulary
@@ -38,7 +38,10 @@ From the official implementation ([texttron/hyde](https://github.com/texttron/hy
 
 ## 3. Technical Parameters
 
-The paper uses temperature 0.7 to encourage diverse hypothetical generation while avoiding excessive randomness. For improved robustness, it recommends generating K=5 hypothetical passages and averaging their embeddings element-wise—this creates a more centered representation in embedding space that reduces the impact of any single hallucination. Output length is kept short (100-150 tokens, roughly 2-3 sentences) since the embedding model compresses semantic meaning regardless of length. A single hypothetical works well for most applications; K=5 averaging is an optional optimization for higher-stakes retrieval.
+- **Temperature 0.7** — encourages diverse hypothetical generation while avoiding excessive randomness
+- **K=5 hypotheticals** — multiple passages averaged element-wise create a more centered representation in embedding space, reducing the impact of any single hallucination
+- **Output length 100-150 tokens** — short passages (2-3 sentences) suffice since the embedding model compresses semantic meaning regardless of length
+- **Single hypothetical** works well for most applications; K=5 averaging is an optional optimization for higher-stakes retrieval
 
 ---
 
