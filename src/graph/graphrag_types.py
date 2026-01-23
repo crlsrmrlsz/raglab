@@ -1,13 +1,13 @@
-"""GraphRAG entity and relationship type definitions.
+"""GraphRAG entity type definitions.
 
-This module provides access to the curated entity and relationship types
-optimized for the dual-domain corpus (neuroscience + philosophy/wisdom).
+This module provides access to the curated entity types optimized for
+the dual-domain corpus (neuroscience + philosophy/wisdom).
 
 Design Decisions:
     - 20 entity types vs Microsoft's default 4 (due to dual-domain nature)
-    - 15 relationship types for semantic graph construction
     - Types are predefined (constrained extraction) vs auto-discovered
     - Bridge types (COGNITIVE_PROCESS, EMOTION, BEHAVIOR) enable cross-domain queries
+    - Relationship types are NOT predefined (following GraphRAG paper)
 
 Usage:
     >>> from src.graph.graphrag_types import get_entity_types, get_entity_type_names
@@ -124,35 +124,6 @@ def get_entity_types_by_domain(domain: str) -> list[dict[str, Any]]:
     return [t for t in types if t.get("domain") == domain]
 
 
-def get_relationship_types() -> list[dict[str, Any]]:
-    """Get full relationship type definitions.
-
-    Returns:
-        List of relationship type dictionaries with keys:
-            - name: Type name (e.g., 'CAUSES')
-            - description: What this relationship represents
-            - examples: List of example relationships
-
-    Example:
-        >>> rels = get_relationship_types()
-        >>> causes = next(r for r in rels if r['name'] == 'CAUSES')
-        >>> print(causes['description'])
-        'Direct causal relationship (X causes Y)'
-    """
-    config = _load_config()
-    return config.get("relationship_types", [])
-
-
-def get_relationship_type_names() -> list[str]:
-    """Get just the relationship type names for use in prompts.
-
-    Returns:
-        List of relationship type names in UPPERCASE_SNAKE_CASE.
-    """
-    types = get_relationship_types()
-    return [t["name"] for t in types]
-
-
 def get_entity_type_prompt_string() -> str:
     """Get entity types formatted for inclusion in LLM prompts.
 
@@ -211,11 +182,8 @@ def _validate_on_import():
     try:
         config = _load_config()
         entity_count = len(config.get("entity_types", []))
-        rel_count = len(config.get("relationship_types", []))
         if entity_count == 0:
             logger.warning("GraphRAG types config has no entity types defined")
-        if rel_count == 0:
-            logger.warning("GraphRAG types config has no relationship types defined")
     except FileNotFoundError:
         logger.warning(
             "GraphRAG types config not found at %s - using fallback types",
