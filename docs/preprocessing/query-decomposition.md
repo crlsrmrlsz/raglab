@@ -30,42 +30,9 @@ The algorithm works in five steps:
 
 5. **Generate answer.** Use the reranked top-k documents as context for LLM generation.
 
-
-```mermaid
-flowchart TB
-    subgraph Decompose["1. Decompose Query"]
-        Q[/"How does stress affect<br/>memory and decision-making?"/]
-        LLM["LLM<br/>(temp=0.8)"]
-        Q --> LLM
-        LLM --> SQ1["Sub-Q1: How does stress<br/>affect memory?"]
-        LLM --> SQ2["Sub-Q2: How does stress<br/>affect decision-making?"]
-        LLM --> SQO["Original query"]
-    end
-
-    subgraph Retrieve["2. Parallel Retrieval"]
-        SQ1 --> R1["Search 1"]
-        SQ2 --> R2["Search 2"]
-        SQO --> R3["Search 3"]
-        R1 --> D1["Docs A, B, C"]
-        R2 --> D2["Docs D, E, F"]
-        R3 --> D3["Docs A, G, H"]
-    end
-
-    subgraph Pool["3. Union + Deduplicate"]
-        D1 --> POOL["Pool: A, B, C, D, E, F, G, H"]
-        D2 --> POOL
-        D3 --> POOL
-    end
-
-    subgraph Rerank["4. Cross-Encoder Rerank"]
-        POOL --> CE["Cross-Encoder<br/>(vs original query)"]
-        CE --> TOP["Top-k: D, A, G, B, E"]
-    end
-
-    subgraph Generate["5. Answer Generation"]
-        TOP --> ANS["LLM generates answer<br/>using reranked context"]
-    end
-```
+<div align="center">
+    <img src="../../assets/query-decomposition.png" alt="Query Decomposition Workflow">
+</div>
 
 **Why simple union instead of rank fusion?** The paper found that complex merging strategies (like RRF) don't improve results when cross-encoder reranking follows. The reranker is powerful enough to sort through the pooled candidates—sophisticated merging is redundant.
 
@@ -105,12 +72,6 @@ Respond with JSON:
   "reasoning": "Brief explanation"
 }}"""
 ```
-
-**Matches paper:**
-- Simple union merge (concatenate + deduplicate by chunk_id, not RRF)
-- Decomposition temperature 0.8
-- Cross-encoder reranking mandatory (`requires_reranking=True` in StrategyConfig)
-- Original query included in retrieval alongside sub-questions
 
 **RAGLab additions:**
 - "Keep as single question" clause for simple queries (follows [Haystack practice](https://haystack.deepset.ai/blog/query-decomposition))—avoids unnecessary decomposition overhead
