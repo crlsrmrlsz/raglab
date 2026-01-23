@@ -68,6 +68,7 @@ def call_chat_completion(
     model: str,
     temperature: float = 0.3,
     max_tokens: int = 1024,
+    top_p: Optional[float] = None,
     json_mode: bool = False,
     timeout: int = 60,
     max_retries: int = 3,
@@ -86,6 +87,8 @@ def call_chat_completion(
         model: OpenRouter model ID (e.g., "openai/gpt-4o-mini").
         temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative).
         max_tokens: Maximum tokens in response.
+        top_p: Nucleus sampling threshold (0.0-1.0). If set, only tokens with
+            cumulative probability <= top_p are considered.
         json_mode: If True, request JSON response format.
         timeout: Request timeout in seconds.
         max_retries: Number of retries on failure.
@@ -121,6 +124,9 @@ def call_chat_completion(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+
+    if top_p is not None:
+        payload["top_p"] = top_p
 
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
