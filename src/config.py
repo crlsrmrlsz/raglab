@@ -590,13 +590,22 @@ def get_strategy_metadata(strategy: str) -> StrategyMetadata:
     if strategy in STRATEGY_REGISTRY:
         return STRATEGY_REGISTRY[strategy]
 
-    # Handle semantic_X.X variants dynamically
+    # Handle semantic variants dynamically
     if strategy.startswith("semantic_"):
-        threshold = strategy.split("_", 1)[1]
+        suffix = strategy.split("_", 1)[1]
+        # Handle stdX format (e.g., "semantic_std2" -> "2 std dev")
+        if suffix.startswith("std") and suffix[3:].isdigit():
+            std_val = suffix[3:]
+            return StrategyMetadata(
+                key=strategy,
+                display_name=f"Semantic ({std_val} std)",
+                description=f"Embedding similarity boundaries ({std_val} standard deviations)",
+            )
+        # Handle numeric threshold (e.g., "semantic_0.5")
         return StrategyMetadata(
             key=strategy,
-            display_name=f"Semantic Chunking ({threshold})",
-            description=f"Embedding similarity boundaries (threshold: {threshold})",
+            display_name=f"Semantic ({suffix})",
+            description=f"Embedding similarity boundaries (threshold: {suffix})",
         )
 
     # Fallback for unknown strategies
