@@ -28,7 +28,7 @@ Question: {query}
 
 Passage:"""
 
-DECOMPOSITION_PROMPT = """Break down this question for a knowledge base on cognitive science and philosophy.
+DECOMPOSITION_PROMPT = """Break down this question for a knowledge base spanning neuroscience research and classical wisdom/philosophy.
 
 If the question is simple enough to answer directly, keep it as a single question.
 Otherwise, create 3-5 sub-questions that can be answered independently and together cover all aspects of the original.

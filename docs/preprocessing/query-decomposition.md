@@ -97,7 +97,7 @@ RAGLab implements the paper's algorithm faithfully, with one practical addition 
 
 ```python
 # src/prompts.py
-DECOMPOSITION_PROMPT = """Break down this question for a knowledge base on cognitive science and philosophy.
+DECOMPOSITION_PROMPT = """Break down this question for a knowledge base spanning neuroscience research and classical wisdom/philosophy.
 
 If the question is simple enough to answer directly, keep it as a single question.
 Otherwise, create 3-5 sub-questions that can be answered independently and together cover all aspects of the original.
@@ -120,16 +120,8 @@ Respond with JSON:
 **RAGLab additions:**
 - "Keep as single question" clause for simple queries (follows [Haystack practice](https://haystack.deepset.ai/blog/query-decomposition))—avoids unnecessary decomposition overhead
 - JSON response with `reasoning` field for debugging decomposition decisions
-- Domain-specific phrasing ("cognitive science and philosophy") matching our corpus
+- Domain-specific phrasing ("neuroscience research and classical wisdom/philosophy") matching HyDE's dual-domain terminology
 
-### Code Locations
-
-| Component | File |
-|-----------|------|
-| Prompt | `src/prompts.py:DECOMPOSITION_PROMPT` |
-| Preprocessing | `src/rag_pipeline/retrieval/preprocessing/query_preprocessing.py` |
-| Strategy | `src/rag_pipeline/retrieval/strategies/decomposition.py` |
-| Config | `src/rag_pipeline/retrieval/preprocessing/strategy_config.py` |
 
 
 ## Navigation
