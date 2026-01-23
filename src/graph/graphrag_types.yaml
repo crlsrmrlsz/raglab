@@ -2,28 +2,41 @@
 # Optimized for dual-domain corpus: Neuroscience (8 books) + Philosophy/Wisdom (11 books)
 #
 # Reference: Microsoft GraphRAG uses 4 defaults (organization, person, geo, event)
-# This corpus needs 20 types due to dual-domain nature and technical vocabulary
+# This corpus needs 33 types due to dual-domain nature and technical vocabulary
 
 entity_types:
-  # Neuroscience-primary
+  # Neuroscience-primary (18)
   - BRAIN_REGION
   - NEURAL_STRUCTURE
+  - NEURAL_SYSTEM
   - NEUROTRANSMITTER
   - HORMONE
   - COGNITIVE_PROCESS
   - BEHAVIOR
   - EMOTION
+  - MENTAL_STATE
+  - PSYCHOLOGICAL_PHENOMENON
+  - HUMAN_DRIVE
   - DISORDER
+  - ENVIRONMENTAL_FACTOR
+  - DEVELOPMENTAL_STAGE
+  - INTERVENTION
+  - THEORY
   - RESEARCHER
   - STUDY
-  # Philosophy-primary
+  # Philosophy-primary (15)
   - PHILOSOPHER
   - PHILOSOPHICAL_SCHOOL
   - WORK
   - PRINCIPLE
   - VIRTUE
+  - VICE
   - ETHICAL_CONCEPT
   - METAPHYSICAL_CONCEPT
   - PSYCHOLOGICAL_CONCEPT
+  - HUMAN_RELATIONSHIP
+  - LIFE_DOMAIN
+  - IDEAL
+  - ARGUMENT
   - HISTORICAL_FIGURE
   - PRACTICE
