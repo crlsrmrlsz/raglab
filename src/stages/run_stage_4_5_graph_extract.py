@@ -8,16 +8,16 @@ for Neo4j upload in Stage 6b.
 
 ```bash
 # Full extraction (default: section chunks)
-python -m src.stages.run_stage_4_5_autotune
+python -m src.stages.run_stage_4_5_graph_extract
 
 # Use different chunking strategy
-python -m src.stages.run_stage_4_5_autotune --strategy semantic
+python -m src.stages.run_stage_4_5_graph_extract --strategy semantic
 
 # Resume after interruption (skip processed books)
-python -m src.stages.run_stage_4_5_autotune --overwrite skip
+python -m src.stages.run_stage_4_5_graph_extract --overwrite skip
 
 # List books to be processed
-python -m src.stages.run_stage_4_5_autotune --list-books
+python -m src.stages.run_stage_4_5_graph_extract --list-books
 ```
 
 ## Next Step
@@ -34,7 +34,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from src.graph.auto_tuning import run_extraction, load_book_files
+from src.graph.extraction import run_extraction, load_book_files
 from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_arg
 from src.config import GRAPHRAG_EXTRACTION_MODEL, DIR_CLEANING_LOGS
 

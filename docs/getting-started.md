@@ -177,7 +177,7 @@ When you run the pipeline, data flows through these folders:
 | 3 | `python -m src.stages.run_stage_3_segmentation` | Sentence segmentation (spaCy NLP) |
 | 4 | `python -m src.stages.run_stage_4_chunking` | Create chunks (800 tokens, 2-sentence overlap) |
 | 4.5a | `python -m src.stages.run_stage_4_5_raptor` | RAPTOR hierarchical tree (optional) |
-| 4.5b | `python -m src.stages.run_stage_4_5_autotune` | GraphRAG entity extraction (optional) |
+| 4.5b | `python -m src.stages.run_stage_4_5_graph_extract` | GraphRAG entity extraction (optional) |
 | 5 | `python -m src.stages.run_stage_5_embedding` | Generate embeddings (OpenAI API) |
 | 6 | `python -m src.stages.run_stage_6_weaviate` | Upload to Weaviate vector database |
 | 6b | `python -m src.stages.run_stage_6b_neo4j` | Upload to Neo4j + Leiden communities (optional) |
@@ -208,7 +208,7 @@ GraphRAG extracts entities and relationships, detects communities using the Leid
 
 ```bash
 # After running stages 1-4
-python -m src.stages.run_stage_4_5_autotune    # Discover entity types + extract
+python -m src.stages.run_stage_4_5_graph_extract  # Extract entities + relationships
 python -m src.stages.run_stage_6b_neo4j        # Upload to Neo4j + run Leiden
 
 # Then use --preprocessing graphrag in evaluation or UI

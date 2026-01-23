@@ -55,7 +55,7 @@ docker compose up -d neo4j weaviate
 
 ```bash
 # Step 1: Entity Extraction (uses curated types from graphrag_types.yaml)
-python -m src.stages.run_stage_4_5_autotune --strategy section
+python -m src.stages.run_stage_4_5_graph_extract --strategy section
 
 # Step 2: Upload + Leiden + Summarization + Entity Embeddings
 python -m src.stages.run_stage_6b_neo4j
@@ -252,7 +252,7 @@ Query: "How does dopamine affect motivation?"
 |------|---------|---------------|
 | `src/graph/schemas.py` | Pydantic models | `GraphEntity`, `Community`, `CommunityRelationship` |
 | `src/graph/extractor.py` | LLM entity extraction | `load_chunks_for_extraction()` |
-| `src/graph/auto_tuning.py` | Auto-discover entity types | `run_auto_tuning()` |
+| `src/graph/extraction.py` | Entity extraction | `run_extraction()` |
 | `src/graph/neo4j_client.py` | Graph DB operations | `upload_extraction_results()`, `find_entity_neighbors()` |
 | `src/graph/community.py` | Leiden + summaries | `detect_and_summarize_communities()` |
 | `src/graph/hierarchy.py` | Multi-level parsing | `parse_leiden_hierarchy()`, `CommunityLevel` |

@@ -21,7 +21,7 @@ After reviewing the GraphRAG theory in memory-bank, the original arXiv paper (24
 - Each gleaning pass finds entities missed in previous passes
 - Increases entity yield per chunk significantly
 
-**RAGLab Implementation (`auto_tuning.py:82-98`):**
+**RAGLab Implementation (`extraction.py:82-98`):**
 ```python
 def extract_chunk(chunk, model):
     prompt = GRAPHRAG_OPEN_EXTRACTION_PROMPT.format(...)
@@ -326,7 +326,7 @@ Additional entities and relationships (JSON):"""
 GRAPHRAG_LOOP_PROMPT = """Given the extraction so far, are there still clearly missing entities?
 Answer YES or NO only."""
 
-# auto_tuning.py
+# extraction.py
 def extract_chunk_with_gleaning(chunk, model, max_gleanings=GRAPHRAG_MAX_GLEANINGS):
     # Initial extraction
     result = extract_chunk(chunk, model)

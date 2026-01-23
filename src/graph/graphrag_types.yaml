@@ -22,10 +22,9 @@ entity_types:
   - DEVELOPMENTAL_STAGE
   - INTERVENTION
   - THEORY
-  - RESEARCHER
   - STUDY
   # Philosophy-primary (15)
-  - PHILOSOPHER
+  - PERSON
   - PHILOSOPHICAL_SCHOOL
   - WORK
   - PRINCIPLE
@@ -38,5 +37,4 @@ entity_types:
   - LIFE_DOMAIN
   - IDEAL
   - ARGUMENT
-  - HISTORICAL_FIGURE
   - PRACTICE

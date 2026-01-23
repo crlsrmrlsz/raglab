@@ -1,12 +1,8 @@
 """Shared utilities for GraphRAG entity extraction.
 
 This module provides helper functions for loading chunks and saving
-extraction results. The actual extraction logic is in auto_tuning.py,
-which discovers entity types dynamically from the corpus.
-
-Note: A predefined extraction approach (with hardcoded entity types from
-config.py) was previously available but has been removed in favor of
-auto-tuning, which adapts better to different corpora.
+extraction results. The actual extraction logic is in extraction.py,
+which uses curated entity types from graphrag_types.yaml.
 """
 
 from typing import Any, Optional

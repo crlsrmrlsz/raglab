@@ -66,7 +66,7 @@ RAGLab implements GraphRAG across two stages with several adaptations for the du
 
 ```bash
 # Stage 4.5: Entity extraction with curated types
-python -m src.stages.run_stage_4_5_autotune --strategy semantic_std3
+python -m src.stages.run_stage_4_5_graph_extract --strategy semantic_std3
 
 # Stage 6b: Neo4j upload + Leiden + summaries + entity embeddings
 docker compose up -d neo4j

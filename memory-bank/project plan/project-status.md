@@ -125,20 +125,20 @@ Comprehensive code revision for publishing:
 | Prompts extracted | Created `src/prompts.py` for all LLM templates |
 | Unused imports removed | Cleaned up 6+ files with orphaned imports |
 
-## GraphRAG Auto-Tuning (Phase 8.1)
+## GraphRAG Entity Extraction (Phase 8.1)
 
-Auto-tuning discovers entity types from the actual corpus content instead of using predefined types.
+Entity extraction uses curated types from `src/graph/graphrag_types.yaml` (33 types for dual-domain corpus).
 
 **Process:**
-1. Open-ended extraction on all chunks (LLM assigns types freely)
-2. Aggregate discovered types with counts across corpus
-3. LLM consolidates into clean taxonomy (8-25 entity types, 10-20 relationships)
-4. Save to `discovered_types.json` for use in extraction and queries
+1. LLM extracts entities constrained to predefined types from YAML
+2. Relationships extracted with open-ended types (per GraphRAG paper)
+3. Results saved per-book for crash recovery
+4. Merged into `extraction_results.json` for Neo4j upload
 
 **Key Features:**
 - **Per-book atomic processing**: Each book saved as separate JSON file
 - **Resumable**: If interrupted, use `--overwrite skip` to continue from first missing book
-- **File logging**: Execution logged to `data/logs/autotune_TIMESTAMP.log`
+- **File logging**: Execution logged to `data/logs/extraction_TIMESTAMP.log`
 - **OverwriteContext integration**: Same `--overwrite {prompt|skip|all}` pattern as other stages
 
 **Output Files:**
@@ -148,16 +148,15 @@ data/processed/05_final_chunks/graph/
 │   ├── Behave, The_Biology....json
 │   ├── Biopsychology.json
 │   └── ... (17 more)
-├── extraction_results.json       # Merged from all books
-└── discovered_types.json         # Consolidated taxonomy
+└── extraction_results.json       # Merged from all books
 
 data/logs/
-└── autotune_TIMESTAMP.log        # Execution log
+└── extraction_TIMESTAMP.log      # Execution log
 ```
 
-**Discovered Types (from current corpus):**
-- Entity Types: CONCEPT, COGNITIVE_PROCESS, NEURAL_STRUCTURE, RESEARCHER, DISCIPLINE, BEHAVIOR, TECHNOLOGY, DISORDER
-- Relationship Types: STUDIES, OPENED_DOORS_TO, STUDIED_BY, CONTAINS, REPRESENTS, ALLOWS_RECOGNITION_OF, INCLUDES, ENABLES, INVOLVES, PART_OF, ABSENT_IN, INFLUENCES, PROPOSES, PROVIDES_INPUT_TO, DECREASES_DURING
+**Entity Types (33 curated in graphrag_types.yaml):**
+- Neuroscience (18): BRAIN_REGION, NEURAL_STRUCTURE, NEUROTRANSMITTER, COGNITIVE_PROCESS, BEHAVIOR, EMOTION, etc.
+- Philosophy (15): PHILOSOPHER, PHILOSOPHICAL_SCHOOL, VIRTUE, ETHICAL_CONCEPT, PRINCIPLE, etc.
 
 ## Strategy Pattern Architecture
 
@@ -270,15 +269,13 @@ python -m src.stages.run_stage_6_weaviate
 python -m src.stages.run_stage_4_5_raptor
 
 # GraphRAG (Neo4j knowledge graph)
-python -m src.stages.run_stage_4_5_autotune       # Auto-discover entity types (resumable)
-python -m src.stages.run_stage_4_6_graph_extract  # Extract entities/relationships
+python -m src.stages.run_stage_4_5_graph_extract  # Extract entities/relationships (resumable)
 python -m src.stages.run_stage_6b_neo4j           # Upload to Neo4j + Leiden communities
 
-# Auto-tuning resume options:
-python -m src.stages.run_stage_4_5_autotune --overwrite skip  # Resume from failure
-python -m src.stages.run_stage_4_5_autotune --overwrite all   # Force reprocess
-python -m src.stages.run_stage_4_5_autotune --list-books      # Preview books
-python -m src.stages.run_stage_4_5_autotune --show-types      # Show discovered types
+# Extraction resume options:
+python -m src.stages.run_stage_4_5_graph_extract --overwrite skip  # Resume from failure
+python -m src.stages.run_stage_4_5_graph_extract --overwrite all   # Force reprocess
+python -m src.stages.run_stage_4_5_graph_extract --list-books      # Preview books
 
 # UI
 streamlit run src/ui/app.py
