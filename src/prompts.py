@@ -22,7 +22,7 @@ Question: {query}
 
 Passage:"""
 
-HYDE_PROMPT_PHILOSOPHY = """Please write a passage from a classical wisdom essay to answer the question.
+HYDE_PROMPT_PHILOSOPHY = """Please write a passage from a classical wisdom/philosophy essay to answer the question.
 
 Question: {query}
 
