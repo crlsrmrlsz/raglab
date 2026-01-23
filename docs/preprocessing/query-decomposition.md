@@ -2,15 +2,11 @@
 
 [← HyDE](hyde.md) | [Home](../../README.md)
 
-When you ask "How does stress affect both memory formation and decision-making?", a single search struggles because the question touches multiple concepts. Documents about stress and memory won't mention decision-making, and vice versa. A single embedding can't represent both facets well—it averages them into a middle ground that matches neither topic precisely.
+When you ask "How does stress affect memory and decision-making?", a single embedding averages both concepts into a middle ground that matches neither well. Query Decomposition breaks the question into focused sub-questions, searches each independently, pools results, and reranks against the original query. The cross-encoder judges each document's relevance to the *complete* question, not just individual sub-questions.
 
-Query Decomposition fixes this by breaking the question into focused sub-questions before searching. Instead of one embedding representing everything, each sub-question ("How does stress affect memory?" + "How does stress affect decision-making?") gets its own search. The results are pooled and a cross-encoder reranks them against the original question, surfacing the most relevant documents from both aspects.
+**When it helps:** Multi-hop questions, comparisons ("How does X differ from Y?"), "what, how, why" chains.
 
-The key insight: complex questions often contain multiple information needs. Decomposing them lets each need get precise retrieval, while reranking ensures the final results address the whole question.
-
-**When decomposition helps:** Multi-hop questions spanning multiple concepts, comparison queries ("How does X differ from Y?"), questions with implicit sub-parts, and "what, how, why" chains where each aspect needs independent retrieval.
-
-**When it struggles:** Simple factual lookups (adds unnecessary latency), cross-domain synthesis where the domains share vocabulary (HyDE may work better), and latency-critical applications (<500ms budget) since multiple searches are required.
+**When it struggles:** Simple lookups (unnecessary overhead), latency-critical apps (<500ms).
 
 
 
@@ -35,42 +31,9 @@ The algorithm works in five steps:
 5. **Generate answer.** Use the reranked top-k documents as context for LLM generation.
 
 
-```mermaid
-flowchart TB
-    subgraph Decompose["1. Decompose Query"]
-        Q[/"How does stress affect<br/>memory and decision-making?"/]
-        LLM["LLM<br/>(temp=0.8)"]
-        Q --> LLM
-        LLM --> SQ1["Sub-Q1: How does stress<br/>affect memory?"]
-        LLM --> SQ2["Sub-Q2: How does stress<br/>affect decision-making?"]
-        LLM --> SQO["Original query"]
-    end
-
-    subgraph Retrieve["2. Parallel Retrieval"]
-        SQ1 --> R1["Search 1"]
-        SQ2 --> R2["Search 2"]
-        SQO --> R3["Search 3"]
-        R1 --> D1["Docs A, B, C"]
-        R2 --> D2["Docs D, E, F"]
-        R3 --> D3["Docs A, G, H"]
-    end
-
-    subgraph Pool["3. Union + Deduplicate"]
-        D1 --> POOL["Pool: A, B, C, D, E, F, G, H"]
-        D2 --> POOL
-        D3 --> POOL
-    end
-
-    subgraph Rerank["4. Cross-Encoder Rerank"]
-        POOL --> CE["Cross-Encoder<br/>(vs original query)"]
-        CE --> TOP["Top-k: D, A, G, B, E"]
-    end
-
-    subgraph Generate["5. Answer Generation"]
-        TOP --> ANS["LLM generates answer<br/>using reranked context"]
-    end
-```
-
+<div align="center">
+    <img src="../../assets/query-decomposition.png" alt="Query Decomposition Workflow">
+</div>
 
 **Why simple union instead of rank fusion?** The paper found that complex merging strategies (like RRF) don't improve results when cross-encoder reranking follows. The reranker is powerful enough to sort through the pooled candidates—sophisticated merging is redundant.
 
@@ -111,16 +74,11 @@ Respond with JSON:
 }}"""
 ```
 
-**Matches paper:**
-- Simple union merge (concatenate + deduplicate by chunk_id, not RRF)
-- Decomposition temperature 0.8
-- Cross-encoder reranking mandatory (`requires_reranking=True` in StrategyConfig)
-- Original query included in retrieval alongside sub-questions
 
 **RAGLab additions:**
 - "Keep as single question" clause for simple queries (follows [Haystack practice](https://haystack.deepset.ai/blog/query-decomposition))—avoids unnecessary decomposition overhead
 - JSON response with `reasoning` field for debugging decomposition decisions
-- Domain-specific phrasing ("neuroscience research and classical wisdom/philosophy") matching HyDE's dual-domain terminology
+- Domain-specific phrasing ("neuroscience research and classical wisdom/philosophy") 
 
 
 
