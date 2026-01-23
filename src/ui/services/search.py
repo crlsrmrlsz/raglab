@@ -11,7 +11,7 @@ encapsulates its own retrieval logic:
 
 - **StandardRetrieval**: Direct Weaviate search (no preprocessing)
 - **HyDERetrieval**: Generate hypotheticals → average embeddings → single search
-- **DecompositionRetrieval**: Break into sub-questions → parallel searches → RRF merge
+- **DecompositionRetrieval**: Break into sub-questions → parallel searches → union → rerank
 - **GraphRAGRetrieval**: Extract entities → vector search → graph traversal → RRF merge
 
 This eliminates the confusing conditional logic that previously checked

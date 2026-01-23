@@ -583,6 +583,10 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
             )
 
             try:
+                # Some strategies require reranking (e.g., decomposition per paper)
+                strategy_config = get_strategy_config(strategy)
+                use_reranking = strategy_config.requires_reranking
+
                 results = run_evaluation(
                     test_questions=questions,
                     metrics=EVAL_DEFAULT_METRICS,
@@ -590,7 +594,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
                     generation_model=args.generation_model,
                     evaluation_model=args.evaluation_model,
                     collection_name=collection,
-                    use_reranking=False,  # Always disabled for speed
+                    use_reranking=use_reranking,
                     alpha=alpha,
                     preprocessing_strategy=strategy,
                     preprocessing_model=None,
@@ -776,6 +780,10 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
         )
 
         try:
+            # Some strategies require reranking (e.g., decomposition per paper)
+            strategy_config = get_strategy_config(fc.strategy)
+            use_reranking = strategy_config.requires_reranking
+
             results = run_evaluation(
                 test_questions=questions,
                 metrics=EVAL_DEFAULT_METRICS,
@@ -783,7 +791,7 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
                 generation_model=args.generation_model,
                 evaluation_model=args.evaluation_model,
                 collection_name=fc.collection,
-                use_reranking=False,
+                use_reranking=use_reranking,
                 alpha=fc.alpha,
                 preprocessing_strategy=fc.strategy,
                 preprocessing_model=None,
@@ -1294,6 +1302,16 @@ def main() -> None:
     # Determine collection name
     collection_name = args.collection or get_collection_name()
 
+    # Check if strategy requires reranking
+    strategy_config = get_strategy_config(args.preprocessing)
+    use_reranking = args.reranking
+    if strategy_config.requires_reranking and not args.reranking:
+        logger.warning(
+            f"Strategy '{args.preprocessing}' requires reranking (per paper). "
+            "Enabling reranking automatically."
+        )
+        use_reranking = True
+
     # Run evaluation
     logger.info("Starting RAGAS evaluation...")
     logger.info(f"Collection: {collection_name}")
@@ -1302,7 +1320,7 @@ def main() -> None:
     logger.info(f"Search type: {args.search_type}")
     alpha_display = f"{args.alpha}" if args.search_type == "hybrid" else "N/A (keyword)"
     logger.info(f"Alpha: {alpha_display}")
-    logger.info(f"Reranking: {args.reranking}")
+    logger.info(f"Reranking: {use_reranking}")
     logger.info(f"Preprocessing: {args.preprocessing}")
     logger.info(f"Generation model: {args.generation_model}")
     logger.info(f"Evaluation model: {args.evaluation_model}")
@@ -1315,7 +1333,7 @@ def main() -> None:
             generation_model=args.generation_model,
             evaluation_model=args.evaluation_model,
             collection_name=collection_name,
-            use_reranking=args.reranking,
+            use_reranking=use_reranking,
             alpha=args.alpha,
             preprocessing_strategy=args.preprocessing,
             preprocessing_model=args.preprocessing_model,

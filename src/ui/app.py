@@ -474,18 +474,28 @@ top_k = st.sidebar.slider(
 )
 
 # -----------------------------------------------------------------------------
-# Reranking (always visible)
+# Reranking (always visible, may be forced by strategy)
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("### Reranking")
 
-use_reranking = st.sidebar.checkbox(
-    "Enable Cross-Encoder",
-    value=False,
-    help="Re-score results for higher accuracy (slow on CPU).",
-)
-
-if use_reranking:
-    st.sidebar.caption("~2 min/query on CPU")
+# Some strategies require reranking (e.g., decomposition per arXiv:2507.00355)
+if strategy_config.requires_reranking:
+    use_reranking = True
+    st.sidebar.checkbox(
+        "Enable Cross-Encoder",
+        value=True,
+        disabled=True,
+        help="Required by this preprocessing strategy.",
+    )
+    st.sidebar.caption(f"Required by {selected_strategy}")
+else:
+    use_reranking = st.sidebar.checkbox(
+        "Enable Cross-Encoder",
+        value=False,
+        help="Re-score results for higher accuracy (slow on CPU).",
+    )
+    if use_reranking:
+        st.sidebar.caption("~2 min/query on CPU")
 
 
 # ============================================================================
@@ -535,7 +545,7 @@ if search_clicked and query:
             st.session_state.preprocessed_query = None
 
         # Step 2 & 3: Search (with optional reranking)
-        # Strategy determines retrieval method: HyDE=embedding averaging, decomposition=RRF
+        # Strategy determines retrieval method: HyDE=embedding averaging, decomposition=union+rerank
         multi_queries = None
         if preprocessed and preprocessed.generated_queries:
             multi_queries = preprocessed.generated_queries
@@ -543,15 +553,16 @@ if search_clicked and query:
         # Build spinner message based on strategy-specific retrieval method
         spinner_msg = "Stage 2: Searching..."
         if selected_strategy == "hyde" and multi_queries and len(multi_queries) > 1:
-            # HyDE averages embeddings into single vector for one search (not RRF)
+            # HyDE averages embeddings into single vector for one search
             spinner_msg = f"Stage 2: Searching ({len(multi_queries)} embeddings averaged)..."
         elif selected_strategy == "decomposition" and multi_queries and len(multi_queries) > 1:
-            # Decomposition runs N searches and merges with RRF
-            spinner_msg = f"Stage 2: Searching ({len(multi_queries)} queries + RRF)..."
+            # Decomposition runs N searches, pools results, reranks (per paper)
+            spinner_msg = f"Stage 2: Searching ({len(multi_queries)} queries + rerank)..."
         elif selected_strategy == "graphrag":
             # GraphRAG combines vector search with graph traversal
             spinner_msg = "Stage 2: Searching (graph + vector)..."
-        if use_reranking:
+        # Add reranking indicator for non-decomposition strategies (decomposition always reranks)
+        if use_reranking and selected_strategy != "decomposition":
             spinner_msg = spinner_msg.replace("...", " + reranking...")
 
         with st.spinner(spinner_msg):

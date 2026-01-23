@@ -144,6 +144,7 @@ class StrategyConfig:
     )
     compatible_collections: Optional[set[str]] = None
     includes_original_in_embedding: bool = False
+    requires_reranking: bool = False  # If True, cross-encoder reranking is mandatory
 
     def is_valid_alpha(self, alpha: float) -> bool:
         """Check if alpha is valid for this strategy.
@@ -234,8 +235,9 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
     "decomposition": StrategyConfig(
         strategy_id="decomposition",
         display_name="Decomposition",
-        description="Break into sub-questions + RRF merge (arXiv:2507.00355)",
+        description="Break into sub-questions + rerank (arXiv:2507.00355)",
         alpha_constraint=AlphaConstraint(mode="any"),
+        requires_reranking=True,  # Paper requires cross-encoder reranking
     ),
     "graphrag": StrategyConfig(
         strategy_id="graphrag",

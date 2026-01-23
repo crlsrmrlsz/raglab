@@ -164,7 +164,8 @@ def decompose_query(query: str, model: Optional[str] = None) -> tuple[list[str],
 
     Breaks complex comparison or multi-aspect questions into simpler
     sub-questions that can be answered independently. Each sub-question
-    is used for retrieval, with results merged using RRF.
+    is used for retrieval, with results pooled and reranked against
+    the original query (per arXiv:2507.00355).
 
     Uses Pydantic DecompositionResult schema for type-safe extraction.
     The schema guarantees sub_questions is a List[str].
@@ -197,7 +198,7 @@ def decompose_query(query: str, model: Optional[str] = None) -> tuple[list[str],
             messages=messages,
             model=model,
             response_model=DecompositionResult,
-            temperature=0.7,  # Paper uses 0.8 for diverse decompositions (arXiv:2507.00355)
+            temperature=0.8,  # Per paper: 0.8 with Top-p 0.8 (arXiv:2507.00355)
             max_tokens=400,
         )
 
