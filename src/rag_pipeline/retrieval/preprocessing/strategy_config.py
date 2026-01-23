@@ -236,7 +236,8 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
         strategy_id="decomposition",
         display_name="Decomposition",
         description="Break into sub-questions + rerank (arXiv:2507.00355)",
-        alpha_constraint=AlphaConstraint(mode="any"),
+        # Paper uses dense retrieval (bge-large-en-v1.5), no BM25
+        alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
         requires_reranking=True,  # Paper requires cross-encoder reranking
     ),
     "graphrag": StrategyConfig(

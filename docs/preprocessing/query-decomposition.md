@@ -22,17 +22,49 @@ The algorithm works in five steps:
 
 1. **Decompose the query.** An LLM breaks the original question into up to 5 sub-questions. Each sub-question should be answerable independently and together cover all aspects of the original. Temperature 0.8 and top-p 0.8 encourage diverse decompositions.
 
-2. **Retrieve for each sub-question.** Execute separate retrieval for the original query plus each sub-question. This generates multiple result sets, each focused on one aspect.
+2. **Retrieve for each sub-question.** Execute dense retrieval (paper uses `bge-large-en-v1.5`) for the original query plus each sub-question. This generates multiple result sets, each focused on one aspect.
 
 3. **Pool all results.** Combine results using simple union—concatenate all result lists and deduplicate by document ID, keeping the first occurrence. No ranking manipulation at this stage.
 
-4. **Rerank against original query.** A cross-encoder (paper uses `bge-reranker-large`) scores each pooled document against the *original* question. This is mandatory—the cross-encoder sees both the full question and each document together, enabling it to judge relevance to the complete multi-faceted query.
+4. **Rerank against original query.** A cross-encoder (`bge-reranker-large`) scores each pooled document against the *original* question. This is mandatory—the cross-encoder sees both the full question and each document together, enabling it to judge relevance to the complete multi-faceted query.
 
 5. **Generate answer.** Use the reranked top-k documents as context for LLM generation.
 
-<div align="center">
-    <img src="../../assets/query-decomposition.png" alt="Query Decomposition Workflow">
-</div>
+```mermaid
+flowchart TB
+    subgraph Decompose["1. Decompose Query"]
+        Q[/"How does stress affect<br/>memory and decision-making?"/]
+        LLM["LLM<br/>(temp=0.8)"]
+        Q --> LLM
+        LLM --> SQ1["Sub-Q1: How does stress<br/>affect memory?"]
+        LLM --> SQ2["Sub-Q2: How does stress<br/>affect decision-making?"]
+        LLM --> SQO["Original query"]
+    end
+
+    subgraph Retrieve["2. Parallel Retrieval"]
+        SQ1 --> R1["Search 1"]
+        SQ2 --> R2["Search 2"]
+        SQO --> R3["Search 3"]
+        R1 --> D1["Docs A, B, C"]
+        R2 --> D2["Docs D, E, F"]
+        R3 --> D3["Docs A, G, H"]
+    end
+
+    subgraph Pool["3. Union + Deduplicate"]
+        D1 --> POOL["Pool: A, B, C, D, E, F, G, H"]
+        D2 --> POOL
+        D3 --> POOL
+    end
+
+    subgraph Rerank["4. Cross-Encoder Rerank"]
+        POOL --> CE["Cross-Encoder<br/>(vs original query)"]
+        CE --> TOP["Top-k: D, A, G, B, E"]
+    end
+
+    subgraph Generate["5. Answer Generation"]
+        TOP --> ANS["LLM generates answer<br/>using reranked context"]
+    end
+```
 
 **Why simple union instead of rank fusion?** The paper found that complex merging strategies (like RRF) don't improve results when cross-encoder reranking follows. The reranker is powerful enough to sort through the pooled candidates—sophisticated merging is redundant.
 
@@ -72,6 +104,13 @@ Respond with JSON:
   "reasoning": "Brief explanation"
 }}"""
 ```
+
+**Matches paper:**
+- Dense retrieval only (`alpha=1.0` in StrategyConfig, same as HyDE)
+- Simple union merge (concatenate + deduplicate by chunk_id, not RRF)
+- Decomposition temperature 0.8
+- Cross-encoder reranking mandatory (`requires_reranking=True`)
+- Original query included in retrieval alongside sub-questions
 
 **RAGLab additions:**
 - "Keep as single question" clause for simple queries (follows [Haystack practice](https://haystack.deepset.ai/blog/query-decomposition))—avoids unnecessary decomposition overhead
