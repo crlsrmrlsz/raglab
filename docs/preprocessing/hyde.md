@@ -92,14 +92,14 @@ RAGLab follows the paper's parameters and includes the original query in the emb
 HYDE_K = 4              # Total hypotheticals: 2 neuroscience + 2 philosophy
 HYDE_MAX_TOKENS = 150   # Short passages, 2-3 sentences (paper uses ~100-150)
 
-# Split prompts for dual-domain corpus
-HYDE_PROMPT_NEUROSCIENCE = """Please write a passage from a neuroscience textbook to answer the question.
+# Split prompts for dual-domain corpus (explicit length for modern models)
+HYDE_PROMPT_NEUROSCIENCE = """Write a brief 2-3 sentence passage from a neuroscience textbook to answer the question.
 
 Question: {query}
 
 Passage:"""
 
-HYDE_PROMPT_PHILOSOPHY = """Please write a passage from a classical wisdom essay to answer the question.
+HYDE_PROMPT_PHILOSOPHY = """Write a brief 2-3 sentence passage from a classical wisdom/philosophy essay to answer the question.
 
 Question: {query}
 

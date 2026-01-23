@@ -159,13 +159,14 @@ Let queries determine natural topic balance. Forced splits constrain generation.
 
 ### Current HyDE Prompts (Split for Dual-Domain Corpus)
 ```python
-HYDE_PROMPT_NEUROSCIENCE = """Please write a passage from a neuroscience textbook to answer the question.
+# Explicit "brief 2-3 sentence" for modern models (paper's InstructGPT was naturally concise)
+HYDE_PROMPT_NEUROSCIENCE = """Write a brief 2-3 sentence passage from a neuroscience textbook to answer the question.
 
 Question: {query}
 
 Passage:"""
 
-HYDE_PROMPT_PHILOSOPHY = """Please write a passage from a classical wisdom essay to answer the question.
+HYDE_PROMPT_PHILOSOPHY = """Write a brief 2-3 sentence passage from a classical wisdom/philosophy essay to answer the question.
 
 Question: {query}
 

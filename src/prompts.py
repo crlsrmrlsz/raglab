@@ -15,14 +15,14 @@ Contains all prompts used for:
 # =============================================================================
 
 # Split prompts for dual-domain corpus (2 neuroscience + 2 philosophy hypotheticals)
-# Minimal prompts following HyDE paper's "document type + domain" pattern
-HYDE_PROMPT_NEUROSCIENCE = """Please write a passage from a neuroscience textbook to answer the question.
+# Explicit length constraint for modern models (paper used InstructGPT which was naturally concise)
+HYDE_PROMPT_NEUROSCIENCE = """Write a brief 2-3 sentence passage from a neuroscience textbook to answer the question.
 
 Question: {query}
 
 Passage:"""
 
-HYDE_PROMPT_PHILOSOPHY = """Please write a passage from a classical wisdom/philosophy essay to answer the question.
+HYDE_PROMPT_PHILOSOPHY = """Write a brief 2-3 sentence passage from a classical wisdom/philosophy essay to answer the question.
 
 Question: {query}
 
