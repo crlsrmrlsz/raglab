@@ -73,6 +73,12 @@ Respond with JSON:
 }}"""
 ```
 
+**Matches paper:**
+- Dense retrieval only (`alpha=1.0` in StrategyConfig)
+- Simple union merge (deduplicate by chunk_id, not RRF)
+- Decomposition temperature 0.8
+- Cross-encoder reranking mandatory (`requires_reranking=True`)
+
 **RAGLab additions:**
 - "Keep as single question" clause for simple queries (follows [Haystack practice](https://haystack.deepset.ai/blog/query-decomposition))—avoids unnecessary decomposition overhead
 - JSON response with `reasoning` field for debugging decomposition decisions
