@@ -73,16 +73,7 @@ Respond with JSON:
 }}"""
 ```
 
-**Matches paper:**
-- Dense retrieval only (`alpha=1.0` in StrategyConfig)
-- Simple union merge (deduplicate by chunk_id, not RRF)
-- Decomposition temperature 0.8
-- Cross-encoder reranking mandatory (`requires_reranking=True`)
-
-**RAGLab additions:**
-- "Keep as single question" clause for simple queries (follows [Haystack practice](https://haystack.deepset.ai/blog/query-decomposition))—avoids unnecessary decomposition overhead
-- JSON response with `reasoning` field for debugging decomposition decisions
-- Domain-specific phrasing ("neuroscience research and classical wisdom/philosophy") 
+RAGLab matches the paper: simple union merge, temperature 0.8, mandatory cross-encoder reranking (`requires_reranking=True`), and dense retrieval only (`alpha=1.0`)—the UI and evaluation enforce this constraint automatically. Additions include a "keep as single question" clause for simple queries ([Haystack practice](https://haystack.deepset.ai/blog/query-decomposition)), JSON response with `reasoning` field for debugging, and domain-specific phrasing for our dual-domain corpus. Since RAGLab is designed to test different techniques and combinations, the constraint system ensures paper-aligned configurations while allowing experimentation with other strategies. 
 
 
 
