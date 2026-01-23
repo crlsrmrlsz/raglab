@@ -324,7 +324,7 @@ def _render_pipeline_log():
         with st.expander("Retrieval", expanded=True):
             _render_retrieval_stage(settings, results, prep)
 
-    # RRF (only if multi-query was used)
+    # RRF (only for decomposition strategy - HyDE uses embedding averaging instead)
     if rrf:
         with st.expander("RRF Merging", expanded=False):
             _render_rrf_stage(rrf, prep)
@@ -520,15 +520,23 @@ if search_clicked and query:
         else:
             st.session_state.preprocessed_query = None
 
-        # Step 2 & 3: Search (with optional reranking and RRF for multi-query)
-        # Check if multi-query strategy was used
+        # Step 2 & 3: Search (with optional reranking)
+        # Strategy determines retrieval method: HyDE=embedding averaging, decomposition=RRF
         multi_queries = None
         if preprocessed and preprocessed.generated_queries:
             multi_queries = preprocessed.generated_queries
 
+        # Build spinner message based on strategy-specific retrieval method
         spinner_msg = "Stage 2: Searching..."
-        if multi_queries and len(multi_queries) > 1:
+        if selected_strategy == "hyde" and multi_queries and len(multi_queries) > 1:
+            # HyDE averages embeddings into single vector for one search (not RRF)
+            spinner_msg = f"Stage 2: Searching ({len(multi_queries)} embeddings averaged)..."
+        elif selected_strategy == "decomposition" and multi_queries and len(multi_queries) > 1:
+            # Decomposition runs N searches and merges with RRF
             spinner_msg = f"Stage 2: Searching ({len(multi_queries)} queries + RRF)..."
+        elif selected_strategy == "graphrag":
+            # GraphRAG combines vector search with graph traversal
+            spinner_msg = "Stage 2: Searching (graph + vector)..."
         if use_reranking:
             spinner_msg = spinner_msg.replace("...", " + reranking...")
 
