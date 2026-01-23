@@ -1,10 +1,13 @@
-# GraphRAG: Complete Reference
+# GraphRAG: Technical Reference
 
-**Date:** 2026-01-09
+**Date:** 2026-01-23
 **Status:** All Phases Complete
 **Paper:** [arXiv:2404.16130](https://arxiv.org/abs/2404.16130) (Microsoft Research, April 2024)
 
+> **Public Docs:** [docs/preprocessing/graphrag.md](../../docs/preprocessing/graphrag.md) - Educational overview (theory + RAGLab basics)
 > **Related:** [graphrag-sota-report.md](graphrag-sota-report.md) - 2025 implementation landscape and benchmarks
+
+This file is an internal technical reference with troubleshooting, module details, and architecture diagrams. For the educational overview, see the public docs.
 
 ---
 
