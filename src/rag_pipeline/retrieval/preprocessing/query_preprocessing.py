@@ -30,7 +30,14 @@ from typing import Optional
 import requests
 from pydantic import ValidationError as PydanticValidationError
 
-from src.config import PREPROCESSING_MODEL, HYDE_PROMPT, DECOMPOSITION_PROMPT, HYDE_K, HYDE_MAX_TOKENS
+from src.config import (
+    PREPROCESSING_MODEL,
+    HYDE_PROMPT_NEUROSCIENCE,
+    HYDE_PROMPT_PHILOSOPHY,
+    DECOMPOSITION_PROMPT,
+    HYDE_K,
+    HYDE_MAX_TOKENS,
+)
 from src.shared.files import setup_logging
 from src.shared.openrouter_client import call_chat_completion, call_structured_completion
 from src.rag_pipeline.retrieval.preprocessing.schemas import (
@@ -78,12 +85,15 @@ class PreprocessedQuery:
 
 
 def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> list[str]:
-    """Generate k hypothetical answers for HyDE retrieval.
+    """Generate k hypothetical answers for HyDE retrieval using split-domain approach.
 
     HyDE (Hypothetical Document Embeddings) generates plausible answers
     to the query, then searches for real passages similar to these answers.
-    Multiple hypotheticals improve retrieval robustness by covering
-    diverse phrasings and perspectives.
+
+    Split-domain approach: For dual-domain corpora (neuroscience + philosophy),
+    we generate k/2 hypotheticals from each domain to ensure embedding coverage
+    across both document types. This prevents all hypotheticals from clustering
+    in one region of embedding space.
 
     Paper: arXiv:2212.10496 - "Precise Zero-Shot Dense Retrieval without
     Relevance Labels"
@@ -91,50 +101,54 @@ def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> lis
     Args:
         query: The user's original question.
         model: Override model (defaults to PREPROCESSING_MODEL).
-        k: Number of hypothetical passages to generate (default from HYDE_K config).
+        k: Total hypotheticals to generate (split evenly between domains).
 
     Returns:
-        List of k hypothetical passages. Embeddings should be averaged downstream.
+        List of k hypothetical passages (k/2 neuroscience + k/2 philosophy).
 
     Example:
-        >>> passages = hyde_prompt("Why do we procrastinate?", k=5)
+        >>> passages = hyde_prompt("Why do we procrastinate?", k=4)
         >>> len(passages)
-        5
-        >>> passages[0]
-        "Procrastination stems from temporal discounting..."
+        4  # 2 neuroscience + 2 philosophy
     """
     model = model or PREPROCESSING_MODEL
 
-    # Format prompt with query only (self-contained domain description)
-    prompt = HYDE_PROMPT.format(query=query)
+    # Split K between domains (e.g., K=4 -> 2 neuroscience + 2 philosophy)
+    per_domain = k // 2
 
-    messages = [
-        {"role": "user", "content": prompt},
+    # Define domain prompts with their labels for logging
+    domain_prompts = [
+        (HYDE_PROMPT_NEUROSCIENCE, "neuroscience", per_domain),
+        (HYDE_PROMPT_PHILOSOPHY, "philosophy", k - per_domain),  # Handle odd K
     ]
 
     passages = []
-    for i in range(k):
-        try:
-            response = call_chat_completion(
-                messages=messages,
-                model=model,
-                temperature=0.7,  # Paper uses 0.7 for diverse hypothetical documents
-                max_tokens=HYDE_MAX_TOKENS,  # Paper uses short passages (~150 tokens)
-            )
-            response_text = response.strip()
-            if response_text:  # Only add non-empty responses
-                passages.append(response_text)
-            else:
-                logger.warning(f"HyDE prompt {i+1}/{k} returned empty response")
-        except requests.RequestException as e:
-            logger.warning(f"HyDE prompt {i+1}/{k} failed: {e}")
+    for prompt_template, domain_name, count in domain_prompts:
+        prompt = prompt_template.format(query=query)
+        messages = [{"role": "user", "content": prompt}]
+
+        for i in range(count):
+            try:
+                response = call_chat_completion(
+                    messages=messages,
+                    model=model,
+                    temperature=0.7,  # Paper uses 0.7 for diverse hypotheticals
+                    max_tokens=HYDE_MAX_TOKENS,
+                )
+                response_text = response.strip()
+                if response_text:
+                    passages.append(response_text)
+                else:
+                    logger.warning(f"HyDE {domain_name} {i+1}/{count} returned empty")
+            except requests.RequestException as e:
+                logger.warning(f"HyDE {domain_name} {i+1}/{count} failed: {e}")
 
     # Ensure at least one passage (fallback to original query)
     if not passages:
-        logger.warning("All HyDE prompts failed or returned empty, using original query")
+        logger.warning("All HyDE prompts failed, using original query")
         passages = [query]
 
-    logger.info(f"[hyde] Generated {len(passages)} hypotheticals")
+    logger.info(f"[hyde] Generated {len(passages)} hypotheticals ({per_domain} neuro + {k - per_domain} philo)")
     return passages
 
 

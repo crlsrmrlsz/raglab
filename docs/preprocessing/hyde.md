@@ -32,8 +32,9 @@ The algorithm works in three steps:
 3. **Search.** Use the averaged vector to find similar real documents via cosine similarity.
 
 
-[Hyde Workflow](../../assets/hyde.png)
-
+<div align="center">
+    <img src="../../assets/hyde.png" alt="Hyde Workflow">
+</div>
 
 
 **Why does this work if the hypothetical contains wrong facts?** The embedding model compresses text into a fixed-size vector. This compression preserves *what the text is about* (topics, concepts, themes) but loses specific details. So a hypothetical that says "cortisol impairs memory via the hippocampus" will have an embedding similar to real documents about stress and memory—even if the specific mechanism described is slightly off. The embedding captures the semantic neighborhood, not the factual claims.
@@ -88,17 +89,24 @@ Paragraph:
 RAGLab follows the paper's parameters and includes the original query in the embedding average. Configuration in `src/config.py`:
 
 ```python
-HYDE_K = 5              # Number of hypothetical passages (paper default)
+HYDE_K = 4              # Total hypotheticals: 2 neuroscience + 2 philosophy
 HYDE_MAX_TOKENS = 150   # Short passages, 2-3 sentences (paper uses ~100-150)
 
-HYDE_PROMPT = """Please write a passage from a neuroscience textbook or classical wisdom essay to answer the question.
+# Split prompts for dual-domain corpus
+HYDE_PROMPT_NEUROSCIENCE = """Please write a passage from a neuroscience textbook to answer the question.
+
+Question: {query}
+
+Passage:"""
+
+HYDE_PROMPT_PHILOSOPHY = """Please write a passage from a classical wisdom essay to answer the question.
 
 Question: {query}
 
 Passage:"""
 ```
 
-The prompt follows the paper's pattern: document type + domain, nothing more. "Neuroscience textbook" matches the scientific books; "classical wisdom essay" matches the Stoics, Schopenhauer, Taoism, etc. without naming specific schools. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms the query into document-like embeddings.
+**Split-domain approach:** For dual-domain corpora, using "or" in a single prompt causes all hypotheticals to cluster in one embedding region. Instead, we use two minimal prompts and split K evenly—2 neuroscience hypotheticals + 2 philosophy hypotheticals—ensuring embedding coverage across both document types. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms queries into document-like embeddings.
 
 
 ## Navigation

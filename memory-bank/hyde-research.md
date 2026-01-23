@@ -155,40 +155,47 @@ Let queries determine natural topic balance. Forced splits constrain generation.
 
 ---
 
-## 8. Implementation: Paper-Aligned Prompt (Updated Jan 2025)
+## 8. Implementation: Split-Domain Approach (Updated Jan 2025)
 
-### Current HyDE Prompt
+### Current HyDE Prompts (Split for Dual-Domain Corpus)
 ```python
-HYDE_PROMPT = """Please write a passage from a neuroscience textbook or classical wisdom essay to answer the question.
+HYDE_PROMPT_NEUROSCIENCE = """Please write a passage from a neuroscience textbook to answer the question.
+
+Question: {query}
+
+Passage:"""
+
+HYDE_PROMPT_PHILOSOPHY = """Please write a passage from a classical wisdom essay to answer the question.
 
 Question: {query}
 
 Passage:"""
 ```
 
-### January 2025 Update: Minimal Prompt Following Paper Pattern
+### January 2025 Update: Split-Domain for Better Embedding Coverage
 
-The previous prompt listed specific philosophy schools (Stoicism, Taoism, etc.) which risked template bias. The new prompt follows the paper's pattern exactly: **document type + domain, nothing more**.
+**Problem with "or":** Using "neuroscience textbook **or** classical wisdom essay" in a single prompt caused all hypotheticals to cluster in one embedding region—the LLM would pick one style and stick with it.
 
-**Prompt Design Rationale:**
-1. **"neuroscience textbook"** - Matches the 9 scientific books (Sapolsky, Kahneman, Gazzaniga, etc.)
-2. **"classical wisdom essay"** - Matches all 10 philosophy books without naming specific schools
-3. **Minimal specification** - Avoids over-constraining LLM output, following paper's key finding
+**Solution:** Split K between domains using two minimal prompts:
+- 2 neuroscience hypotheticals (for Sapolsky, Kahneman, Gazzaniga, etc.)
+- 2 philosophy hypotheticals (for Stoics, Schopenhauer, Taoism, etc.)
 
-**RAGLab Implementation (K=5):**
+This ensures embedding coverage across both document types, improving retrieval for cross-domain queries like "How does self-control relate to virtue?"
 
-RAGLab uses K=5 hypothetical passages (matching the paper) and includes the original query in the embedding average.
+**RAGLab Implementation (K=4, split 2+2):**
 
 At retrieval time:
-1. Generate K=5 hypothetical passages (temperature 0.7)
-2. Embed original query + all K passages
-3. Average the embedding vectors (element-wise mean)
-4. Use averaged vector for pure semantic search (alpha=1.0)
+1. Generate 2 neuroscience hypotheticals (temperature 0.7)
+2. Generate 2 philosophy hypotheticals (temperature 0.7)
+3. Embed original query + all 4 passages (5 vectors total)
+4. Average the embedding vectors (element-wise mean)
+5. Use averaged vector for pure semantic search (alpha=1.0)
 
-**Key decisions aligned with paper:**
+**Key decisions:**
 - **Temperature 0.7**: Matches paper for diverse hypothetical generation
-- **Minimal prompt**: Document type + domain only, avoiding template bias
-- **Embedding averaging**: Smooths out individual passage variance
+- **Split-domain prompts**: Guarantees both corpus types are represented
+- **Minimal prompts**: Document type only, following paper's key finding
+- **Embedding averaging**: Smooths variance and balances domain contributions
 
 ---
 

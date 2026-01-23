@@ -14,7 +14,15 @@ Contains all prompts used for:
 # QUERY PREPROCESSING PROMPTS
 # =============================================================================
 
-HYDE_PROMPT = """Please write a passage from a neuroscience textbook or classical wisdom essay to answer the question.
+# Split prompts for dual-domain corpus (2 neuroscience + 2 philosophy hypotheticals)
+# Minimal prompts following HyDE paper's "document type + domain" pattern
+HYDE_PROMPT_NEUROSCIENCE = """Please write a passage from a neuroscience textbook to answer the question.
+
+Question: {query}
+
+Passage:"""
+
+HYDE_PROMPT_PHILOSOPHY = """Please write a passage from a classical wisdom essay to answer the question.
 
 Question: {query}
 

@@ -842,8 +842,9 @@ GRAPHRAG_MIN_CORPUS_PERCENTAGE = 1.0  # Minimum % within corpus to be considered
 # Import them here for backward compatibility with existing code.
 
 from src.prompts import (
-    # Query preprocessing
-    HYDE_PROMPT,
+    # Query preprocessing (HyDE split prompts for dual-domain corpus)
+    HYDE_PROMPT_NEUROSCIENCE,
+    HYDE_PROMPT_PHILOSOPHY,
     DECOMPOSITION_PROMPT,
     # Answer generation
     GENERATION_SYSTEM_PROMPT,
@@ -860,9 +861,9 @@ from src.prompts import (
     GRAPHRAG_STRATIFIED_CONSOLIDATION_PROMPT,
 )
 
-# Number of hypothetical documents to generate for HyDE
-# Paper recommends K=5 for robustness via embedding averaging
-HYDE_K = 5
+# Number of hypothetical documents to generate for HyDE (total)
+# Split evenly: 2 neuroscience + 2 philosophy for dual-domain corpus
+HYDE_K = 4
 
 # Max tokens per hypothetical passage
 # Paper uses short passages (~100-150 tokens, 2-3 sentences)
