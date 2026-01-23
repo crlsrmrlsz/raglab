@@ -166,8 +166,8 @@ The tokens are calculated with *tiktoken* with *cl100k_base encoding* (GPT-4 / *
 
 Building this pipeline and manually testing I got this main takeaways:
 
-https://www.arxiv.org/abs/2601.07372
-
+a. https://www.arxiv.org/abs/2601.07372
+b. memoery brain vs rag
 
 **Data preparation is harder than expected.** Scientific PDF books with complex layouts, figures, and footnotes break naive extraction. It may seem that nowadays this is a solved problem but even with Docling from IBM, which represented a major improvement in quality compared to other open source libraries, a significant amount of semi-manual cleaning was necessary. This was a small dataset, but doing this at scale requires specific techniques.
 
