@@ -106,7 +106,7 @@ Question: {query}
 Passage:"""
 ```
 
-**Split-domain approach:** For dual-domain corpora, using "or" in a single prompt causes all hypotheticals to cluster in one embedding region. Instead, we use two minimal prompts and split K evenly—2 neuroscience hypotheticals + 2 philosophy hypotheticals—ensuring embedding coverage across both document types. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms queries into document-like embeddings.
+**Split-domain approach:** For dual-domain corpora, using "or" in a single prompt causes all hypotheticals to cluster in one embedding region. Instead, we use two minimal prompts and split K evenly—2 neuroscience hypotheticals + 2 philosophy hypotheticals—ensuring embedding coverage across both document types. The explicit "brief 2-3 sentence" instruction adapts the paper's approach for modern models, which are more verbose than the InstructGPT used in the original research. Search uses pure semantic retrieval (alpha=1.0) since HyDE already transforms queries into document-like embeddings.
 
 
 ## Navigation
