@@ -4,7 +4,6 @@ Contains all prompts used for:
 - Query preprocessing (HyDE, decomposition)
 - Answer generation
 - GraphRAG entity extraction and community summarization
-- Auto-tuning type discovery and consolidation
 - Contextual chunking
 - RAPTOR hierarchical summarization
 """
@@ -139,63 +138,34 @@ Summary:"""
 
 
 # =============================================================================
-# AUTO-TUNING PROMPTS (GraphRAG Entity Type Discovery)
+# GRAPHRAG CHUNK EXTRACTION PROMPT
 # =============================================================================
 
-# Open-ended entity extraction (discovers types from corpus)
-GRAPHRAG_OPEN_EXTRACTION_PROMPT = """Extract entities and relationships from this text.
+# Constrained entity extraction using curated types from graphrag_types.yaml
+# Per Microsoft GraphRAG: entity types are predefined, relationships are open-ended
+GRAPHRAG_CHUNK_EXTRACTION_PROMPT = """Extract entities and relationships from this text.
 
-For each entity, assign the MOST APPROPRIATE TYPE (use UPPERCASE_SNAKE_CASE).
-Common types: BRAIN_REGION, NEUROTRANSMITTER, CONCEPT, PHILOSOPHER, RESEARCHER, BEHAVIOR, EMOTION, BOOK, STUDY.
-You may create NEW types if none fit well.
+ENTITY TYPES (use ONLY these): {entity_types}
+
+For each entity:
+- name: The entity name as it appears in text
+- entity_type: One of the types above (choose the BEST match)
+- description: Brief description (under 15 words)
+
+For each relationship:
+- source_entity / target_entity: Entity names from above
+- relationship_type: Free-form type (e.g., CAUSES, MODULATES, PROPOSES, INFLUENCES)
+- description: Brief description of the relationship
+- weight: 0.0-1.0 (strength/importance)
 
 LIMITS: Up to {max_entities} entities and {max_relationships} relationships.
-Keep descriptions under 15 words. Focus on significant concepts.
+Focus on significant concepts mentioned in the text.
 
 Text:
 {text}
 
 IMPORTANT: Respond ONLY with valid JSON:
 {{"entities": [{{"name": "...", "entity_type": "...", "description": "..."}}], "relationships": [{{"source_entity": "...", "target_entity": "...", "relationship_type": "...", "description": "...", "weight": 1.0}}]}}"""
-
-# Global consolidation (single pass, may favor larger corpora)
-GRAPHRAG_GLOBAL_CONSOLIDATION_PROMPT = """Consolidate these discovered entity/relationship types into a clean taxonomy.
-
-ENTITY TYPES (with counts):
-{entity_types}
-
-RELATIONSHIP TYPES (with counts):
-{relationship_types}
-
-Rules:
-1. Merge similar types (e.g., BRAIN_REGION + NEURAL_STRUCTURE)
-2. Remove types with count=1 unless clearly important
-3. Target: 15-25 entity types, 10-20 relationship types
-
-Respond with JSON: {{"entity_types": [...], "relationship_types": [...], "rationale": "..."}}"""
-
-# Stratified consolidation (balances across domains)
-GRAPHRAG_STRATIFIED_CONSOLIDATION_PROMPT = """Consolidate entity types from TWO domains with BALANCED representation.
-
-DOMAIN 1: {corpus1_name}
-{corpus1_types}
-
-DOMAIN 2: {corpus2_name}
-{corpus2_types}
-
-SHARED TYPES:
-{shared_types}
-
-RELATIONSHIP TYPES:
-{relationship_types}
-
-Rules:
-1. Keep domain-specific types even if low global count
-2. Merge obviously similar types across domains
-3. Target: 20-25 entity types, 12-18 relationship types
-4. Ensure BOTH domains are well-represented
-
-Respond with JSON: {{"entity_types": [...], "relationship_types": [...], "rationale": "..."}}"""
 
 
 # =============================================================================

@@ -13,9 +13,9 @@ from pathlib import Path
 
 import yaml
 
-from src.shared.setup_logging import get_logger
+from src.shared.files import setup_logging
 
-logger = get_logger(__name__)
+logger = setup_logging(__name__)
 
 _TYPES_YAML_PATH = Path(__file__).parent / "graphrag_types.yaml"
 _cached_types: list[str] | None = None

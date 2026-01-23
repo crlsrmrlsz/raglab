@@ -698,55 +698,8 @@ GRAPHRAG_MAX_EXTRACTION_TOKENS = 4000  # Max tokens for extraction response
 GRAPHRAG_MAX_ENTITIES = 10             # Max entities per chunk (reduced from 15 to prevent truncation)
 GRAPHRAG_MAX_RELATIONSHIPS = 7         # Max relationships per chunk (reduced from 10 to prevent truncation)
 
-# Domain-specific entity types for neuroscience/philosophy corpus
-# These guide the LLM to extract relevant entities
-GRAPHRAG_ENTITY_TYPES = [
-    # Neuroscience entities
-    "BRAIN_REGION",          # Prefrontal cortex, amygdala, hippocampus
-    "NEUROTRANSMITTER",      # Dopamine, serotonin, cortisol
-    "NEURAL_PROCESS",        # Synaptic plasticity, long-term potentiation
-    "COGNITIVE_FUNCTION",    # Working memory, decision-making, attention
-    "BEHAVIOR",              # Aggression, altruism, stress response
-    # Philosophy entities
-    "PHILOSOPHER",           # Marcus Aurelius, Schopenhauer, Confucius
-    "PHILOSOPHICAL_CONCEPT", # Virtue ethics, will, Tao, Stoic acceptance
-    "PHILOSOPHICAL_SCHOOL",  # Stoicism, Taoism, German Pessimism
-    "TEXT_OR_WORK",          # Meditations, The Art of Worldly Wisdom
-    # Research entities
-    "RESEARCHER",            # Sapolsky, Kahneman, Tversky
-    "STUDY_OR_EXPERIMENT",   # Stanford prison experiment, marshmallow test
-    "COGNITIVE_BIAS",        # Confirmation bias, loss aversion
-    # General entities
-    "PERSON",                # Historical figures, case study subjects
-    "ORGANIZATION",          # Universities, research institutions
-    "BOOK_OR_CHAPTER",       # Source document references
-]
-
-# Relationship types for knowledge graph edges
-GRAPHRAG_RELATIONSHIP_TYPES = [
-    # Causal/mechanistic relationships
-    "CAUSES",                # A causes B
-    "INHIBITS",              # A inhibits/blocks B
-    "MODULATES",             # A modulates/affects B
-    "REGULATES",             # A regulates B
-    # Associative relationships
-    "ASSOCIATED_WITH",       # A is associated with B
-    "PART_OF",               # A is part of B
-    "LOCATED_IN",            # A is located in B
-    # Philosophical relationships
-    "PROPOSES",              # Philosopher proposes concept
-    "INFLUENCES",            # A influences B
-    "CONTRADICTS",           # A contradicts B
-    "BUILDS_ON",             # A builds on B
-    "ADVOCATES_FOR",         # A advocates for B
-    # Research relationships
-    "STUDIES",               # Researcher studies phenomenon
-    "DEMONSTRATES",          # Study demonstrates finding
-    "CITES",                 # A cites B
-    # Attribution relationships
-    "AUTHORED_BY",           # Work authored by person
-    "AFFILIATED_WITH",       # Person affiliated with organization
-]
+# Entity types are now defined in src/graph/graphrag_types.yaml
+# See: from src.graph.graphrag_types import get_entity_types
 
 # Leiden community detection parameters
 GRAPHRAG_LEIDEN_RESOLUTION = 1.0    # Higher = more, smaller communities
@@ -760,9 +713,7 @@ GRAPHRAG_LEIDEN_CONCURRENCY = 1     # Single-threaded for reproducibility
 GRAPHRAG_MAX_SUMMARY_TOKENS = 300   # Max tokens per community summary (buffer for sentence completion)
 GRAPHRAG_MAX_CONTEXT_TOKENS = 6000  # Max input tokens for summarization
 
-# GraphRAG prompts are imported from src/prompts.py (see bottom of file):
-# - GRAPHRAG_COMMUNITY_PROMPT
-# - GRAPHRAG_QUERY_EXTRACTION_PROMPT
+# GraphRAG prompts are imported from src/prompts.py (see bottom of file)
 
 # Graph retrieval parameters
 GRAPHRAG_TOP_COMMUNITIES = 3        # Number of communities to retrieve
@@ -805,46 +756,6 @@ def get_entity_collection_name() -> str:
 DIR_GRAPH_DATA = DIR_FINAL_CHUNKS / "graph"
 
 # =============================================================================
-# CORPUS MAPPING FOR STRATIFIED ENTITY TYPE CONSOLIDATION
-# =============================================================================
-# Maps book filenames (stems) to corpus types for balanced entity type discovery.
-# Used by auto_tuning.py to select top entity types proportionally from each corpus,
-# preventing larger corpora from dominating the final entity type taxonomy.
-
-CORPUS_BOOK_MAPPING = {
-    # Neuroscience books (8 books, ~4440 chunks, ~48.6K entities)
-    "neuroscience": [
-        "Cognitive Biology , Evolutionary and Developmental Perspectives on Mind Brain and Behavior (Luca Tommasi, Mary A.Peterson, Lynn Nadel)",
-        "Determined, a science of life without free will (Robert M. Sapolsky)",
-        "Cognitive Neuroscience, The Biology of the Mind (Michael Gazzaniga)",
-        "Biopsychology (John Pinel, Steven Barnes)",
-        "Fundamentals of Cognitive Neuroscience,  A_Beginners Guide(Nicole M. Gage Bernard)",
-        "Behave, The_Biology of Humans at Our Best Worst (Robert M. Sapolsky)",
-        "Brain and behavior, a cognitive neuroscience perspective (David Eagleman, Jonathan Downar)",
-        "Psychobiology of Behaviour (Konstanthos N,Fountoulakis, Loannis Nimatoudis)",
-    ],
-    # Philosophy books (11 books, ~1809 chunks, ~15.6K entities)
-    "philosophy": [
-        "The Enchiridion (Epictetus)",
-        "Thinking Fast and Slow (Daniel Kahneman)",
-        "Letters from a Stoic (Seneca)",
-        "The Meditations (Marcus Aurelius)",
-        "Wisdom of Life (Schopenhauer)",
-        "The essays, counsels and maxims (Arthur Schopenhauer)",
-        "Essays and Aphorisms (Arthur Schopenhauer)",
-        "The Art of Living ,The Classical Manual on Virtue Happiness and Effectiveness (Epictetus)",
-        "Tao te ching Lao_tzu (Lao Tzu)",
-        "The Pocket Oracle and Art of Prudence (Baltasar Gracian)",
-        "The Analects Conclusions and Conversations (Confucius)",
-    ],
-}
-
-# Stratified consolidation parameters
-GRAPHRAG_TYPES_PER_CORPUS = 12      # Top entity types to select from each corpus
-GRAPHRAG_MIN_CORPUS_PERCENTAGE = 1.0  # Minimum % within corpus to be considered (filters noise)
-
-
-# =============================================================================
 # PROMPTS - Imported from prompts.py
 # =============================================================================
 # All LLM prompts are centralized in src/prompts.py for maintainability.
@@ -864,10 +775,7 @@ from src.prompts import (
     # GraphRAG
     GRAPHRAG_QUERY_EXTRACTION_PROMPT,
     GRAPHRAG_COMMUNITY_PROMPT,
-    # Auto-tuning
-    GRAPHRAG_OPEN_EXTRACTION_PROMPT,
-    GRAPHRAG_GLOBAL_CONSOLIDATION_PROMPT,
-    GRAPHRAG_STRATIFIED_CONSOLIDATION_PROMPT,
+    GRAPHRAG_CHUNK_EXTRACTION_PROMPT,
 )
 
 # Number of hypothetical documents to generate for HyDE (total)

@@ -10,8 +10,9 @@ related chunks. This module provides two extraction methods:
    entity descriptions stored in Weaviate. Matches the Microsoft GraphRAG
    reference implementation approach.
 
-2. **LLM-based** (fallback): Uses structured LLM output for complex queries
-   where embedding similarity may miss implied concepts.
+2. **LLM-based** (fallback): Uses structured LLM output with curated entity
+   types from graphrag_types.yaml for complex queries where embedding
+   similarity may miss implied concepts.
 
 ## Library Usage
 
@@ -23,7 +24,7 @@ related chunks. This module provides two extraction methods:
 
 Query → Embed → Weaviate vector search → Entity names
                        ↓ (if empty)
-               LLM extraction (fallback)
+               LLM extraction (curated types)
                        ↓
                Neo4j validation (optional)
                        ↓
@@ -37,44 +38,19 @@ from neo4j import Driver
 
 from src.config import (
     GRAPHRAG_EXTRACTION_MODEL,
-    GRAPHRAG_ENTITY_TYPES,
     GRAPHRAG_QUERY_EXTRACTION_PROMPT,
     GRAPHRAG_ENTITY_EXTRACTION_TOP_K,
     GRAPHRAG_ENTITY_MIN_SIMILARITY,
     GRAPHRAG_USE_EMBEDDING_EXTRACTION,
-    DIR_GRAPH_DATA,
     get_entity_collection_name,
 )
+from src.graph.graphrag_types import get_entity_types
 from src.shared.files import setup_logging
 from src.shared.openrouter_client import call_structured_completion
 from .schemas import QueryEntities
 from .neo4j_client import find_entities_by_names
 
 logger = setup_logging(__name__)
-
-
-# ============================================================================
-# Entity Type Discovery
-# ============================================================================
-
-
-def _get_entity_types() -> list[str]:
-    """Get entity types, preferring discovered types if available.
-
-    Returns:
-        List of entity type strings.
-    """
-    import json
-
-    discovered_path = DIR_GRAPH_DATA / "discovered_types.json"
-    if discovered_path.exists():
-        with open(discovered_path, "r") as f:
-            data = json.load(f)
-        logger.debug(f"Using {len(data['consolidated_entity_types'])} discovered entity types")
-        return data["consolidated_entity_types"]
-    else:
-        logger.debug("Using default entity types from config")
-        return GRAPHRAG_ENTITY_TYPES
 
 
 # ============================================================================
@@ -173,7 +149,7 @@ def extract_query_entities_llm(
         >>> extract_query_entities_llm("What creates lasting happiness?")
         ["happiness", "pleasure", "hedonic adaptation"]
     """
-    entity_types = _get_entity_types()
+    entity_types = get_entity_types()
 
     prompt = GRAPHRAG_QUERY_EXTRACTION_PROMPT.format(
         entity_types=", ".join(entity_types),

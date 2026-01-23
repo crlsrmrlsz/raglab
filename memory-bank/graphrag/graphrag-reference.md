@@ -54,11 +54,8 @@ docker compose up -d neo4j weaviate
 ### Execution Steps
 
 ```bash
-# Step 1: Entity Extraction (auto-discovers types from corpus)
+# Step 1: Entity Extraction (uses curated types from graphrag_types.yaml)
 python -m src.stages.run_stage_4_5_autotune --strategy section
-
-# Step 1b: Re-consolidate for mixed corpora (optional)
-python -m src.stages.run_stage_4_5_autotune --reconsolidate stratified
 
 # Step 2: Upload + Leiden + Summarization + Entity Embeddings
 python -m src.stages.run_stage_6b_neo4j
@@ -85,11 +82,11 @@ python -m src.stages.run_stage_6b_neo4j
 ### Data Flow
 
 ```
-Stage 4 (chunks) -> Stage 4.5 autotune -> Stage 6b (Neo4j + Leiden) -> Query
+Stage 4 (chunks) -> Stage 4.5 extraction -> Stage 6b (Neo4j + Leiden) -> Query
                           |                            |
                           v                            v
                extraction_results.json         communities.json
-               discovered_types.json           leiden_checkpoint.json
+               (uses graphrag_types.yaml)      leiden_checkpoint.json
                                                Entity embeddings (Weaviate)
                                                Community embeddings (Weaviate)
 ```
@@ -372,6 +369,7 @@ GRAPHRAG_USE_EMBEDDING_EXTRACTION = True  # Use embedding-based (fallback to LLM
 | Feature | Paper | Implementation | Status |
 |---------|-------|----------------|--------|
 | Entity Extraction | LLM per chunk | LLM with structured output | Done |
+| Entity Types | Predefined in settings.yaml | Curated in graphrag_types.yaml | Done |
 | Entity Resolution | String matching | Normalized name matching | Done |
 | Leiden Communities | Multi-level | C0, C1, C2 with summaries | Done |
 | PageRank Centrality | Hub entity ranking | Neo4j GDS PageRank | Done |

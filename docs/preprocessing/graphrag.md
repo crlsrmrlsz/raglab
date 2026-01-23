@@ -65,7 +65,7 @@ The algorithm has two phases:
 RAGLab implements GraphRAG across two stages with several adaptations for the dual-domain corpus (neuroscience + philosophy):
 
 ```bash
-# Stage 4.5: Entity extraction with auto-discovered types
+# Stage 4.5: Entity extraction with curated types
 python -m src.stages.run_stage_4_5_autotune --strategy semantic_std3
 
 # Stage 6b: Neo4j upload + Leiden + summaries + entity embeddings
@@ -73,13 +73,13 @@ docker compose up -d neo4j
 python -m src.stages.run_stage_6b_neo4j
 ```
 
-**Semantic chunking for entity extraction.** The paper uses fixed 300-token chunks, but RAGLab uses [semantic chunking](../chunking/semantic-chunking.md) (std coefficient=3.0) for GraphRAG. While entity deduplication happens at merge time regardless of chunk boundaries, *relationships* are extracted per-chunk—entities must appear together to form edges. Semantic chunking keeps related concepts together, improving relationship capture. The conservative std=3.0 threshold preserves 98% of sections as single chunks (avg 665 tokens for neuroscience, 1331 for philosophy), accepting some longer chunks to avoid splitting mid-argument.
+**Curated entity types.** Entity types are defined in `src/graph/graphrag_types.yaml` (33 types optimized for the dual-domain corpus). Following Microsoft's reference implementation, types are predefined to ensure consistent taxonomy. The curated list includes 18 neuroscience types (BRAIN_REGION, NEUROTRANSMITTER, COGNITIVE_PROCESS, etc.) and 15 philosophy types (PHILOSOPHER, VIRTUE, ETHICAL_CONCEPT, etc.). Relationship types remain open-ended per the GraphRAG paper.
 
-**Auto-tuning entity types.** Rather than hardcoding entity types, Stage 4.5 uses open-ended extraction and discovers types from the corpus. A consolidation step merges similar types (RESEARCHER/SCIENTIST/ACADEMIC -> RESEARCHER). The `stratified` strategy balances types across corpora—preventing neuroscience (larger) from dominating philosophy.
+**Semantic chunking for entity extraction.** The paper uses fixed 300-token chunks, but RAGLab uses [semantic chunking](../chunking/semantic-chunking.md) (std coefficient=3.0) for GraphRAG. While entity deduplication happens at merge time regardless of chunk boundaries, *relationships* are extracted per-chunk—entities must appear together to form edges. Semantic chunking keeps related concepts together, improving relationship capture. The conservative std=3.0 threshold preserves 98% of sections as single chunks (avg 665 tokens for neuroscience, 1331 for philosophy), accepting some longer chunks to avoid splitting mid-argument.
 
 **Deterministic Leiden.** Stage 6b runs Leiden with `seed=42` and `concurrency=1`, guaranteeing identical community assignments on every run. This enables crash recovery: if summarization fails midway, re-running picks up where it stopped because community IDs remain stable.
 
-**Dual extraction at query time.** Entity extraction uses embedding similarity search (~50ms) with LLM fallback (~1-2s) for complex conceptual queries. The embedding approach searches pre-indexed entity descriptions in Weaviate; the LLM approach uses the discovered entity types to guide extraction.
+**Dual extraction at query time.** Entity extraction uses embedding similarity search (~50ms) with LLM fallback (~1-2s) for complex conceptual queries. The embedding approach searches pre-indexed entity descriptions in Weaviate; the LLM approach uses the same curated entity types from `graphrag_types.yaml` to guide extraction.
 
 **RRF merge with graph boost.** Hybrid retrieval combines vector search results with graph traversal results using Reciprocal Rank Fusion (k=60). Chunks appearing in both lists get boosted scores—they're semantically similar AND structurally related through the knowledge graph.
 
