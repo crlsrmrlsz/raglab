@@ -56,12 +56,14 @@ RAGLab implements GraphRAG across two stages with several adaptations for the du
 
 ```bash
 # Stage 4.5: Entity extraction with auto-discovered types
-python -m src.stages.run_stage_4_5_autotune --strategy section
+python -m src.stages.run_stage_4_5_autotune --strategy semantic_std3
 
 # Stage 6b: Neo4j upload + Leiden + summaries + entity embeddings
 docker compose up -d neo4j
 python -m src.stages.run_stage_6b_neo4j
 ```
+
+**Semantic chunking for entity extraction.** The paper uses fixed 300-token chunks, but RAGLab uses [semantic chunking](../chunking/semantic-chunking.md) (std coefficient=3.0) for GraphRAG. While entity deduplication happens at merge time regardless of chunk boundaries, *relationships* are extracted per-chunk—entities must appear together to form edges. Semantic chunking keeps related concepts together, improving relationship capture. The conservative std=3.0 threshold preserves 98% of sections as single chunks (avg 665 tokens for neuroscience, 1331 for philosophy), accepting some longer chunks to avoid splitting mid-argument.
 
 **Auto-tuning entity types.** Rather than hardcoding entity types, Stage 4.5 uses open-ended extraction and discovers types from the corpus. A consolidation step merges similar types (RESEARCHER/SCIENTIST/ACADEMIC -> RESEARCHER). The `stratified` strategy balances types across corpora—preventing neuroscience (larger) from dominating philosophy.
 
