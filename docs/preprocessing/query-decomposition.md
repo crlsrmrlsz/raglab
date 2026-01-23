@@ -11,20 +11,19 @@ Breaks complex questions into sub-questions, retrieves for each, pools results, 
 ## Algorithm (per paper)
 
 ```
-1. Decompose query → up to 5 sub-questions (temp=0.8, top_p=0.8)
+1. Decompose query → up to 5 sub-questions (temp=0.8)
 2. Retrieve for: original + each sub-question
 3. Pool all results (simple union, deduplicate by chunk_id)
 4. Rerank entire pool against original query (mandatory)
-5. Generate answer (temp=0.8, top_p=0.8, max_tokens=512)
+5. Generate answer
 ```
 
 ## RAGLab Implementation
 
-**Matches paper exactly:**
+**Matches paper:**
 - Union merge (not RRF)
-- Temperature 0.8 with top_p 0.8
+- Decomposition temperature 0.8
 - Reranking mandatory (`requires_reranking=True` in StrategyConfig)
-- Generation: temp=0.8, top_p=0.8, max=512 tokens
 
 **RAGLab additions:**
 - "Keep as single" clause for simple queries (Haystack practice)

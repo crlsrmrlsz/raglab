@@ -112,9 +112,7 @@ def generate_answer(
     query: str,
     chunks: list[dict[str, Any]],
     model: Optional[str] = None,
-    temperature: float = 0.8,
-    top_p: float = 0.8,
-    max_tokens: int = 512,
+    temperature: float = 0.3,
     graph_context: Optional[str] = None,
 ) -> GeneratedAnswer:
     """Generate an answer from retrieved chunks using an LLM.
@@ -122,17 +120,12 @@ def generate_answer(
     Synthesizes information from retrieved context to answer the user's query.
     Uses a unified prompt that handles all query types effectively.
 
-    Parameters aligned with arXiv:2507.00355 (Query Decomposition paper):
-    - temperature=0.8, top_p=0.8, max_tokens=512
-
     Args:
         query: The user's original query.
         chunks: List of chunk dictionaries from search results.
             Each chunk should have 'text', 'book_id', and optionally 'section'.
         model: Override model (defaults to GENERATION_MODEL from config).
-        temperature: Sampling temperature (paper: 0.8).
-        top_p: Nucleus sampling threshold (paper: 0.8).
-        max_tokens: Maximum response length (paper: 512).
+        temperature: Sampling temperature (higher = more creative).
         graph_context: Optional GraphRAG context (community summaries and
             entity relationships) to provide thematic background. Generated
             by format_graph_context_for_generation() from graph metadata.
@@ -193,8 +186,7 @@ Please answer based on the context above, citing sources by number [1], [2], etc
         messages=messages,
         model=model,
         temperature=temperature,
-        top_p=top_p,
-        max_tokens=max_tokens,
+        max_tokens=2048,
     )
 
     # Extract citations
