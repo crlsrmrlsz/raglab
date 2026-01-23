@@ -2,140 +2,61 @@
 
 [← HyDE](hyde.md) | [Home](../../README.md)
 
-> **Paper:** [Question Decomposition for Retrieval-Augmented Generation](https://arxiv.org/abs/2507.00355) | Ammann et al. (Humboldt-Universitat) | July 2025
+Some questions hide multiple questions inside. "How does Stoic philosophy compare to neuroscience on emotional regulation?" requires three things: what Stoics said about emotions, what neuroscience says, and how they relate. A single embedding search struggles because no chunk contains all three aspects—the information is scattered across your corpus.
 
-Breaks complex multi-part questions into simpler sub-questions, retrieves for each independently, then merges results using Reciprocal Rank Fusion (RRF).
+Query decomposition solves this by breaking the complex question into sub-questions, retrieving for each independently, then merging the results. Documents that appear across multiple sub-queries get boosted in the final ranking.
 
-**Type:** Query-time preprocessing | **LLM Calls:** 1 per query | **Latency:** ~500ms
+**When decomposition helps:** Multi-hop questions requiring multiple evidence pieces, procedural "what, then how, then why" queries, and comparison questions within a single domain.
 
----
+**When it struggles:** Cross-domain synthesis where you need documents that *bridge* topics (decomposition fragments the integration), simple factual lookups (unnecessary overhead), and time-sensitive applications (~500ms latency per query).
 
-## Diagram
 
-```mermaid
-flowchart TB
-    subgraph INPUT["Complex Query"]
-        Q["'How does Stoic philosophy<br/>compare to neuroscience<br/>on emotional regulation?'"]
-    end
 
-    subgraph DECOMPOSE["LLM Decomposition"]
-        LLM["Break into<br/>sub-questions"]
-        SQ1["'What is the Stoic view<br/>on emotions?'"]
-        SQ2["'What does neuroscience<br/>say about emotional<br/>regulation?'"]
-        SQ3["'What similarities exist<br/>between them?'"]
-    end
+## The Paper and Community Implementations
 
-    subgraph RETRIEVAL["Parallel Retrieval"]
-        R0["Original query<br/>→ results_0"]
-        R1["Sub-query 1<br/>→ results_1"]
-        R2["Sub-query 2<br/>→ results_2"]
-        R3["Sub-query 3<br/>→ results_3"]
-    end
+**Paper:** "Question Decomposition for Retrieval-Augmented Generation"
+**Authors:** Ammann, Golde, Akbik (Humboldt-Universität zu Berlin)
+**Published:** ACL SRW 2025 ([arXiv:2507.00355](https://arxiv.org/abs/2507.00355))
 
-    subgraph MERGE["RRF Merge"]
-        RRF["score = Σ 1/(k + rank)<br/>Boost documents in<br/>multiple lists"]
-        OUT["Merged top-k<br/>chunks"]
-    end
+The authors wanted better retrieval for multi-hop questions without specialized indexing or training. Their solution: let an LLM break down complex queries, retrieve for each piece, then merge and rerank.
 
-    Q --> LLM --> SQ1 & SQ2 & SQ3
-    Q --> R0
-    SQ1 --> R1
-    SQ2 --> R2
-    SQ3 --> R3
-    R0 & R1 & R2 & R3 --> RRF --> OUT
+The algorithm works in four steps:
 
-    style LLM fill:#ede7f6,stroke:#512da8,stroke-width:2px
-    style RRF fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
-```
+1. **Decompose the query.** The LLM generates up to 5 sub-questions from the original query. In experiments, it generated exactly 5 sub-questions 93-99% of the time. The original query is always retained alongside sub-queries.
 
----
+2. **Retrieve for each.** Execute top-k retrieval for the original query plus each sub-question. This creates a broader candidate pool covering different aspects.
 
-## Theory
+3. **Merge candidates.** The paper uses simple union—all retrieved passages go into one pool. Documents appearing in multiple sub-query results naturally get more chances at selection.
 
-### The Core Problem
+4. **Rerank and select.** A cross-encoder (bge-reranker-large) scores each candidate against the *original* query. Top-k passages by reranker score go to generation.
 
-Complex questions require multiple pieces of information:
+**Why does reranking against the original query matter?** Sub-queries can drift from the user's actual intent. A chunk relevant to "What do Stoics say about anger?" might not help with "How does this compare to neuroscience?" Reranking filters for overall relevance.
 
-```
-Query: "How does Stoic philosophy's view on emotions compare to
-        modern neuroscience findings about emotional regulation?"
+**Benchmark results:** +36.7% MRR@10 on MultiHop-RAG, +11.6% F1 on HotpotQA. The improvement comes from capturing evidence that no single query would find.
 
-Requires:
-  1. What Stoics said about emotions
-  2. What neuroscience says about emotional regulation
-  3. How they relate
-```
+### Parameters
 
-A single retrieval struggles because no single chunk contains all three aspects.
+The paper used temperature 0.8 with nucleus sampling (Top-p=0.8) for diverse decomposition. Higher temperatures generate varied sub-questions that explore different framings; lower temperatures produce repetitive outputs.
 
-### Research Background
+### Prompts
 
-The paper (July 2025) establishes decomposition as a systematic retrieval enhancement:
-
-<div align="center">
-
-| Benchmark | Improvement |
-|-----------|-------------|
-| MultiHop-RAG | **+36.7% MRR@10** |
-| HotpotQA | **+11.6% F1** |
-
-</div>
-
-**Key findings from paper:**
-- Temperature 0.8 with nucleus sampling (top-p = 0.8) for diverse decomposition
-- Maximum 5 sub-questions (enforced in experiments)
-- **Original query always retained** — critical for context preservation
-- Cross-encoder reranker scores passages against original query
-
-### Community Best Practices
-
-<div align="center">
+The paper describes using "a fixed natural language prompt provided to an instruction-tuned language model" but doesn't disclose the exact wording. Community implementations provide guidance:
 
 | Source | Key Practice |
 |--------|--------------|
-| **Haystack** | "If the query is simple, keep it as is" — avoid over-decomposition |
-| **LangChain** | "Do not try to rephrase" acronyms/unfamiliar words — preserve terminology |
-| **EfficientRAG** | "Independently answerable" sub-questions — enables parallel retrieval |
+| **[Haystack](https://haystack.deepset.ai/blog/query-decomposition)** | "If the query is simple, keep it as it is" — avoids unnecessary decomposition |
+| **[LangChain](https://python.langchain.com/docs/tutorials/query_analysis/)** | "Do not try to rephrase" acronyms or unfamiliar words — preserve terminology |
+| **[EfficientRAG](https://arxiv.org/abs/2408.04259)** | Sub-questions should be "independently answerable" — enables parallel retrieval |
 
-</div>
+The pattern: instruct the LLM to simplify only when needed, keep domain terms intact, and ensure each sub-question stands alone.
 
----
 
-## Implementation in RAGLab
 
-### Algorithm
+## RAGLab Implementation
 
-```
-1. LLM decomposes query into 3-5 sub-questions (or keeps as single if simple)
-2. Search for: original query + each sub-question (4-6 searches total)
-3. Merge all result lists using Reciprocal Rank Fusion (RRF)
-4. Return top-k merged chunks
-```
-
-### Key Design Decisions
-
-<div align="center">
-
-| Decision | Paper | RAGLab | Rationale |
-|----------|-------|--------|-----------|
-| **Temperature** | 0.8 | 0.7 | Balance diversity with coherence |
-| **Max sub-questions** | 5 | 3-5 | Paper limit, with "simple = keep as is" |
-| **Original query** | Always retained | Always retained | Critical for context |
-| **Output format** | Unspecified | JSON with reasoning | Enables parsing and debugging |
-
-</div>
-
-### Differences from Paper
-
-1. **"Keep as single question" clause**: Haystack-inspired addition — simple queries skip decomposition
-2. **"Independently answerable" requirement**: EfficientRAG-inspired — enables parallel retrieval
-3. **JSON output with reasoning**: Adds transparency and debugging capability
-
-### Decomposition Prompt
+RAGLab adapts the paper's approach with RRF merging instead of simple union, and includes community best practices in the prompt. Configuration in `src/prompts.py`:
 
 ```python
-# src/rag_pipeline/retrieval/preprocessing/query_preprocessing.py
-
 DECOMPOSITION_PROMPT = """Break down this question for a knowledge base on cognitive science and philosophy.
 
 If the question is simple enough to answer directly, keep it as a single question.
@@ -150,150 +71,47 @@ Respond with JSON:
 }}"""
 ```
 
-**Design rationale:**
-- **"If simple, keep as is"** — Avoids over-decomposition for factual queries
-- **"Answered independently"** — Enables parallel retrieval without dependencies
-- **"Cover all aspects"** — Ensures comprehensive retrieval
-- **JSON with reasoning** — Debugging and transparency
+**Differences from Paper:**
 
-### RRF Merging
+| Aspect | Paper | RAGLab | Rationale |
+|--------|-------|--------|-----------|
+| **Merging** | Union (simple pool) | RRF fusion | Boosts chunks appearing in multiple results |
+| **Temperature** | 0.8 | 0.7 | Balance diversity with coherence |
+| **Max sub-questions** | 5 | 3-5 | "Keep as single" clause for simple queries |
+| **Reranking** | Always (bge-reranker-large) | Optional | User-configurable for latency tradeoff |
 
-```python
-# src/rag_pipeline/retrieval/rrf.py
+**RRF vs Union:** The paper uses simple union—all results go into one pool, then rerank filters them. RAGLab uses [Reciprocal Rank Fusion](https://dl.acm.org/doi/10.1145/1571941.1572114) (k=60), which scores documents by `sum(1/(k+rank))` across result lists. Documents appearing in multiple sub-query results get higher scores. This provides ranking *before* reranking, useful when reranking is disabled.
 
-def reciprocal_rank_fusion(
-    result_lists: List[List[SearchResult]],
-    k: int = 60,
-    top_k: int = 10,
-) -> RRFResult:
-    """Merge result lists using Reciprocal Rank Fusion."""
-    scores: Dict[str, float] = defaultdict(float)
+**The "keep as single" clause:** Following Haystack's practice, the prompt allows the LLM to skip decomposition for simple queries. The paper's LLM nearly always generated 5 sub-questions regardless of query complexity—RAGLab's prompt explicitly permits fewer.
 
-    for results in result_lists:
-        for rank, result in enumerate(results):
-            # RRF formula: 1 / (k + rank + 1)
-            rrf_score = 1.0 / (k + rank + 1)
-            scores[result.chunk_id] += rrf_score
+**JSON with reasoning:** The response includes a "reasoning" field that explains the decomposition. This aids debugging and lets you verify the LLM understood the query correctly.
 
-    # Sort by RRF score
-    sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-    return RRFResult(results=[...], ...)
-```
-
-**Why RRF?**
-- No score normalization needed (ranks are comparable across lists)
-- Documents appearing in multiple lists get naturally boosted
-- `k=60` is standard (from Cormack et al., 2009)
-
----
-
-## Performance in This Pipeline
-
-### Key Finding: Best Precision on Single-Concept, Worst on Cross-Domain
-
-From comprehensive evaluation across 102 configurations:
-
-<div align="center">
-
-| Metric | Decomposition | None | HyDE | GraphRAG |
-|--------|---------------|------|------|----------|
-| Single-Concept Precision | **73.8%** (1st) | 70.8% | 69.2% | 66.4% |
-| Single-Concept Recall | **96.0%** (1st) | 92.3% | 89.3% | 97.5% |
-| Cross-Domain Recall | 65.6% (worst) | 70.5% | **78.8%** | 76.1% |
-| Cross-Domain Recall Drop | **-30.4%** (worst) | -21.8% | -10.5% | -21.4% |
-
-</div>
-
-**Primary Takeaway:** Decomposition excels for **multi-step single-domain questions** but **fails catastrophically on cross-domain synthesis** (-30.4% recall drop).
-
-### Why Decomposition Fails on Cross-Domain
-
-Cross-domain questions require synthesis: "How do neuroscience and Stoicism address free will?" needs chunks that **bridge** the domains.
-
-When decomposed:
-- Sub-query 1: "What does neuroscience say about free will?" → neuroscience chunks
-- Sub-query 2: "What does Stoicism say about free will?" → philosophy chunks
-- RRF merging: Each domain's chunks rank high for their sub-query, moderate for the other
-
-**The problem:** Chunks that genuinely bridge both domains rank **moderately for each sub-query** and get demoted by RRF. The decomposition destroys the very integration the original query required.
-
-### When Decomposition Works
-
-Works well for **sequential multi-step** questions within a single domain:
-- "What is the amygdala, what does it do, and how is it affected by stress?"
-- Each sub-question has independent answers that combine naturally
-
----
-
-## Cost Analysis
-
-<div align="center">
-
-| Component | Tokens | Cost |
-|-----------|--------|------|
-| LLM decomposition | ~100 input + ~150 output | ~$0.0001 |
-| Retrieval | 4-6 searches (parallelizable) | Weaviate cost |
-| **Total per query** | ~250 tokens | ~$0.0001 |
-
-</div>
-
-Latency: ~500ms for LLM + retrieval parallelizes.
-
----
-
-## When to Use
-
-<div align="center">
-
-| Scenario | Recommendation |
-|----------|----------------|
-| Multi-step procedural questions | "What, then how, then why?" |
-| Comparison within single domain | "Compare X and Y in neuroscience" |
-| Multi-aspect factual queries | "List features A, B, and C" |
-| **Avoid when** | Cross-domain synthesis needed |
-
-</div>
-
-### Anti-Pattern: Decomposition + Cross-Domain
+### Algorithm Flow
 
 ```
-Query: "How do neuroscience and philosophy together explain addiction?"
-
-WRONG: Decompose into separate domain questions
-       → Each domain's chunks miss the integration
-
-RIGHT: Use HyDE (pre-synthesizes the bridge) or
-       GraphRAG (knowledge graph connects domains)
+1. LLM receives query + decomposition prompt
+2. Returns JSON: {sub_questions: [...], reasoning: "..."}
+3. Execute search for: original query + each sub-question
+4. RRF merge: score = sum(1/(60 + rank)) per document across all result lists
+5. Optional reranking against original query
+6. Return top-k merged results
 ```
 
----
+### Code Locations
 
-## Example
+- **Prompt:** `src/prompts.py:DECOMPOSITION_PROMPT`
+- **Decompose function:** `src/rag_pipeline/retrieval/preprocessing/query_preprocessing.py:decompose_query()`
+- **Strategy wrapper:** `src/rag_pipeline/retrieval/preprocessing/strategies.py:decomposition_strategy()`
+- **RRF merge:** `src/rag_pipeline/retrieval/rrf.py:reciprocal_rank_fusion()`
+- **Retrieval strategy:** `src/rag_pipeline/retrieval/strategies/decomposition.py`
 
-**Query**: "How do Stoic techniques for managing anger compare to what neuroscience tells us about emotional regulation?"
-
-**Decomposition** (generated):
-```json
-{
-  "sub_questions": [
-    "What techniques did the Stoics use for managing anger?",
-    "What does neuroscience reveal about emotional regulation mechanisms?",
-    "Are there overlaps between Stoic practices and neuroscience findings?",
-    "What are the key differences between the approaches?"
-  ],
-  "reasoning": "Comparison question requiring both Stoic philosophy content and neuroscience content"
-}
-```
-
-**Note:** This example would likely underperform because the sub-questions fragment the cross-domain synthesis. HyDE or GraphRAG would be better choices.
-
----
 
 ## Navigation
 
 **Next:** [GraphRAG](graphrag.md) — Knowledge graph + communities for cross-document reasoning
 
 **Related:**
-- [HyDE](hyde.md) — Better for cross-domain (pre-synthesizes bridge)
-- [RRF Implementation](../../src/rag_pipeline/retrieval/rrf.py) — Merge algorithm
+- [HyDE](hyde.md) — Better for cross-domain synthesis (pre-generates bridging content)
 - [Preprocessing Overview](README.md) — Strategy comparison
+- [Paper (arXiv)](https://arxiv.org/abs/2507.00355) — Original research
+- [Haystack Blog](https://haystack.deepset.ai/blog/query-decomposition) — Community implementation guide
