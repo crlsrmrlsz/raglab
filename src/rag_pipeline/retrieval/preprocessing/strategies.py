@@ -95,21 +95,27 @@ def hyde_strategy(query: str, model: Optional[str] = None) -> PreprocessedQuery:
     model = model or PREPROCESSING_MODEL
 
     # Generate K hypothetical answers (configurable via HYDE_K)
-    hyde_passages = _hyde_prompt_fn(query, model=model, k=HYDE_K)
-    logger.info(f"[hyde] Generated {len(hyde_passages)} hypotheticals, first: {hyde_passages[0][:80]}...")
+    # Returns list of {"domain": "neuroscience|philosophy", "passage": "..."}
+    hyde_results = _hyde_prompt_fn(query, model=model, k=HYDE_K)
+    first_passage = hyde_results[0]["passage"]
+    logger.info(f"[hyde] Generated {len(hyde_results)} hypotheticals, first: {first_passage[:80]}...")
 
     elapsed_ms = (time.time() - start_time) * 1000
 
     # Paper alignment: include original query + hypotheticals for embedding averaging
     # The retrieval layer will average embeddings of ALL entries in generated_queries
     generated_queries = [{"type": "original", "query": query}]
-    for passage in hyde_passages:
-        generated_queries.append({"type": "hyde", "query": passage})
+    for result in hyde_results:
+        generated_queries.append({
+            "type": f"hyde_{result['domain']}",  # e.g., "hyde_neuroscience"
+            "query": result["passage"],
+            "domain": result["domain"],
+        })
 
     return PreprocessedQuery(
         original_query=query,
-        search_query=hyde_passages[0],  # First hypothetical for backward compatibility
-        hyde_passage=hyde_passages[0],  # Keep first for logging
+        search_query=first_passage,  # First hypothetical for backward compatibility
+        hyde_passage=first_passage,  # Keep first for logging
         generated_queries=generated_queries,  # Original + hypotheticals for averaging
         strategy_used="hyde",
         preprocessing_time_ms=elapsed_ms,

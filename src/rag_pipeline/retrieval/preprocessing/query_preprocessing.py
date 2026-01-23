@@ -84,7 +84,7 @@ class PreprocessedQuery:
 # =============================================================================
 
 
-def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> list[str]:
+def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> list[dict]:
     """Generate k hypothetical answers for HyDE retrieval using split-domain approach.
 
     HyDE (Hypothetical Document Embeddings) generates plausible answers
@@ -104,12 +104,14 @@ def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> lis
         k: Total hypotheticals to generate (split evenly between domains).
 
     Returns:
-        List of k hypothetical passages (k/2 neuroscience + k/2 philosophy).
+        List of dicts with domain and passage: [{"domain": "neuroscience", "passage": "..."}]
 
     Example:
         >>> passages = hyde_prompt("Why do we procrastinate?", k=4)
         >>> len(passages)
         4  # 2 neuroscience + 2 philosophy
+        >>> passages[0]["domain"]
+        "neuroscience"
     """
     model = model or PREPROCESSING_MODEL
 
@@ -137,7 +139,7 @@ def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> lis
                 )
                 response_text = response.strip()
                 if response_text:
-                    passages.append(response_text)
+                    passages.append({"domain": domain_name, "passage": response_text})
                 else:
                     logger.warning(f"HyDE {domain_name} {i+1}/{count} returned empty")
             except requests.RequestException as e:
@@ -146,7 +148,7 @@ def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> lis
     # Ensure at least one passage (fallback to original query)
     if not passages:
         logger.warning("All HyDE prompts failed, using original query")
-        passages = [query]
+        passages = [{"domain": "fallback", "passage": query}]
 
     logger.info(f"[hyde] Generated {len(passages)} hypotheticals ({per_domain} neuro + {k - per_domain} philo)")
     return passages

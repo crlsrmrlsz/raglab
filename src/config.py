@@ -866,5 +866,5 @@ from src.prompts import (
 HYDE_K = 4
 
 # Max tokens per hypothetical passage
-# Paper uses short passages (~100-150 tokens, 2-3 sentences)
-HYDE_MAX_TOKENS = 150
+# Paper uses ~100-150 tokens, but RAGLab's dense corpus needs more for complete thoughts
+HYDE_MAX_TOKENS = 250

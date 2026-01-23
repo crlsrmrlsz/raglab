@@ -188,11 +188,25 @@ def _render_preprocessing_stage(prep) -> None:
     col2.markdown(f"**Model:** `{model}`")
     col3.metric("Time", f"{prep.preprocessing_time_ms:.0f}ms")
 
-    # HyDE output
-    hyde_passage = getattr(prep, 'hyde_passage', None)
-    if hyde_passage and hyde_passage != prep.original_query:
-        st.markdown("**Hypothetical Passage:**")
-        st.info(hyde_passage)
+    # HyDE output - show all hypotheticals with domain labels
+    generated_queries = getattr(prep, 'generated_queries', None)
+    if strategy == "hyde" and generated_queries:
+        # Filter to only hyde passages (exclude original query)
+        hyde_passages = [q for q in generated_queries if q.get("type", "").startswith("hyde")]
+        if hyde_passages:
+            st.markdown(f"**Hypothetical Passages ({len(hyde_passages)}):**")
+            # Group by domain for display
+            neuro_count = phil_count = 0
+            for q in hyde_passages:
+                domain = q.get("domain", "unknown").title()
+                if domain.lower() == "neuroscience":
+                    neuro_count += 1
+                    label = f"Neuroscience #{neuro_count}"
+                else:
+                    phil_count += 1
+                    label = f"Philosophy #{phil_count}"
+                with st.expander(label, expanded=False):
+                    st.info(q.get("query", ""))
 
     # Decomposition output
     sub_queries = getattr(prep, 'sub_queries', None)
