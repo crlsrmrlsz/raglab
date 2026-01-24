@@ -339,7 +339,6 @@ def retrieve_community_context(
 def retrieve_communities_for_map_reduce(
     query: str,
     level: Optional[int] = None,
-    top_k: Optional[int] = None,
 ) -> list[Community]:
     """Retrieve full Community objects for map-reduce processing.
 
@@ -348,13 +347,11 @@ def retrieve_communities_for_map_reduce(
     for use in map-reduce global queries.
 
     Microsoft GraphRAG uses ALL communities at the selected level for
-    global queries (map-reduce over all community reports). The top_k
-    parameter is optional for performance tuning on large corpora.
+    global queries (map-reduce over all community reports).
 
     Args:
         query: User query string.
         level: Hierarchy level filter (0=coarsest for global queries).
-        top_k: Optional limit on communities (None = use all, Microsoft-aligned).
 
     Returns:
         List of Community objects sorted by relevance (full data for map-reduce).
@@ -390,7 +387,7 @@ def retrieve_communities_for_map_reduce(
                 scored.append((similarity, community))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        sorted_communities = [community for _, community in scored]
+        return [community for _, community in scored]
     else:
         # Fallback: keyword matching
         query_words = set(query.lower().split())
@@ -402,12 +399,7 @@ def retrieve_communities_for_map_reduce(
             scored.append((overlap, community))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        sorted_communities = [community for _, community in scored]
-
-    # Apply top_k limit only if specified (Microsoft uses all for global queries)
-    if top_k is not None:
-        return sorted_communities[:top_k]
-    return sorted_communities
+        return [community for _, community in scored]
 
 
 def get_graph_chunk_ids(
@@ -713,11 +705,7 @@ def hybrid_graph_retrieval_with_map_reduce(
 
         # Retrieve ALL L0 (coarsest) communities for global query map-reduce
         # Microsoft GraphRAG: map-reduce over all community reports at selected level
-        communities = retrieve_communities_for_map_reduce(
-            query,
-            level=0,  # L0 = coarsest level for global/abstract queries
-            # top_k=None uses all communities (Microsoft-aligned)
-        )
+        communities = retrieve_communities_for_map_reduce(query, level=0)
 
         if communities:
             # Run map-reduce
