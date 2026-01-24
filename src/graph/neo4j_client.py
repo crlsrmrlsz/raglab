@@ -472,7 +472,8 @@ def find_entities_by_names(
         entity_names: List of entity names to search for.
 
     Returns:
-        List of matching entity dicts.
+        List of matching entity dicts with name, entity_type, description,
+        source_chunk_ids, and community_id.
     """
     from src.graph.schemas import GraphEntity
 
@@ -490,8 +491,53 @@ def find_entities_by_names(
         e.name as name,
         e.entity_type as entity_type,
         e.description as description,
-        e.source_chunk_ids as source_chunk_ids
+        e.source_chunk_ids as source_chunk_ids,
+        e.community_id as community_id
     """
 
     result = driver.execute_query(query, normalized_names=normalized_names)
     return [dict(r) for r in result.records]
+
+
+def get_entity_community_ids(
+    driver: Driver,
+    entity_names: list[str],
+) -> list[int]:
+    """Get unique community IDs for a list of entity names.
+
+    Used for Microsoft-style community retrieval by entity membership:
+    instead of embedding similarity, get communities that contain
+    the matched query entities.
+
+    Args:
+        driver: Neo4j driver instance.
+        entity_names: List of entity names to lookup.
+
+    Returns:
+        List of unique community IDs (integers) that contain the entities.
+
+    Example:
+        >>> community_ids = get_entity_community_ids(driver, ["dopamine", "motivation"])
+        >>> community_ids
+        [42, 15, 7]  # Communities containing these entities
+    """
+    from src.graph.schemas import GraphEntity
+
+    if not entity_names:
+        return []
+
+    # Pre-normalize names
+    normalized_names = [
+        GraphEntity(name=name, entity_type="").normalized_name()
+        for name in entity_names
+    ]
+
+    query = """
+    UNWIND $normalized_names AS norm_name
+    MATCH (e:Entity)
+    WHERE e.normalized_name = norm_name AND e.community_id IS NOT NULL
+    RETURN DISTINCT e.community_id as community_id
+    """
+
+    result = driver.execute_query(query, normalized_names=normalized_names)
+    return [r["community_id"] for r in result.records]

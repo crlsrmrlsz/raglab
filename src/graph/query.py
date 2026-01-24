@@ -47,7 +47,7 @@ from src.rag_pipeline.indexing.weaviate_client import (
 )
 from src.rag_pipeline.indexing.weaviate_query import SearchResult
 from src.rag_pipeline.retrieval.rrf import reciprocal_rank_fusion
-from .neo4j_client import find_entity_neighbors, find_entities_by_names
+from .neo4j_client import find_entity_neighbors, find_entities_by_names, get_entity_community_ids
 from .community import load_communities
 from .schemas import Community
 # Entity extraction logic moved to query_entities.py
@@ -226,12 +226,92 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return float(np.dot(a_arr, b_arr) / norm_product)
 
 
+def retrieve_community_context_by_membership(
+    entity_names: list[str],
+    driver: Driver,
+    communities: Optional[list[Community]] = None,
+) -> list[dict[str, Any]]:
+    """Retrieve community summaries by entity membership (Microsoft approach).
+
+    Instead of embedding similarity, gets communities that CONTAIN the
+    matched query entities. This is how Microsoft GraphRAG does local
+    search community context.
+
+    Args:
+        entity_names: Entity names matched from query (already validated).
+        driver: Neo4j driver instance.
+        communities: Pre-loaded communities (optional, loads from file if None).
+
+    Returns:
+        List of community dicts with summary, member info, and score.
+
+    Example:
+        >>> context = retrieve_community_context_by_membership(
+        ...     ["dopamine", "motivation"], driver
+        ... )
+        >>> for c in context:
+        ...     print(c["community_id"], c["member_count"])
+    """
+    if not entity_names:
+        return []
+
+    # Get community IDs from Neo4j for the matched entities
+    community_ids = get_entity_community_ids(driver, entity_names)
+
+    if not community_ids:
+        logger.debug("No community IDs found for entities, skipping community context")
+        return []
+
+    logger.info(f"Found {len(community_ids)} communities for entities {entity_names}")
+
+    # Load communities if not provided
+    if communities is None:
+        try:
+            communities = load_communities()
+        except FileNotFoundError:
+            logger.warning("No communities file found")
+            return []
+
+    # Build lookup by community_id (need to parse the key format)
+    from .hierarchy import parse_community_key, build_community_key
+
+    community_lookup = {}
+    for c in communities:
+        # community_id format: "community_L0_42" → extract (level, id)
+        try:
+            level, cid = parse_community_key(c.community_id)
+            # Only include L0 (finest level where entities have community_id)
+            if level == 0:
+                community_lookup[cid] = c
+        except ValueError:
+            continue
+
+    # Get matching communities
+    results = []
+    for cid in community_ids:
+        if cid in community_lookup:
+            c = community_lookup[cid]
+            results.append({
+                "community_id": c.community_id,
+                "summary": c.summary,
+                "member_count": c.member_count,
+                "score": 1.0,  # Full membership match
+            })
+
+    logger.info(f"Retrieved {len(results)} communities by entity membership")
+    return results
+
+
 def retrieve_community_context(
     query: str,
     communities: Optional[list[Community]] = None,
     top_k: int = GRAPHRAG_TOP_COMMUNITIES,
 ) -> list[dict[str, Any]]:
     """Retrieve relevant community summaries using embedding similarity.
+
+    NOTE: This is the legacy approach. For local queries, prefer
+    retrieve_community_context_by_membership() which uses entity
+    membership (Microsoft GraphRAG approach).
 
     Tries Weaviate first for efficient HNSW search, then falls back to
     in-memory file-based search if Weaviate collection doesn't exist.
@@ -559,8 +639,13 @@ def hybrid_graph_retrieval(
     # Get graph chunk IDs and metadata
     graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
 
-    # Get community context for thematic enrichment
-    community_context = retrieve_community_context(query)
+    # Get community context by entity membership (Microsoft approach)
+    # Uses communities that CONTAIN the matched entities, not embedding similarity
+    query_entities = graph_meta.get("query_entities", [])
+    community_context = retrieve_community_context_by_membership(
+        entity_names=query_entities,
+        driver=driver,
+    )
 
     # Build metadata
     metadata = {

@@ -748,6 +748,11 @@ GRAPHRAG_USE_EMBEDDING_EXTRACTION = True  # Use embedding-based extraction (fall
 # Follows LangChain's approach to prevent graph fragmentation from type drift
 GRAPHRAG_STRICT_MODE = True
 
+# Recommended chunking for GraphRAG: semantic with std=2.0
+# Lower std coefficient = more breakpoints = smaller, more cohesive chunks
+# Better for entity extraction (each chunk covers fewer topics)
+GRAPHRAG_SEMANTIC_STD_COEFFICIENT = 2.0
+
 
 def get_entity_collection_name() -> str:
     """Generate entity collection name for GraphRAG embedding extraction.

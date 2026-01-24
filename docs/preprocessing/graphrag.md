@@ -128,13 +128,21 @@ The curated 8-type schema provides consistent taxonomy without consolidation cos
 
 </details>
 
-**Semantic chunking for entity extraction.** The paper uses fixed 300-token chunks, but RAGLab uses [semantic chunking](../chunking/semantic-chunking.md) (std coefficient=3.0) for GraphRAG. While entity deduplication happens at merge time regardless of chunk boundaries, *relationships* are extracted per-chunk—entities must appear together to form edges. Semantic chunking keeps related concepts together, improving relationship capture. The conservative std=3.0 threshold preserves 98% of sections as single chunks (avg 665 tokens for neuroscience, 1331 for philosophy), accepting some longer chunks to avoid splitting mid-argument.
+**Semantic chunking for entity extraction.** The paper uses fixed 300-token chunks, but RAGLab recommends [semantic chunking](../chunking/semantic-chunking.md) with **std coefficient=2.0** for GraphRAG (`GRAPHRAG_SEMANTIC_STD_COEFFICIENT = 2.0` in config). Lower std = more breakpoints = smaller, more cohesive chunks. While entity deduplication happens at merge time regardless of chunk boundaries, *relationships* are extracted per-chunk—entities must appear together to form edges. Semantic chunking keeps related concepts together, improving relationship capture. The std=2.0 setting creates more granular chunks than std=3.0, which is better for entity extraction since each chunk covers fewer topics.
 
 **Deterministic Leiden.** Stage 6b runs Leiden with `seed=42` and `concurrency=1`, guaranteeing identical community assignments on every run. This enables crash recovery: if summarization fails midway, re-running picks up where it stopped because community IDs remain stable.
 
 **Dual extraction at query time.** Entity extraction uses embedding similarity search (~50ms) with LLM fallback (~1-2s) for complex conceptual queries. The embedding approach searches pre-indexed entity descriptions in Weaviate; the LLM approach uses the same curated entity types from `graphrag_types.yaml` to guide extraction.
 
 **RRF merge with graph boost.** Hybrid retrieval combines vector search results with graph traversal results using Reciprocal Rank Fusion (k=60). Chunks appearing in both lists get boosted scores—they're semantically similar AND structurally related through the knowledge graph.
+
+**Community context by entity membership (Microsoft approach).** For local queries, RAGLab retrieves community summaries based on which communities the matched entities belong to—not embedding similarity. This aligns with Microsoft's implementation where community context comes from the entity's community_id property in Neo4j, ensuring we get thematically relevant community summaries.
+
+**Neo4j graph traversal (Neo4j GraphRAG pattern).** Unlike Microsoft's simpler text_unit_id lookup, RAGLab uses Cypher traversal (`MATCH path = (start)-[*1..2]-(neighbor)`) to discover multi-hop relationships. This finds structurally related entities beyond the initial matches, capturing reasoning chains like:
+```
+stress → [ACTIVATES] → amygdala → [INHIBITS] → prefrontal_cortex → [CONTROLS] → decision-making
+```
+For a dual-domain corpus (neuroscience + philosophy), this enables cross-domain connections that direct lookup would miss.
 
 Configuration in `src/config.py`:
 
