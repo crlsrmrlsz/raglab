@@ -73,11 +73,31 @@ docker compose up -d neo4j
 python -m src.stages.run_stage_6b_neo4j
 ```
 
-**Curated entity types.** Entity types are defined in `src/graph/graphrag_types.yaml` (33 types optimized for the dual-domain corpus). Following Microsoft's reference implementation, types are predefined to ensure consistent taxonomy. The curated list includes 18 neuroscience types (BRAIN_REGION, NEUROTRANSMITTER, COGNITIVE_PROCESS, etc.) and 15 philosophy types (PHILOSOPHER, VIRTUE, ETHICAL_CONCEPT, etc.). Relationship types remain open-ended per the GraphRAG paper.
+**Curated entity types.** Entity types are defined in `src/graph/graphrag_types.yaml` (8 types). Following industry best practices, types are minimal and non-overlapping: 2 generic (PERSON, WORK), 3 neuroscience (BRAIN_STRUCTURE, CHEMICAL, DISORDER), 2 psychology bridge (MENTAL_STATE, BEHAVIOR), and 1 philosophy (PRINCIPLE). Relationship types remain open-ended per the GraphRAG paper.
 
-**Why fewer types is better.** Microsoft defaults to just 4 types (PERSON, ORGANIZATION, LOCATION, EVENT) for good reason. Overlapping types cause two problems: (1) **inconsistent extraction**—the LLM might tag "Aristotle" as PHILOSOPHER, HISTORICAL_FIGURE, or RESEARCHER depending on context, fragmenting what should be one node; (2) **weakened communities**—Leiden clustering relies on co-occurrence patterns, so split entities dilute the signal that connects related concepts. RAGLab uses 33 types as an experiment in domain-specific extraction, accepting this tradeoff for finer-grained semantic distinctions.
+<details>
+<summary><strong>Entity type design rationale</strong></summary>
 
-**Industry consensus on entity types.** Across major implementations—[Microsoft GraphRAG](https://microsoft.github.io/graphrag/config/yaml/) (4 default types), [LangChain LLMGraphTransformer](https://python.langchain.com/api_reference/experimental/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html) (recommends "basic/elementary types"), [LlamaIndex PropertyGraph](https://docs.llamaindex.ai/en/stable/module_guides/indexing/lpg_index_guide/) (3-5 in examples), and [Neo4j Graph Builder](https://neo4j.com/blog/developer/graphrag-llm-knowledge-graph-builder/) ("start with minimal schema")—the pattern is consistent: **4-6 generic types**, prefer general over specific (PERSON not PHILOSOPHER), and add domain types only when truly distinct. RAGLab's 33 types exceed this by 6-8x.
+**Why fewer types is better.** Microsoft defaults to just 4 types (PERSON, ORGANIZATION, LOCATION, EVENT). Overlapping types cause: (1) **inconsistent extraction**—the LLM might tag "Aristotle" as PHILOSOPHER, HISTORICAL_FIGURE, or RESEARCHER, fragmenting nodes; (2) **weakened communities**—Leiden clustering relies on co-occurrence, so split entities dilute signal.
+
+**Industry consensus.** [Microsoft GraphRAG](https://microsoft.github.io/graphrag/config/yaml/) (4 types), [LangChain](https://python.langchain.com/api_reference/experimental/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html) ("basic/elementary types"), [LlamaIndex](https://docs.llamaindex.ai/en/stable/module_guides/indexing/lpg_index_guide/) (3-5 in examples), [Neo4j](https://neo4j.com/blog/developer/graphrag-llm-knowledge-graph-builder/) ("minimal schema")—all recommend 4-6 generic types.
+
+**Corpus analysis.** Initial extraction with open types showed PERSON fragmented across 6 variants (RESEARCHER, PHILOSOPHER, HISTORICAL_FIGURE, etc.) totaling ~9,000 entities. Similarly, PSYCHOLOGICAL_PHENOMENON vs PSYCHOLOGICAL_CONCEPT and VIRTUE vs ETHICAL_CONCEPT created semantic overlap.
+
+**Query-driven design.** Evaluation questions connect brain mechanisms → psychological states → behaviors → philosophical principles. The 8 types mirror this retrieval pattern:
+
+| Type | Examples | Query Role |
+|------|----------|------------|
+| PERSON | Sapolsky, Epictetus, Kahneman | Attribution |
+| WORK | Behave, Meditations | Source |
+| BRAIN_STRUCTURE | amygdala, prefrontal cortex, thalamus | Causal mechanism |
+| CHEMICAL | dopamine, serotonin, oxytocin | Causal mechanism |
+| DISORDER | PTSD, depression, addiction | Clinical condition |
+| MENTAL_STATE | emotion, consciousness, suffering | Internal experience |
+| BEHAVIOR | procrastination, aggression, empathy | Observable pattern |
+| PRINCIPLE | dichotomy of control, wu wei, hedonic treadmill | Philosophical interpretation |
+
+</details>
 
 **Semantic chunking for entity extraction.** The paper uses fixed 300-token chunks, but RAGLab uses [semantic chunking](../chunking/semantic-chunking.md) (std coefficient=3.0) for GraphRAG. While entity deduplication happens at merge time regardless of chunk boundaries, *relationships* are extracted per-chunk—entities must appear together to form edges. Semantic chunking keeps related concepts together, improving relationship capture. The conservative std=3.0 threshold preserves 98% of sections as single chunks (avg 665 tokens for neuroscience, 1331 for philosophy), accepting some longer chunks to avoid splitting mid-argument.
 
