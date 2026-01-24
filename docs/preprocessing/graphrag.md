@@ -138,11 +138,11 @@ The curated 8-type schema provides consistent taxonomy without consolidation cos
 
 **Community context by entity membership (Microsoft approach).** For local queries, RAGLab retrieves community summaries based on which communities the matched entities belong to—not embedding similarity. This aligns with Microsoft's implementation where community context comes from the entity's community_id property in Neo4j, ensuring we get thematically relevant community summaries.
 
-**Neo4j graph traversal (Neo4j GraphRAG pattern).** Unlike Microsoft's simpler text_unit_id lookup, RAGLab uses Cypher traversal (`MATCH path = (start)-[*1..2]-(neighbor)`) to discover multi-hop relationships. This finds structurally related entities beyond the initial matches, capturing reasoning chains like:
+**Neo4j graph traversal ([VectorCypherRetriever pattern](https://neo4j.com/docs/neo4j-graphrag-python/current/user_guide_rag.html)).** RAGLab uses Cypher traversal (`MATCH path = (start)-[*1..2]-(neighbor)`) instead of Microsoft's simpler text_unit_id lookup. **Why:** Microsoft stores `text_unit_ids` on each entity during indexing and simply collects them at query time—no graph traversal needed. This is efficient but only retrieves chunks that directly mention the matched entity. RAGLab's Cypher traversal discovers **multi-hop relationships**, finding structurally related entities beyond initial matches:
 ```
 stress → [ACTIVATES] → amygdala → [INHIBITS] → prefrontal_cortex → [CONTROLS] → decision-making
 ```
-For a dual-domain corpus (neuroscience + philosophy), this enables cross-domain connections that direct lookup would miss.
+For a dual-domain corpus (neuroscience + philosophy), this enables cross-domain connections. A query about "Stoic self-control" can traverse to `prefrontal_cortex` chunks via `self-control → [REQUIRES] → impulse_control → [LOCALIZED_IN] → prefrontal_cortex`, bridging philosophy and neuroscience.
 
 Configuration in `src/config.py`:
 
