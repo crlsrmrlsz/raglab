@@ -688,69 +688,654 @@ All improvements statistically significant (p < 0.001)
 
 ---
 
-## 15. Appendix: Prompt Templates
+## 15. Scoring & Weight Calculations
 
-### A. Entity Extraction Prompt (Summarized)
+### 15.1 Relationship Weight (Strength Score)
+
+**LLM-Assigned Strength:**
+The extraction prompt asks the LLM to provide a `relationship_strength` score:
+> "a numeric score indicating strength of the relationship between the source entity and target entity"
+
+**Typical Values (from prompt examples):**
+- Strong direct relationship (e.g., "Chair of organization"): **9**
+- Ownership/control: **5**
+- Indirect involvement (e.g., "negotiated exchange"): **2**
+- Co-occurrence (e.g., "exchanged in same event"): **2**
+
+**Weight Accumulation:**
+When the same relationship (same source, target, type) is extracted from multiple text units:
+```
+final_weight = sum(all_extracted_weights)
+```
+
+> "The weight column shows the sum of the LLM-assigned relationship strength (weight is not the number of connections between source and target nodes!)"
+
+### 15.2 Combined Degree
+
+**Definition:**
+```
+combined_degree = degree(source_entity) + degree(target_entity)
+```
+
+Where `degree(entity)` = number of relationships connected to that entity.
+
+**Purpose:** Prioritize relationships between highly-connected (important) entities.
+
+**Usage in Local Search:**
+- In-network relationships sorted by `combined_degree` (descending)
+- Higher combined_degree = more important connection
+
+### 15.3 Entity Rank
+
+**Default Calculation:**
+```
+entity_rank = degree(entity)  # Number of relationships
+```
+
+**Usage:**
+- Fallback ranking when query embedding is empty
+- Community context prioritization
+
+### 15.4 Map Phase Importance Score
+
+**Scale:** 0-100 (integer)
+
+**Scoring Guidelines (from prompt):**
+- **0**: "I don't know" type response / not helpful
+- **1-30**: Marginally relevant information
+- **31-70**: Moderately helpful, partial answer
+- **71-100**: Highly relevant, directly answers question
+
+**Filtering:**
+- Points with `score = 0` are **removed** before reduce phase
+- Remaining points sorted by score descending
+
+### 15.5 Community Impact Severity Rating
+
+**Scale:** 0.0-10.0 (float)
+
+**From Community Report Prompt:**
+> "IMPACT SEVERITY RATING: a float score between 0-10 that represents the severity of IMPACT posed by entities within the community. IMPACT is the scored importance of a community."
+
+**Example from Prompt:**
+- Unity March at public plaza: **5.0** ("moderate due to potential for unrest")
+
+---
+
+## 16. Complete Token Limits Reference
+
+### 16.1 Indexing Token Limits
+
+| Parameter | Default Value | Location |
+|-----------|---------------|----------|
+| `chunk_size` | 1,200 tokens | `chunks.size` |
+| `chunk_overlap` | 100 tokens | `chunks.overlap` |
+| `max_input_length` (summarize) | 4,000 tokens | `summarize_descriptions.max_input_length` |
+| `max_length` (summarize output) | 500 tokens | `summarize_descriptions.max_length` |
+| `max_input_length` (community) | 8,000 tokens | `community_reports.max_input_length` |
+| `max_report_length` | 2,000 words | `community_reports.max_length` |
+| `batch_max_tokens` (embedding) | 8,191 tokens | `embed_text.batch_max_tokens` |
+
+### 16.2 Query Token Limits
+
+| Parameter | Default Value | Location |
+|-----------|---------------|----------|
+| `max_context_tokens` (local) | 12,000 tokens | `local_search.max_context_tokens` |
+| `max_context_tokens` (global) | 12,000 tokens | `global_search.max_context_tokens` |
+| `max_data_tokens` (global reduce) | 12,000 tokens | `global_search.data_max_tokens` |
+| `map_max_length` | (words, configurable) | `global_search.map_max_length` |
+| `reduce_max_length` | (words, configurable) | `global_search.reduce_max_length` |
+| `data_max_tokens` (DRIFT) | 12,000 tokens | `drift_search.data_max_tokens` |
+| `primer_llm_max_tokens` | 12,000 tokens | `drift_search.primer_llm_max_tokens` |
+
+### 16.3 Token Budget Allocation (Local Search)
+
+| Component | Proportion | With 12K max |
+|-----------|------------|--------------|
+| Text Units | 50% (`text_unit_prop=0.5`) | 6,000 tokens |
+| Community Reports | 15% (`community_prop=0.15`) | 1,800 tokens |
+| Entities + Relationships | 35% (remainder) | 4,200 tokens |
+
+**Note:** Earlier documentation showed `community_prop=0.1` (10%), but current defaults use `0.15` (15%).
+
+---
+
+## 17. Entity Types Configuration
+
+### 17.1 Storage Location
+
+Entity types are configured in `settings.yaml` under the `extract_graph` section:
+
+```yaml
+extract_graph:
+  model_id: extraction_chat_model
+  prompt: "prompts/extract_graph.txt"
+  entity_types: [organization, person, geo, event]
+  max_gleanings: 1
+```
+
+### 17.2 Default Entity Types
+
+| Type | Description |
+|------|-------------|
+| `ORGANIZATION` | Companies, agencies, institutions |
+| `PERSON` | Named individuals |
+| `GEO` | Geographic locations, places |
+| `EVENT` | Named events, occurrences |
+
+### 17.3 Format Rules
+
+- **Case**: Types are converted to UPPERCASE in extraction output
+- **Format**: Simple string array in YAML
+- **Injection**: Passed to prompt via `{entity_types}` placeholder
+- **Example prompt injection**: `Entity_types: ORGANIZATION,PERSON,GEO,EVENT`
+
+### 17.4 Domain Customization
+
+Add domain-specific types by extending the array:
+
+```yaml
+# For a medical corpus
+entity_types: [organization, person, geo, event, disease, treatment, drug, symptom]
+
+# For a technical corpus
+entity_types: [organization, person, geo, event, technology, product, concept]
+```
+
+**No validation**: The LLM may extract entities with types not in the list. These are included but may reduce consistency.
+
+---
+
+## 18. Relationship Weights Deep Dive
+
+### 18.1 Extraction
+
+The LLM assigns a `relationship_strength` during extraction:
+
+```
+("relationship"<|>SOURCE<|>TARGET<|>DESCRIPTION<|>WEIGHT)
+```
+
+**Example from prompt:**
+```
+("relationship"{tuple_delimiter}MARTIN SMITH{tuple_delimiter}CENTRAL INSTITUTION{tuple_delimiter}Martin Smith is the Chair of the Central Institution and will answer questions at a press conference{tuple_delimiter}9)
+```
+
+### 18.2 Weight Interpretation
+
+| Score Range | Interpretation | Example |
+|-------------|----------------|---------|
+| 8-10 | Direct, strong relationship | "Chair of", "owns", "created" |
+| 5-7 | Significant but indirect | "formerly owned", "invested in" |
+| 2-4 | Weak/circumstantial | "mentioned together", "co-occurred" |
+| 1 | Minimal connection | Default when unparseable |
+
+### 18.3 Accumulation on Merge
+
+When same relationship extracted multiple times:
+
+```python
+# Pseudocode for relationship merging
+if (source, target, type) already exists:
+    existing.weight += new.weight
+    existing.descriptions.append(new.description)
+else:
+    create new relationship
+```
+
+**Result:** Frequently mentioned relationships have higher weights.
+
+### 18.4 Usage in Graph
+
+| Context | How Weight Used |
+|---------|-----------------|
+| Leiden clustering | Edge weight for modularity calculation |
+| Visualization | Edge thickness |
+| Context building | Not currently used for ranking |
+
+**Note from docs:** "Weight is not used by default" for relationship ranking in local search—`combined_degree` is used instead.
+
+---
+
+## 19. Complete Prompts (Full Text)
+
+### 19.1 GRAPH_EXTRACTION_PROMPT
 
 ```
 -Goal-
-Given a text document, identify all entities and relationships.
+Given a text document that is potentially relevant to this activity and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities.
 
 -Steps-
-1. Identify entities: name, type, description
-2. Identify relationships: source, target, description, strength
-3. Return as delimited tuples
+1. Identify all entities. For each identified entity, extract the following information:
+- entity_name: Name of the entity, capitalized
+- entity_type: One of the following types: [{entity_types}]
+- entity_description: Comprehensive description of the entity's attributes and activities
+Format each entity as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
 
--Entity Types-
-{entity_types}
+2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly related* to each other.
+For each pair of related entities, extract the following information:
+- source_entity: name of the source entity, as identified in step 1
+- target_entity: name of the target entity, as identified in step 1
+- relationship_description: explanation as to why you think the source entity and the target entity are related to each other
+- relationship_strength: a numeric score indicating strength of the relationship between the source entity and target entity
+Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>)
 
--Text-
+3. Return output in English as a single list of all the entities and relationships identified in steps 1 and 2. Use **{record_delimiter}** as the list delimiter.
+
+4. When finished, output {completion_delimiter}
+
+######################
+-Examples-
+######################
+Example 1:
+Entity_types: ORGANIZATION,PERSON
+Text:
+The Verdantis's Central Institution is scheduled to meet on Monday and Thursday, with the institution planning to release its latest policy decision on Thursday at 1:30 p.m. PDT, followed by a press conference where Central Institution Chair Martin Smith will take questions. Investors expect the Market Strategy Committee to hold its benchmark interest rate steady in a range of 3.5%-3.75%.
+######################
+Output:
+("entity"{tuple_delimiter}CENTRAL INSTITUTION{tuple_delimiter}ORGANIZATION{tuple_delimiter}The Central Institution is the Federal Reserve of Verdantis, which is setting interest rates on Monday and Thursday)
+{record_delimiter}
+("entity"{tuple_delimiter}MARTIN SMITH{tuple_delimiter}PERSON{tuple_delimiter}Martin Smith is the chair of the Central Institution)
+{record_delimiter}
+("entity"{tuple_delimiter}MARKET STRATEGY COMMITTEE{tuple_delimiter}ORGANIZATION{tuple_delimiter}The Central Institution committee makes key decisions about interest rates and the growth of Verdantis's money supply)
+{record_delimiter}
+("relationship"{tuple_delimiter}MARTIN SMITH{tuple_delimiter}CENTRAL INSTITUTION{tuple_delimiter}Martin Smith is the Chair of the Central Institution and will answer questions at a press conference{tuple_delimiter}9)
+{completion_delimiter}
+
+######################
+Example 2:
+Entity_types: ORGANIZATION
+Text:
+TechGlobal's (TG) stock skyrocketed in its opening day on the Global Exchange Thursday. But IPO experts warn that the semiconductor corporation's debut on the public markets isn't indicative of how other newly listed companies may perform.
+
+TechGlobal, a formerly public company, was taken private by Vision Holdings in 2014. The well-established chip designer says it powers 85% of premium smartphones.
+######################
+Output:
+("entity"{tuple_delimiter}TECHGLOBAL{tuple_delimiter}ORGANIZATION{tuple_delimiter}TechGlobal is a stock now listed on the Global Exchange which powers 85% of premium smartphones)
+{record_delimiter}
+("entity"{tuple_delimiter}VISION HOLDINGS{tuple_delimiter}ORGANIZATION{tuple_delimiter}Vision Holdings is a firm that previously owned TechGlobal)
+{record_delimiter}
+("relationship"{tuple_delimiter}TECHGLOBAL{tuple_delimiter}VISION HOLDINGS{tuple_delimiter}Vision Holdings formerly owned TechGlobal from 2014 until present{tuple_delimiter}5)
+{completion_delimiter}
+
+######################
+Example 3:
+Entity_types: ORGANIZATION,GEO,PERSON
+Text:
+Five Aurelians jailed for 8 years in Firuzabad and widely regarded as hostages are on their way home to Aurelia.
+
+The swap orchestrated by Quintara was finalized when $8bn of Firuzi funds were transferred to financial institutions in Krohaara, the capital of Quintara.
+
+The exchange initiated in Firuzabad's capital, Tiruzia, led to the four men and one woman, who are also Firuzi nationals, boarding a chartered flight to Krohaara.
+
+They were welcomed by senior Aurelian officials and are now on their way to Aurelia's capital, Cashion.
+
+The Aurelians include 39-year-old businessman Samuel Namara, who has been held in Tiruzia's Alhamia Prison, as well as journalist Durke Bataglani, 59, and environmentalist Meggie Tazbah, 53, who also holds Bratinas nationality.
+######################
+Output:
+("entity"{tuple_delimiter}FIRUZABAD{tuple_delimiter}GEO{tuple_delimiter}Firuzabad held Aurelians as hostages)
+{record_delimiter}
+("entity"{tuple_delimiter}AURELIA{tuple_delimiter}GEO{tuple_delimiter}Country seeking to release hostages)
+{record_delimiter}
+("entity"{tuple_delimiter}QUINTARA{tuple_delimiter}GEO{tuple_delimiter}Country that negotiated a swap of money in exchange for hostages)
+{record_delimiter}
+("entity"{tuple_delimiter}TIRUZIA{tuple_delimiter}GEO{tuple_delimiter}Capital of Firuzabad where the Aurelians were being held)
+{record_delimiter}
+("entity"{tuple_delimiter}KROHAARA{tuple_delimiter}GEO{tuple_delimiter}Capital city in Quintara)
+{record_delimiter}
+("entity"{tuple_delimiter}CASHION{tuple_delimiter}GEO{tuple_delimiter}Capital city in Aurelia)
+{record_delimiter}
+("entity"{tuple_delimiter}SAMUEL NAMARA{tuple_delimiter}PERSON{tuple_delimiter}Aurelian who spent time in Tiruzia's Alhamia Prison)
+{record_delimiter}
+("entity"{tuple_delimiter}ALHAMIA PRISON{tuple_delimiter}GEO{tuple_delimiter}Prison in Tiruzia)
+{record_delimiter}
+("entity"{tuple_delimiter}DURKE BATAGLANI{tuple_delimiter}PERSON{tuple_delimiter}Aurelian journalist who was held hostage)
+{record_delimiter}
+("entity"{tuple_delimiter}MEGGIE TAZBAH{tuple_delimiter}PERSON{tuple_delimiter}Bratinas national and environmentalist who was held hostage)
+{record_delimiter}
+("relationship"{tuple_delimiter}FIRUZABAD{tuple_delimiter}AURELIA{tuple_delimiter}Firuzabad negotiated a hostage exchange with Aurelia{tuple_delimiter}2)
+{record_delimiter}
+("relationship"{tuple_delimiter}QUINTARA{tuple_delimiter}AURELIA{tuple_delimiter}Quintara brokered the hostage exchange between Firuzabad and Aurelia{tuple_delimiter}2)
+{record_delimiter}
+("relationship"{tuple_delimiter}QUINTARA{tuple_delimiter}FIRUZABAD{tuple_delimiter}Quintara brokered the hostage exchange between Firuzabad and Aurelia{tuple_delimiter}2)
+{record_delimiter}
+("relationship"{tuple_delimiter}SAMUEL NAMARA{tuple_delimiter}ALHAMIA PRISON{tuple_delimiter}Samuel Namara was a prisoner at Alhamia prison{tuple_delimiter}8)
+{record_delimiter}
+("relationship"{tuple_delimiter}SAMUEL NAMARA{tuple_delimiter}MEGGIE TAZBAH{tuple_delimiter}Samuel Namara and Meggie Tazbah were exchanged in the same hostage release{tuple_delimiter}2)
+{record_delimiter}
+("relationship"{tuple_delimiter}SAMUEL NAMARA{tuple_delimiter}DURKE BATAGLANI{tuple_delimiter}Samuel Namara and Durke Bataglani were exchanged in the same hostage release{tuple_delimiter}2)
+{record_delimiter}
+("relationship"{tuple_delimiter}MEGGIE TAZBAH{tuple_delimiter}DURKE BATAGLANI{tuple_delimiter}Meggie Tazbah and Durke Bataglani were exchanged in the same hostage release{tuple_delimiter}2)
+{record_delimiter}
+("relationship"{tuple_delimiter}SAMUEL NAMARA{tuple_delimiter}FIRUZABAD{tuple_delimiter}Samuel Namara was a hostage in Firuzabad{tuple_delimiter}2)
+{record_delimiter}
+("relationship"{tuple_delimiter}MEGGIE TAZBAH{tuple_delimiter}FIRUZABAD{tuple_delimiter}Meggie Tazbah was a hostage in Firuzabad{tuple_delimiter}2)
+{record_delimiter}
+("relationship"{tuple_delimiter}DURKE BATAGLANI{tuple_delimiter}FIRUZABAD{tuple_delimiter}Durke Bataglani was a hostage in Firuzabad{tuple_delimiter}2)
+{completion_delimiter}
+
+######################
+-Real Data-
+######################
+Entity_types: {entity_types}
+Text: {input_text}
+######################
+Output:
+```
+
+### 19.2 CONTINUE_PROMPT (Gleaning)
+
+```
+MANY entities and relationships were missed in the last extraction. Remember to ONLY emit entities that match any of the previously extracted types. Add them below using the same format:
+```
+
+### 19.3 LOOP_PROMPT (Gleaning Check)
+
+```
+It appears some entities and relationships may have still been missed. Answer Y if there are still entities or relationships that need to be added, or N if there are none. Please answer with a single letter Y or N.
+```
+
+### 19.4 COMMUNITY_REPORT_PROMPT
+
+```
+You are an AI assistant that helps a human analyst to perform general information discovery. Information discovery is the process of identifying and assessing relevant information associated with certain entities (e.g., organizations and individuals) within a network.
+
+# Goal
+Write a comprehensive report of a community, given a list of entities that belong to the community as well as their relationships and optional associated claims. The report will be used to inform decision-makers about information associated with the community and their potential impact. The content of this report includes an overview of the community's key entities, their legal compliance, technical capabilities, reputation, and noteworthy claims.
+
+# Report Structure
+
+The report should include the following sections:
+
+- TITLE: community's name that represents its key entities - title should be short but specific. When possible, include representative named entities in the title.
+- SUMMARY: An executive summary of the community's overall structure, how its entities are related to each other, and significant information associated with its entities.
+- IMPACT SEVERITY RATING: a float score between 0-10 that represents the severity of IMPACT posed by entities within the community. IMPACT is the scored importance of a community.
+- RATING EXPLANATION: Give a single sentence explanation of the IMPACT severity rating.
+- DETAILED FINDINGS: A list of 5-10 key insights about the community. Each insight should have a short summary followed by multiple paragraphs of explanatory text grounded according to the grounding rules below. Be comprehensive.
+
+Return output as a well-formed JSON-formatted string with the following format:
+    {
+        "title": <report_title>,
+        "summary": <executive_summary>,
+        "rating": <impact_severity_rating>,
+        "rating_explanation": <rating_explanation>,
+        "findings": [
+            {
+                "summary":<insight_1_summary>,
+                "explanation": <insight_1_explanation>
+            },
+            {
+                "summary":<insight_2_summary>,
+                "explanation": <insight_2_explanation>
+            }
+        ]
+    }
+
+# Grounding Rules
+
+Points supported by data should list their data references as follows:
+
+"This is an example sentence supported by multiple data references [Data: <dataset name> (record ids); <dataset name> (record ids)]."
+
+Do not list more than 5 record ids in a single reference. Instead, list the top 5 most relevant record ids and add "+more" to indicate that there are more.
+
+For example:
+"Person X is the owner of Company Y and subject to many allegations of wrongdoing [Data: Reports (1), Entities (5, 7); Relationships (23); Claims (7, 2, 34, 64, 46, +more)]."
+
+where 1, 5, 7, 23, 2, 34, 46, and 64 represent the id (not the index) of the relevant data record.
+
+Do not include information where the supporting evidence for it is not provided.
+
+Limit the total report length to {max_report_length} words.
+
+# Example Input
+-----------
+Text:
+
+Entities
+
+id,entity,description
+5,VERDANT OASIS PLAZA,Verdant Oasis Plaza is the location of the Unity March
+6,HARMONY ASSEMBLY,Harmony Assembly is an organization that is holding a march at Verdant Oasis Plaza
+
+Relationships
+
+id,source,target,description
+37,VERDANT OASIS PLAZA,UNITY MARCH,Verdant Oasis Plaza is the location of the Unity March
+38,VERDANT OASIS PLAZA,HARMONY ASSEMBLY,Harmony Assembly is holding a march at Verdant Oasis Plaza
+39,VERDANT OASIS PLAZA,UNITY MARCH,The Unity March is taking place at Verdant Oasis Plaza
+40,VERDANT OASIS PLAZA,TRIBUNE SPOTLIGHT,Tribune Spotlight is reporting on the Unity march taking place at Verdant Oasis Plaza
+41,VERDANT OASIS PLAZA,BAILEY ASADI,Bailey Asadi is speaking at Verdant Oasis Plaza about the march
+43,HARMONY ASSEMBLY,UNITY MARCH,Harmony Assembly is organizing the Unity March
+
+Output:
+{
+    "title": "Verdant Oasis Plaza and Unity March",
+    "summary": "The community revolves around the Verdant Oasis Plaza, which is the location of the Unity March. The plaza has relationships with the Harmony Assembly, Unity March, and Tribune Spotlight, all of which are associated with the march event.",
+    "rating": 5.0,
+    "rating_explanation": "The impact severity rating is moderate due to the potential for unrest or conflict during the Unity March.",
+    "findings": [
+        {
+            "summary": "Verdant Oasis Plaza as the central location",
+            "explanation": "Verdant Oasis Plaza is the central entity in this community, serving as the location for the Unity March. This plaza is the common link between all other entities, suggesting its significance in the community. The plaza's association with the march could potentially lead to issues such as public disorder or conflict, depending on the nature of the march and the reactions it provokes. [Data: Entities (5), Relationships (37, 38, 39, 40, 41,+more)]"
+        },
+        {
+            "summary": "Harmony Assembly's role in the community",
+            "explanation": "Harmony Assembly is another key entity in this community, being the organizer of the march at Verdant Oasis Plaza. The nature of Harmony Assembly and its march could be a potential source of threat, depending on their objectives and the reactions they provoke. The relationship between Harmony Assembly and the plaza is crucial in understanding the dynamics of this community. [Data: Entities(6), Relationships (38, 43)]"
+        }
+    ]
+}
+
+
+# Real Data
+
+Use the following text for your answer. Do not make anything up in your answer.
+
+Text:
 {input_text}
+
+Output:
 ```
 
-### B. Community Report Prompt (Summarized)
+### 19.5 LOCAL_SEARCH_SYSTEM_PROMPT
 
 ```
-You are an AI assistant analyzing a community of entities.
+---Role---
 
-Create a report with:
-- TITLE: Community name from key entities
-- SUMMARY: Executive overview
-- IMPACT SEVERITY RATING: 0-10 scale
-- RATING EXPLANATION: Single sentence
-- DETAILED FINDINGS: 5-10 key insights
+You are a helpful assistant responding to questions about data in the tables provided.
 
-Output as JSON. Only use provided data.
-Maximum {max_report_length} words.
+
+---Goal---
+
+Generate a response of the target length and format that responds to the user's question, summarizing all information in the input data tables appropriate for the response length and format, and incorporating any relevant general knowledge.
+
+If you don't know the answer, just say so. Do not make anything up.
+
+Points supported by data should list their data references as follows:
+
+"This is an example sentence supported by multiple data references [Data: <dataset name> (record ids); <dataset name> (record ids)]."
+
+Do not list more than 5 record ids in a single reference. Instead, list the top 5 most relevant record ids and add "+more" to indicate that there are more.
+
+For example:
+
+"Person X is the owner of Company Y and subject to many allegations of wrongdoing [Data: Sources (15, 16), Reports (1), Entities (5, 7); Relationships (23); Claims (2, 7, 34, 46, 64, +more)]."
+
+where 15, 16, 1, 5, 7, 23, 2, 7, 34, 46, and 64 represent the id (not the index) of the relevant data record.
+
+Do not include information where the supporting evidence for it is not provided.
+
+
+---Target response length and format---
+
+{response_type}
+
+
+---Data tables---
+
+{context_data}
+
+Add sections and commentary to the response as appropriate for the length and format. Style the response in markdown.
 ```
 
-### C. Map Phase Prompt (Summarized)
+### 19.6 MAP_SYSTEM_PROMPT (Global Search)
 
 ```
-Generate key points answering the user question.
-Rate each point 0-100 for importance.
+---Role---
 
-Output JSON:
-{"points": [{"description": "...", "score": N}, ...]}
+You are a helpful assistant responding to questions about data in the tables provided.
 
-Only include evidence-supported claims.
+
+---Goal---
+
+Generate a response consisting of a list of key points that responds to the user's question, summarizing all relevant information in the input data tables.
+
+You should use the data provided in the data tables below as the primary context for generating the response.
+If you don't know the answer or if the input data tables do not contain sufficient information to provide an answer, just say so. Do not make anything up.
+
+Each key point in the response should have the following element:
+- Description: A comprehensive description of the point.
+- Importance Score: An integer score between 0-100 that indicates how important the point is in answering the user's question. An 'I don't know' type of response should have a score of 0.
+
+The response should be JSON formatted as follows:
+{
+    "points": [
+        {"description": "Description of point 1 [Data: Reports (report ids)]", "score": score_value},
+        {"description": "Description of point 2 [Data: Reports (report ids)]", "score": score_value}
+    ]
+}
+
+The response shall preserve the original meaning and use of modal verbs such as "shall", "may" or "will".
+
+Points supported by data should list the relevant reports as references as follows:
+"This is an example sentence supported by data references [Data: Reports (report ids)]"
+
+**Do not list more than 5 record ids in a single reference**. Instead, list the top 5 most relevant record ids and add "+more" to indicate that there are more.
+
+For example:
+"Person X is the owner of Company Y and subject to many allegations of wrongdoing [Data: Reports (2, 7, 64, 46, 34, +more)]. He is also CEO of company X [Data: Reports (1, 3)]"
+
+where 1, 2, 3, 7, 34, 46, and 64 represent the id (not the index) of the relevant data report in the provided tables.
+
+Do not include information where the supporting evidence for it is not provided.
+
+Limit your response length to {max_length} words.
+
+---Data tables---
+
+{context_data}
 ```
 
-### D. Reduce Phase Prompt (Summarized)
+### 19.7 REDUCE_SYSTEM_PROMPT (Global Search)
 
 ```
-Synthesize analyst reports into a single response.
-Reports ranked by importance (descending).
+---Role---
 
-- Preserve modal verbs
-- Maintain data references
-- Remove irrelevant information
-- Use markdown formatting
+You are a helpful assistant responding to questions about a dataset by synthesizing perspectives from multiple analysts.
+
+
+---Goal---
+
+Generate a response of the target length and format that responds to the user's question, summarize all the reports from multiple analysts who focused on different parts of the dataset.
+
+Note that the analysts' reports provided below are ranked in the **descending order of importance**.
+
+If you don't know the answer or if the provided reports do not contain sufficient information to provide an answer, just say so. Do not make anything up.
+
+The final response should remove all irrelevant information from the analysts' reports and merge the cleaned information into a comprehensive answer that provides explanations of all the key points and implications appropriate for the response length and format.
+
+Add sections and commentary to the response as appropriate for the length and format. Style the response in markdown.
+
+The response shall preserve the original meaning and use of modal verbs such as "shall", "may" or "will".
+
+The response should also preserve all the data references previously included in the analysts' reports, but do not mention the roles of multiple analysts in the analysis process.
+
+**Do not list more than 5 record ids in a single reference**. Instead, list the top 5 most relevant record ids and add "+more" to indicate that there are more.
+
+For example:
+
+"Person X is the owner of Company Y and subject to many allegations of wrongdoing [Data: Reports (2, 7, 34, 46, 64, +more)]. He is also CEO of company X [Data: Reports (1, 3)]"
+
+where 1, 2, 3, 7, 34, 46, and 64 represent the id (not the index) of the relevant data record.
+
+Do not include information where the supporting evidence for it is not provided.
+
+Limit your response length to {max_length} words.
+
+---Target response length and format---
+
+{response_type}
+
+
+---Analyst Reports---
+
+{report_data}
+```
+
+### 19.8 NO_DATA_ANSWER (Fallback)
+
+```
+I am sorry but I am unable to answer this question given the provided data.
 ```
 
 ---
 
-## 16. References
+## 20. Additional Configuration Parameters
+
+### 20.1 Graph Pruning (`prune_graph` block)
+
+```yaml
+prune_graph:
+  min_node_freq: 2           # Minimum times entity must appear
+  min_node_degree: 1         # Minimum relationships per entity
+  min_edge_weight_pct: 40.0  # Percentile threshold for edge weights
+  max_node_freq_std: null    # Standard deviation limit for frequency
+  max_node_degree_std: null  # Standard deviation limit for degree
+  remove_ego_nodes: false    # Remove highly central nodes
+  lcc_only: false            # Keep only largest connected component
+```
+
+### 20.2 Graph Embedding (`embed_graph` block)
+
+```yaml
+embed_graph:
+  enabled: false             # Disabled by default
+  dimensions: 1536           # Vector dimensions
+  num_walks: 10              # Node2Vec walks per node
+  walk_length: 40            # Steps per walk
+  window_size: 2             # Context window
+  iterations: 3              # Training iterations
+  random_seed: 42            # Reproducibility seed
+```
+
+### 20.3 DRIFT Search (`drift_search` block)
+
+```yaml
+drift_search:
+  data_max_tokens: 12000     # Maximum data tokens
+  reduce_max_tokens: 2000    # Reduce phase limit
+  concurrency: 32            # Parallel requests
+  drift_k_followups: 20      # Follow-up queries per iteration
+  primer_folds: 5            # Search priming folds
+  primer_llm_max_tokens: 12000
+  n_depth: 3                 # Maximum iteration depth
+```
+
+### 20.4 Rate Limiting & Retries
+
+```yaml
+# In model definition
+max_retries: 10              # Maximum retry attempts
+max_retry_wait: 10.0         # Max backoff seconds
+request_timeout: 180.0       # Per-request timeout
+concurrent_requests: 25      # Parallel requests allowed
+tokens_per_minute: null      # Token rate limit (optional)
+requests_per_minute: null    # Request rate limit (optional)
+```
+
+---
+
+## 21. References
 
 1. Edge, D., et al. (2024). "From Local to Global: A Graph RAG Approach to Query-Focused Summarization." arXiv:2404.16130
 2. Microsoft GraphRAG Documentation: https://microsoft.github.io/graphrag/
