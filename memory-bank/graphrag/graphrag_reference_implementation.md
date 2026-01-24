@@ -1335,7 +1335,240 @@ requests_per_minute: null    # Request rate limit (optional)
 
 ---
 
-## 21. References
+## 21. Expected LLM Response Structures
+
+This section consolidates all expected response formats from LLM calls throughout the pipeline.
+
+### 21.1 Entity & Relationship Extraction Response
+
+**Format:** Delimited tuples (not JSON)
+
+**Delimiters:**
+| Delimiter | Default Value | Purpose |
+|-----------|---------------|---------|
+| `tuple_delimiter` | `<\|>` | Separates fields within a record |
+| `record_delimiter` | `##` | Separates records in the list |
+| `completion_delimiter` | `<\|COMPLETE\|>` | Marks end of extraction |
+
+**Entity Record Structure:**
+```
+("entity"<|>ENTITY_NAME<|>ENTITY_TYPE<|>ENTITY_DESCRIPTION)
+```
+
+| Field | Type | Constraints |
+|-------|------|-------------|
+| `entity_name` | string | Capitalized, canonical name |
+| `entity_type` | string | Must be from `{entity_types}` list |
+| `entity_description` | string | Comprehensive description |
+
+**Relationship Record Structure:**
+```
+("relationship"<|>SOURCE_ENTITY<|>TARGET_ENTITY<|>RELATIONSHIP_DESCRIPTION<|>RELATIONSHIP_STRENGTH)
+```
+
+| Field | Type | Constraints |
+|-------|------|-------------|
+| `source_entity` | string | Must match an extracted entity name |
+| `target_entity` | string | Must match an extracted entity name |
+| `relationship_description` | string | Why entities are related |
+| `relationship_strength` | numeric | Integer/float, typically 1-10 |
+
+**Complete Response Example:**
+```
+("entity"<|>CENTRAL INSTITUTION<|>ORGANIZATION<|>The Central Institution is the Federal Reserve of Verdantis)
+##
+("entity"<|>MARTIN SMITH<|>PERSON<|>Martin Smith is the chair of the Central Institution)
+##
+("relationship"<|>MARTIN SMITH<|>CENTRAL INSTITUTION<|>Martin Smith is the Chair of the Central Institution<|>9)
+<|COMPLETE|>
+```
+
+### 21.2 Gleaning Loop Response
+
+**Format:** Single character
+
+**Expected Values:**
+| Response | Meaning | Action |
+|----------|---------|--------|
+| `Y` | More entities exist | Continue extraction |
+| `N` | Extraction complete | Stop gleaning loop |
+
+### 21.3 Community Report Response
+
+**Format:** JSON object
+
+**Schema:**
+```json
+{
+    "title": "<string: short community name with key entities>",
+    "summary": "<string: executive summary, 2-3 sentences>",
+    "rating": "<float: 0.0-10.0 impact severity>",
+    "rating_explanation": "<string: single sentence justification>",
+    "findings": [
+        {
+            "summary": "<string: insight title>",
+            "explanation": "<string: detailed explanation with [Data: ...] citations>"
+        }
+    ]
+}
+```
+
+| Field | Type | Constraints |
+|-------|------|-------------|
+| `title` | string | Short, specific, includes entity names |
+| `summary` | string | Executive overview of community structure |
+| `rating` | float | 0.0 (no impact) to 10.0 (critical impact) |
+| `rating_explanation` | string | Single sentence explaining rating |
+| `findings` | array | 5-10 insight objects |
+| `findings[].summary` | string | Brief insight title |
+| `findings[].explanation` | string | Multi-paragraph explanation with citations |
+
+**Citation Format in Findings:**
+```
+[Data: Entities (5, 7); Relationships (23, 45); Claims (2, 7, 34, +more)]
+```
+
+### 21.4 Map Phase Response (Global Search)
+
+**Format:** JSON object
+
+**Schema:**
+```json
+{
+    "points": [
+        {
+            "description": "<string: key point with [Data: Reports (...)] citations>",
+            "score": "<integer: 0-100 importance score>"
+        }
+    ]
+}
+```
+
+| Field | Type | Constraints |
+|-------|------|-------------|
+| `points` | array | List of key point objects |
+| `points[].description` | string | Comprehensive point description with citations |
+| `points[].score` | integer | 0 = "I don't know", 1-100 = importance level |
+
+**Score Interpretation:**
+| Range | Meaning |
+|-------|---------|
+| 0 | No relevant information / "I don't know" |
+| 1-30 | Marginally relevant |
+| 31-70 | Moderately helpful |
+| 71-100 | Highly relevant, directly answers question |
+
+**Example:**
+```json
+{
+    "points": [
+        {
+            "description": "The Central Bank announced rate changes affecting multiple sectors [Data: Reports (2, 7, 15)]",
+            "score": 85
+        },
+        {
+            "description": "Market reactions were mixed across regions [Data: Reports (3, 8)]",
+            "score": 62
+        }
+    ]
+}
+```
+
+### 21.5 Local Search Response
+
+**Format:** Freeform markdown text
+
+**Required Elements:**
+- Markdown formatting with headers/sections appropriate to length
+- Data citations: `[Data: <dataset> (record ids)]`
+- Maximum 5 record IDs per citation (use `+more` for additional)
+
+**Citation Datasets Available:**
+| Dataset | Contains |
+|---------|----------|
+| `Entities` | Entity records |
+| `Relationships` | Relationship records |
+| `Sources` | Text unit records |
+| `Reports` | Community report records |
+| `Claims` | Covariate records (if enabled) |
+
+**Example Response:**
+```markdown
+## Overview
+
+The Central Institution plays a key role in monetary policy [Data: Entities (5, 12); Reports (3)].
+
+## Key Findings
+
+Martin Smith, as Chair, influences rate decisions [Data: Entities (7); Relationships (23, 45, 67, 89, +more)].
+
+The Market Strategy Committee meets regularly to assess conditions [Data: Sources (15, 16); Reports (1, 3)].
+```
+
+### 21.6 Reduce Phase Response (Global Search)
+
+**Format:** Freeform markdown text
+
+**Required Elements:**
+- Synthesized response from analyst reports
+- Markdown formatting with sections
+- Preserved data citations from analyst reports
+- No mention of "analysts" in final output
+
+**Same citation rules as Local Search.**
+
+### 21.7 Entity Description Summarization Response
+
+**Format:** Plain text string
+
+**Purpose:** Consolidate multiple descriptions of same entity into single coherent description.
+
+**Input:** Multiple descriptions separated by delimiter
+**Output:** Single summarized description (max `max_length` tokens)
+
+### 21.8 Relationship Description Summarization Response
+
+**Format:** Plain text string
+
+**Purpose:** Consolidate multiple relationship descriptions into single coherent description.
+
+**Input:** Multiple descriptions for same (source, target) pair
+**Output:** Single summarized description (max `max_length` tokens)
+
+### 21.9 Response Parsing Notes
+
+**Extraction Parsing:**
+```python
+# Pseudocode for parsing extraction response
+records = response.split(record_delimiter)  # Split by ##
+for record in records:
+    if completion_delimiter in record:
+        break  # End of extraction
+    fields = record.split(tuple_delimiter)  # Split by <|>
+    record_type = fields[0].strip('(")')    # "entity" or "relationship"
+    if record_type == "entity":
+        name, type, description = fields[1], fields[2], fields[3]
+    elif record_type == "relationship":
+        source, target, description, weight = fields[1], fields[2], fields[3], fields[4]
+```
+
+**JSON Parsing:**
+- Community reports and map responses are parsed as JSON
+- Invalid JSON triggers error handling / retry
+- Empty or malformed responses return default values
+
+**Weight Parsing:**
+```python
+# Relationship weight with fallback
+try:
+    weight = float(weight_string)
+except ValueError:
+    weight = 1.0  # Default weight if unparseable
+```
+
+---
+
+## 22. References
 
 1. Edge, D., et al. (2024). "From Local to Global: A Graph RAG Approach to Query-Focused Summarization." arXiv:2404.16130
 2. Microsoft GraphRAG Documentation: https://microsoft.github.io/graphrag/
