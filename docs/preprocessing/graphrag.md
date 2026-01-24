@@ -64,16 +64,10 @@ The algorithm has two phases:
 
 RAGLab implements GraphRAG across two stages with several adaptations for the dual-domain corpus (neuroscience + philosophy):
 
-```bash
-# Stage 4.5: Entity extraction with curated types
-python -m src.stages.run_stage_4_5_graph_extract --strategy semantic_std3
-
-# Stage 6b: Neo4j upload + Leiden + summaries + entity embeddings
-docker compose up -d neo4j
-python -m src.stages.run_stage_6b_neo4j
-```
 
 **Curated entity types.** Entity types are defined in `src/graph/graphrag_types.yaml` (8 types). Following industry best practices, types are minimal and non-overlapping: 2 generic (PERSON, WORK), 3 neuroscience (BRAIN_STRUCTURE, CHEMICAL, DISORDER), 2 psychology bridge (MENTAL_STATE, BEHAVIOR), and 1 philosophy (PRINCIPLE). Relationship types remain open-ended per the GraphRAG paper.
+
+**Strict mode filtering.** Following LangChain's approach, RAGLab discards extracted entities whose types don't match the curated list (`GRAPHRAG_STRICT_MODE = True` in config). This prevents graph fragmentation when the LLM ignores type constraints—entities with wrong types are removed rather than stored with inconsistent labels. Relationships involving discarded entities are also pruned during Neo4j upload (source/target won't exist in the entity set).
 
 <details>
 <summary><strong>Entity type design rationale</strong></summary>

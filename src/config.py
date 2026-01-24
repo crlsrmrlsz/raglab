@@ -739,6 +739,10 @@ GRAPHRAG_ENTITY_EXTRACTION_TOP_K = 10   # Max entities from embedding search
 GRAPHRAG_ENTITY_MIN_SIMILARITY = 0.3    # Minimum cosine similarity threshold
 GRAPHRAG_USE_EMBEDDING_EXTRACTION = True  # Use embedding-based extraction (fallback to LLM)
 
+# Strict mode: discard entities with types not in graphrag_types.yaml
+# Follows LangChain's approach to prevent graph fragmentation from type drift
+GRAPHRAG_STRICT_MODE = True
+
 
 def get_entity_collection_name() -> str:
     """Generate entity collection name for GraphRAG embedding extraction.

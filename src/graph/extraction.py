@@ -38,12 +38,13 @@ from src.config import (
     DIR_FINAL_CHUNKS,
     GRAPHRAG_CHUNK_EXTRACTION_PROMPT,
     GRAPHRAG_SUMMARY_MODEL,
+    GRAPHRAG_STRICT_MODE,
 )
 from src.prompts import (
     GRAPHRAG_ENTITY_SUMMARIZE_PROMPT,
     GRAPHRAG_RELATIONSHIP_SUMMARIZE_PROMPT,
 )
-from src.graph.graphrag_types import get_entity_types_string
+from src.graph.graphrag_types import get_entity_types, get_entity_types_string
 from src.shared.openrouter_client import call_structured_completion, call_chat_completion
 from src.shared.files import setup_logging, OverwriteContext
 
@@ -77,6 +78,39 @@ class ExtractionResult(BaseModel):
 
 
 # ============================================================================
+# Strict Mode Filtering
+# ============================================================================
+
+def filter_entities_strict(
+    entities: list[ExtractedEntity],
+    allowed_types: set[str],
+) -> tuple[list[ExtractedEntity], int]:
+    """Filter entities to only those with allowed types (case-insensitive).
+
+    Follows LangChain's approach: when the LLM ignores type constraints and
+    invents new types, discard those entities to prevent graph fragmentation.
+
+    Args:
+        entities: List of extracted entities to filter.
+        allowed_types: Set of allowed entity type names.
+
+    Returns:
+        Tuple of (filtered_entities, discarded_count).
+    """
+    allowed_lower = {t.lower() for t in allowed_types}
+    filtered = []
+    discarded = 0
+
+    for entity in entities:
+        if entity.entity_type.lower() in allowed_lower:
+            filtered.append(entity)
+        else:
+            discarded += 1
+
+    return filtered, discarded
+
+
+# ============================================================================
 # Core Extraction Functions
 # ============================================================================
 
@@ -101,13 +135,23 @@ def extract_chunk(
         max_entities=GRAPHRAG_MAX_ENTITIES,
         max_relationships=GRAPHRAG_MAX_RELATIONSHIPS,
     )
-    return call_structured_completion(
+    result = call_structured_completion(
         messages=[{"role": "user", "content": prompt}],
         model=model,
         response_model=ExtractionResult,
         temperature=0.0,
         max_tokens=GRAPHRAG_MAX_EXTRACTION_TOKENS,
     )
+
+    # Apply strict mode filtering if enabled
+    if GRAPHRAG_STRICT_MODE:
+        allowed = set(get_entity_types())
+        filtered, discarded = filter_entities_strict(result.entities, allowed)
+        if discarded > 0:
+            logger.debug(f"Strict mode: discarded {discarded} entities with non-matching types")
+        result = ExtractionResult(entities=filtered, relationships=result.relationships)
+
+    return result
 
 
 def extract_book(
