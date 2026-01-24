@@ -357,9 +357,9 @@ flowchart TB
                 VectorSearch["Standard vector search<br/>query embedding → top-k chunks"]
             end
 
-            subgraph CommunityPath["Community Path (Weaviate)"]
+            subgraph CommunityPath["Community Path (Neo4j → JSON)"]
                 direction TB
-                CommunitySearch["query_communities_by_vector()<br/>top_k=3 (GRAPHRAG_TOP_COMMUNITIES)<br/>ALL levels by similarity"]
+                CommunitySearch["get_entity_community_ids()<br/>Query community_id from matched entities<br/>Load from communities.json"]
             end
         end
 
@@ -430,7 +430,7 @@ flowchart TB
 | `GRAPHRAG_ENTITY_MIN_SIMILARITY` | 0.3 | config.py:744 | Minimum cosine similarity |
 | `GRAPHRAG_USE_EMBEDDING_EXTRACTION` | True | config.py:745 | Use embedding (vs LLM only) |
 | `GRAPHRAG_TRAVERSE_DEPTH` | 2 | config.py:725 | Neo4j traversal hops |
-| `GRAPHRAG_TOP_COMMUNITIES` | 3 | config.py:724 | Communities for local queries |
+| `GRAPHRAG_TOP_COMMUNITIES` | 3 | config.py:724 | Communities for global queries (local uses entity membership) |
 | `GRAPHRAG_RRF_K` | 60 | config.py:726 | RRF fusion constant |
 | `GRAPHRAG_MAP_MAX_TOKENS` | 300 | config.py:738 | Max tokens per map response |
 | `GRAPHRAG_REDUCE_MAX_TOKENS` | 500 | config.py:739 | Max tokens for reduce |
@@ -467,10 +467,10 @@ flowchart TB
 | Aspect | RAGLab | Microsoft GraphRAG |
 |--------|--------|-------------------|
 | **Entity validation** | Neo4j lookup | N/A (assumes exists) |
-| **Graph traversal** | `max_hops=2`, `limit=50` | Configurable depth |
-| **Chunk retrieval** | Weaviate batch fetch | Text unit lookup |
-| **Community context** | Yes, `top_k=3` communities | Yes, configurable |
-| **Community level** | All levels (similarity-based) | Selected level |
+| **Graph traversal** | Neo4j Cypher `max_hops=2`, `limit=50` | No traversal - uses stored text_unit_ids |
+| **Chunk retrieval** | Weaviate batch fetch (ContainsAny) | Text unit lookup by stored IDs |
+| **Community context** | By entity membership (aligned with Microsoft) | By entity membership |
+| **Community level** | L0 only (entities store community_id at finest level) | Selected level |
 | **Fusion method** | RRF (k=60) | RRF or weighted |
 | **Graph ranking** | By path_length (shorter=better) | By relevance score |
 
@@ -494,21 +494,23 @@ flowchart TB
 | **Level convention** | L0=coarsest, L2=finest | L0=coarsest (same) |
 | **Number of levels** | 3 (configurable) | Variable |
 | **Global query level** | L0 (coarsest) | L0 (coarsest) |
-| **Local query level** | All (by similarity) | Selected level |
+| **Local query level** | By entity membership (community_id property) | Selected level |
 | **Algorithm** | Neo4j GDS Leiden | graspologic Leiden |
 | **Determinism** | seed=42, concurrency=1 | seed only |
 
 ### Key Differences Summary
 
-1. **Community embeddings:** RAGLab embeds community summaries and stores in Weaviate; Microsoft does not. This enables faster community retrieval for local queries via HNSW.
+1. **Graph traversal (Neo4j pattern):** RAGLab uses Cypher traversal for multi-hop discovery. Microsoft uses direct text_unit_id lookup (no traversal). This enables cross-domain connections in the dual-domain corpus.
 
-2. **Dual storage:** RAGLab uses Neo4j for graph structure AND Weaviate for vector search. Microsoft uses Parquet files for everything.
+2. **Community context (aligned):** RAGLab now uses entity membership for local query community retrieval, matching Microsoft's approach.
 
-3. **Entity extraction fallback:** RAGLab has a 3-tier fallback (embedding → LLM → regex). Microsoft relies on embedding only.
+3. **Community embeddings:** RAGLab embeds community summaries in Weaviate for global queries. Microsoft does not embed summaries.
 
-4. **Community context in local queries:** RAGLab retrieves top 3 communities across ALL levels by similarity. Microsoft typically uses a specific level.
+4. **Dual storage:** RAGLab uses Neo4j for graph + Weaviate for vectors. Microsoft uses Parquet files.
 
-5. **Map-reduce input:** RAGLab formats community context as summary + top 5 entities + top 5 relationships. Microsoft uses full community reports with more detail.
+5. **Entity extraction fallback:** RAGLab has 3-tier fallback (embedding → LLM → regex). Microsoft uses embedding only.
+
+6. **Map-reduce input:** RAGLab uses summary + top 5 entities + top 5 relationships. Microsoft uses full community reports.
 
 ---
 
