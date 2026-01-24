@@ -99,6 +99,41 @@ python -m src.stages.run_stage_6b_neo4j
 
 </details>
 
+<details>
+<summary><strong>Removed: Auto-tuning process</strong></summary>
+
+RAGLab originally implemented Microsoft's auto-tuning approach for entity type discovery. The process was:
+
+1. **Open-ended extraction** — LLM extracts entities with freely-assigned types (no predefined schema)
+2. **Type aggregation** — Collect all unique types across corpus with frequency counts
+3. **Stratified consolidation** — LLM proposes clean taxonomy, balancing types across neuroscience vs philosophy corpora
+4. **Save for query time** — Store `discovered_types.json` for entity matching
+
+**Top extracted types (by count):**
+
+| Type | Count | Issue |
+|------|-------|-------|
+| CONCEPT | 19,916 | Catch-all, too broad for retrieval |
+| BRAIN_REGION | 6,133 | Useful, kept as BRAIN_STRUCTURE |
+| NEURAL_STRUCTURE | 5,248 | Merged with BRAIN_REGION |
+| COGNITIVE_PROCESS | 4,482 | Merged into MENTAL_STATE |
+| RESEARCHER | 4,451 | Merged into PERSON |
+| HISTORICAL_FIGURE | 2,147 | Merged into PERSON |
+| BEHAVIOR | 2,134 | Kept |
+| PHILOSOPHER | 1,172 | Merged into PERSON |
+| EMOTION | 902 | Merged into MENTAL_STATE |
+
+**Why auto-tuning was removed:**
+
+- **CONCEPT dominated** (19,916 entities) — too generic for useful retrieval
+- **Person fragmentation** — 6 variants (RESEARCHER, PHILOSOPHER, HISTORICAL_FIGURE, PERSON, PEOPLE, RESEARCHERS) totaling ~9,000 entities that should be one type
+- **Consolidation overhead** — extra LLM calls during indexing without quality improvement
+- **Inconsistent runs** — open extraction produced different types on re-runs
+
+The curated 8-type schema provides consistent taxonomy without consolidation cost.
+
+</details>
+
 **Semantic chunking for entity extraction.** The paper uses fixed 300-token chunks, but RAGLab uses [semantic chunking](../chunking/semantic-chunking.md) (std coefficient=3.0) for GraphRAG. While entity deduplication happens at merge time regardless of chunk boundaries, *relationships* are extracted per-chunk—entities must appear together to form edges. Semantic chunking keeps related concepts together, improving relationship capture. The conservative std=3.0 threshold preserves 98% of sections as single chunks (avg 665 tokens for neuroscience, 1331 for philosophy), accepting some longer chunks to avoid splitting mid-argument.
 
 **Deterministic Leiden.** Stage 6b runs Leiden with `seed=42` and `concurrency=1`, guaranteeing identical community assignments on every run. This enables crash recovery: if summarization fails midway, re-running picks up where it stopped because community IDs remain stable.
