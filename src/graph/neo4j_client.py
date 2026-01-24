@@ -420,6 +420,10 @@ def find_entity_neighbors(
     Pre-normalizes the entity name using the same Python logic as upload
     (Unicode NFKC, lowercase, edge stopword removal, punctuation stripping).
 
+    Returns degree for combined_degree ranking (Microsoft GraphRAG approach):
+    combined_degree = start_degree + neighbor_degree
+    Higher combined_degree = more informative relationship (hub entities).
+
     Args:
         driver: Neo4j driver instance.
         entity_name: Name of the entity to start from.
@@ -427,12 +431,17 @@ def find_entity_neighbors(
         limit: Maximum number of results.
 
     Returns:
-        List of connected entities with relationship info.
+        List of connected entities with:
+        - name, entity_type, description, source_chunk_ids
+        - path_length: Number of hops from start entity
+        - degree: Neighbor's degree (number of relationships)
+        - start_degree: Start entity's degree (for combined_degree calculation)
 
     Example:
         >>> neighbors = find_entity_neighbors(driver, "dopamine", max_hops=2)
         >>> for n in neighbors:
-        ...     print(n["name"], n["path_length"])
+        ...     combined = n["start_degree"] + n["degree"]
+        ...     print(n["name"], f"combined_degree={combined}")
     """
     from src.graph.schemas import GraphEntity
 
@@ -448,7 +457,9 @@ def find_entity_neighbors(
         neighbor.entity_type as entity_type,
         neighbor.description as description,
         neighbor.source_chunk_ids as source_chunk_ids,
-        length(path) as path_length
+        length(path) as path_length,
+        coalesce(neighbor.degree, 0) as degree,
+        coalesce(start.degree, 0) as start_degree
     ORDER BY path_length, name
     LIMIT $limit
     """

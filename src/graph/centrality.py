@@ -145,3 +145,52 @@ def write_pagerank_to_neo4j(
 
     logger.info(f"Wrote PageRank scores to {total_updated} Entity nodes")
     return total_updated
+
+
+def compute_and_store_degree(driver: Driver) -> int:
+    """Compute entity degree and store on Entity nodes.
+
+    Degree is the number of RELATED_TO relationships connected to an entity.
+    Used for combined_degree ranking in local search (Microsoft GraphRAG approach):
+    combined_degree = degree(source_entity) + degree(neighbor)
+
+    Higher-degree entities are "hub" nodes that carry more information value.
+
+    Args:
+        driver: Neo4j driver instance.
+
+    Returns:
+        Number of nodes updated with degree property.
+
+    Example:
+        >>> count = compute_and_store_degree(driver)
+        >>> print(f"Updated {count} nodes with degree")
+    """
+    query = """
+    MATCH (e:Entity)
+    OPTIONAL MATCH (e)-[r:RELATED_TO]-()
+    WITH e, count(r) as degree
+    SET e.degree = degree
+    RETURN count(e) as count
+    """
+
+    result = driver.execute_query(query)
+    count = result.records[0]["count"]
+
+    # Log statistics
+    stats_query = """
+    MATCH (e:Entity)
+    WHERE e.degree IS NOT NULL
+    RETURN min(e.degree) as min_deg, max(e.degree) as max_deg, avg(e.degree) as avg_deg
+    """
+    stats = driver.execute_query(stats_query)
+    if stats.records:
+        rec = stats.records[0]
+        logger.info(
+            f"Stored degree for {count} Entity nodes: "
+            f"min={rec['min_deg']}, max={rec['max_deg']}, avg={rec['avg_deg']:.2f}"
+        )
+    else:
+        logger.info(f"Stored degree for {count} Entity nodes")
+
+    return count

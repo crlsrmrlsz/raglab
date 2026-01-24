@@ -105,7 +105,7 @@ flowchart TB
 |---------|--------------------|-----------------------|--------|
 | Local Search | Entity matching → traversal | Entity matching → traversal | Matches |
 | Entity Matching | Embedding similarity | Embedding similarity + LLM fallback | Enhanced |
-| Relationship Prioritization | combined_degree | path_length (shorter = higher) | Different |
+| Relationship Prioritization | combined_degree | **combined_degree** (start + neighbor degree) | Matches |
 | Token Budget | 50% text, 10% community | RRF merge (no explicit budget) | Different |
 | Community Context | In token budget | By entity membership (separate) | Different |
 | Global Search | Map-reduce over communities | Map-reduce over L0 communities | Matches |
@@ -513,7 +513,7 @@ flowchart TB
 
     subgraph RRFMerge["RRF Fusion"]
         GRAPH_CHUNKS --> FETCH[fetch_chunks_by_ids<br/>Batch retrieval]
-        FETCH --> RANK_GRAPH[_build_graph_ranked_list<br/>Sort by path_length]
+        FETCH --> RANK_GRAPH[_build_graph_ranked_list<br/>Sort by combined_degree]
         RANK_GRAPH --> RRF[reciprocal_rank_fusion<br/>k=60]
         VECTOR_CHUNKS --> RRF
         RRF --> MERGED[Merged Results<br/>Chunks in BOTH lists boosted]
@@ -537,7 +537,7 @@ flowchart TB
 | Aspect | Microsoft Reference | RAGLab |
 |--------|--------------------|----|
 | Entity matching | Embedding similarity | Embedding + LLM fallback + Regex |
-| Relationship ranking | `combined_degree` | `path_length` (shorter = higher) |
+| Relationship ranking | `combined_degree` | `combined_degree` (start + neighbor degree) |
 | Context composition | Token budget allocation | RRF merge (no explicit budget) |
 | Community retrieval | In token budget | By entity membership (separate context) |
 
@@ -887,7 +887,7 @@ def hybrid_graph_retrieval(query, driver, vector_results, top_k=10):
     # Fetch ALL graph-discovered chunks from Weaviate
     all_graph_chunks = fetch_chunks_by_ids(graph_chunk_ids)
 
-    # Build graph-ranked list ordered by path_length
+    # Build graph-ranked list ordered by combined_degree (Microsoft approach)
     graph_ranked_results = _build_graph_ranked_list(graph_context, all_graph_chunks)
 
     # RRF merge: chunks in BOTH lists get boosted
@@ -969,7 +969,10 @@ def run_leiden(gds, graph, resolution=1.0, max_levels=10, seed=42, concurrency=1
 ### 6. Relationship Prioritization
 
 **Microsoft**: `combined_degree = degree(source) + degree(target)`
-**RAGLab**: `path_length` (shorter path = higher rank)
+**RAGLab**: `combined_degree = start_degree + neighbor_degree` (Matches Microsoft)
+
+Higher combined_degree indicates relationships involving "hub" entities that are
+well-connected in the knowledge graph, providing more informative context.
 
 ### 7. Community Summary Format
 

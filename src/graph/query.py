@@ -552,23 +552,27 @@ def _build_graph_ranked_list(
     graph_context: list[dict[str, Any]],
     fetched_chunks: list[SearchResult],
 ) -> list[SearchResult]:
-    """Build a ranked list of graph results ordered by path_length.
+    """Build a ranked list of graph results ordered by combined_degree.
 
-    Shorter path_length = closer to query entity = higher rank.
+    Microsoft GraphRAG approach: combined_degree = start_degree + neighbor_degree
+    Higher combined_degree = relationship involves hub entities = more informative.
     This list is used for RRF merging with vector results.
 
     Args:
-        graph_context: List of entities with path_length and source_chunk_ids (list).
+        graph_context: List of entities with degree, start_degree, and source_chunk_ids.
         fetched_chunks: SearchResult objects fetched from Weaviate.
 
     Returns:
-        List of SearchResult ordered by graph relevance (path_length ascending).
+        List of SearchResult ordered by graph relevance (combined_degree descending).
     """
-    # Build chunk_id -> minimum path_length mapping
-    # A chunk might be reached via multiple entities; use shortest path
-    chunk_path_lengths: dict[str, int] = {}
+    # Build chunk_id -> maximum combined_degree mapping
+    # A chunk might be reached via multiple entities; use highest combined_degree
+    chunk_combined_degrees: dict[str, int] = {}
     for entity in graph_context:
-        path_len = entity.get("path_length", 999)
+        # combined_degree = start_degree + neighbor_degree (Microsoft approach)
+        start_degree = entity.get("start_degree", 0)
+        neighbor_degree = entity.get("degree", 0)
+        combined_degree = start_degree + neighbor_degree
 
         # Handle new format: source_chunk_ids as list
         chunk_ids = entity.get("source_chunk_ids", [])
@@ -579,16 +583,23 @@ def _build_graph_ranked_list(
 
         for chunk_id in chunk_ids:
             if chunk_id:
-                if chunk_id not in chunk_path_lengths:
-                    chunk_path_lengths[chunk_id] = path_len
+                if chunk_id not in chunk_combined_degrees:
+                    chunk_combined_degrees[chunk_id] = combined_degree
                 else:
-                    chunk_path_lengths[chunk_id] = min(chunk_path_lengths[chunk_id], path_len)
+                    # Use maximum combined_degree if chunk reached via multiple paths
+                    chunk_combined_degrees[chunk_id] = max(
+                        chunk_combined_degrees[chunk_id], combined_degree
+                    )
 
     # Create lookup for fetched chunks
     fetched_by_id = {c.chunk_id: c for c in fetched_chunks}
 
-    # Build ranked list: sort by path_length (ascending)
-    ranked_chunk_ids = sorted(chunk_path_lengths.keys(), key=lambda x: chunk_path_lengths[x])
+    # Build ranked list: sort by combined_degree (DESCENDING - higher = better)
+    ranked_chunk_ids = sorted(
+        chunk_combined_degrees.keys(),
+        key=lambda x: chunk_combined_degrees[x],
+        reverse=True,
+    )
 
     # Create SearchResult list in ranked order
     ranked_results = []
@@ -684,7 +695,8 @@ def hybrid_graph_retrieval(
     all_graph_chunks = fetch_chunks_by_ids(graph_chunk_ids, collection_name)
 
     if all_graph_chunks:
-        # Build graph-ranked list ordered by path_length (shorter = higher rank)
+        # Build graph-ranked list ordered by combined_degree (Microsoft approach)
+        # Higher combined_degree = hub entities = more informative
         graph_context = graph_meta.get("graph_context", [])
         graph_ranked_results = _build_graph_ranked_list(graph_context, all_graph_chunks)
 

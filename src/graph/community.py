@@ -738,11 +738,13 @@ def detect_and_summarize_communities(
 
         # Step 4.5: Compute PageRank for entity importance ranking
         try:
-            from .centrality import compute_pagerank, write_pagerank_to_neo4j
+            from .centrality import compute_pagerank, write_pagerank_to_neo4j, compute_and_store_degree
             pagerank_scores = compute_pagerank(gds, graph)
             write_pagerank_to_neo4j(driver, pagerank_scores)
+            # Compute degree for combined_degree ranking (Microsoft GraphRAG approach)
+            compute_and_store_degree(driver)
         except Exception as e:
-            logger.warning(f"PageRank computation failed: {e}")
+            logger.warning(f"PageRank/degree computation failed: {e}")
 
         # Step 5: Parse hierarchy into levels
         levels = parse_leiden_hierarchy(leiden_result, max_levels=hierarchy_levels)
