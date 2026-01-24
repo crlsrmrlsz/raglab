@@ -297,14 +297,14 @@ class Community(BaseModel):
     algorithm. Each community has an LLM-generated summary that
     captures the main theme and relationships.
 
-    Supports hierarchical structure with parent/child pointers:
-    - Level 0 (C0): Finest granularity, specific topics
+    Hierarchy levels follow Microsoft GraphRAG convention:
+    - Level 0 (C0): Coarsest granularity, corpus-wide themes
     - Level 1 (C1): Medium granularity, domain themes
-    - Level 2 (C2): Coarsest, corpus-wide themes
+    - Level 2 (C2): Finest granularity, specific topics
 
     Attributes:
         community_id: Unique identifier (e.g., "community_L0_42").
-        level: Hierarchy level (0 = finest, higher = coarser).
+        level: Hierarchy level (0 = coarsest, higher = finer).
         parent_id: Parent community ID at coarser level (None if top).
         members: List of entities in this community.
         member_count: Number of entities in this community.
@@ -325,7 +325,7 @@ class Community(BaseModel):
     """
 
     community_id: str = Field(..., description="Unique community identifier")
-    level: int = Field(default=0, description="Hierarchy level (0 = finest)")
+    level: int = Field(default=0, description="Hierarchy level (0 = coarsest, higher = finer)")
     parent_id: Optional[str] = Field(
         default=None,
         description="Parent community ID at coarser level",

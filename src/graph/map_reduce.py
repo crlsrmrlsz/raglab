@@ -5,13 +5,15 @@
 Microsoft GraphRAG (arXiv:2404.16130) uses map-reduce for global queries:
 
 **Local queries**: "What is dopamine?" → Entity traversal + vector search
-**Global queries**: "What are the main themes?" → Map-reduce over communities
+**Global queries**: "What are the main themes?" → Map-reduce over L0 communities
 
-Map-Reduce approach:
-1. **Map Phase**: Generate partial answer from each community summary
-2. **Reduce Phase**: Synthesize partial answers into final response
+For abstract queries like "What are the main themes?", we:
+1. Retrieve L0 communities (coarsest level = corpus-wide themes)
+2. Map: Generate partial answer per community (parallel LLM calls)
+3. Reduce: Synthesize partial answers into coherent response
 
 Benefits:
+- L0 communities capture corpus-wide themes (fewer, larger communities)
 - Parallelizes LLM calls (50% latency reduction with async)
 - Captures diverse perspectives from different communities
 - Scales to large corpora without exceeding context limits
@@ -19,7 +21,7 @@ Benefits:
 ## Data Flow
 
 1. Query classification: local vs global
-2. For global: Retrieve top-k communities (C2 level preferred)
+2. For global: Retrieve top-k L0 (coarsest) communities
 3. Map: Parallel LLM calls → partial answers
 4. Reduce: Single LLM call → final synthesis
 """

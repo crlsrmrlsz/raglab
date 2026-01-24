@@ -3,13 +3,13 @@
 ## RAG Theory: Hierarchical Community Structure
 
 Microsoft GraphRAG (arXiv:2404.16130) uses Leiden's multi-level output:
-- Level 0 (C0): Finest granularity - specific topics within domains
+- Level 0 (C0): Coarsest granularity - corpus-wide themes
 - Level 1 (C1): Medium granularity - domain-level themes
-- Level 2 (C2): Coarsest granularity - corpus-wide themes
+- Level 2 (C2): Finest granularity - specific topics within domains
 
 Query routing uses hierarchy:
-- Local queries (entity-specific): Use C0 communities
-- Global queries (thematic): Use C2 communities with map-reduce
+- Global queries (thematic): Use L0 (coarsest) communities with map-reduce
+- Local queries (entity-specific): Use L2 (finest) communities
 
 ## Data Flow
 
@@ -35,7 +35,7 @@ class CommunityLevel:
     """Single level in the community hierarchy.
 
     Attributes:
-        level: Hierarchy depth (0=finest, 1=medium, 2=coarsest).
+        level: Hierarchy depth (0=coarsest, higher=finer).
         communities: Map from community_id to set of entity node IDs.
         parent_map: Map from community_id to parent community_id at next level.
         child_map: Map from community_id to list of child community_ids.
@@ -115,12 +115,11 @@ def parse_leiden_hierarchy(
         # if Leiden didn't produce that many levels
         hierarchy = []
 
-        # Intermediate IDs are stored coarse-to-fine in Neo4j GDS
-        # Reverse them to get fine-to-coarse (L0, L1, L2)
+        # Intermediate IDs from Neo4j GDS: index 0 = coarsest, last = finest
+        # Keep this order to match Microsoft GraphRAG convention (L0 = coarsest)
         if intermediate_ids:
-            # intermediate_ids[0] is usually the coarsest level
-            # The last element is finest (same as communityId)
-            hierarchy = list(reversed(intermediate_ids))
+            # intermediate_ids[0] = coarsest (L0), last element = finest (L2)
+            hierarchy = list(intermediate_ids)
         else:
             # No hierarchy data, just use the final community ID for L0
             hierarchy = [final_community_id]

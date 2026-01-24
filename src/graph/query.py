@@ -339,6 +339,7 @@ def retrieve_community_context(
 def retrieve_communities_for_map_reduce(
     query: str,
     top_k: int = GRAPHRAG_TOP_COMMUNITIES,
+    level: Optional[int] = None,
 ) -> list[Community]:
     """Retrieve full Community objects for map-reduce processing.
 
@@ -349,6 +350,7 @@ def retrieve_communities_for_map_reduce(
     Args:
         query: User query string.
         top_k: Number of communities to retrieve.
+        level: Optional hierarchy level filter (0=coarsest for global queries).
 
     Returns:
         List of Community objects (full data for map-reduce).
@@ -359,6 +361,14 @@ def retrieve_communities_for_map_reduce(
     except FileNotFoundError:
         logger.warning("No communities file found for map-reduce")
         return []
+
+    if not communities:
+        return []
+
+    # Filter by level if specified (L0 = coarsest for global queries)
+    if level is not None:
+        communities = [c for c in communities if c.level == level]
+        logger.debug(f"Filtered to {len(communities)} communities at level {level}")
 
     if not communities:
         return []
@@ -693,9 +703,13 @@ def hybrid_graph_retrieval_with_map_reduce(
     if use_map_reduce and should_use_map_reduce(query, extracted_entities):
         logger.info("Global query detected, using map-reduce")
 
-        # Retrieve communities for map-reduce
+        # Retrieve L0 (coarsest) communities for global query map-reduce
         from src.config import GRAPHRAG_MAP_REDUCE_TOP_K
-        communities = retrieve_communities_for_map_reduce(query, top_k=GRAPHRAG_MAP_REDUCE_TOP_K)
+        communities = retrieve_communities_for_map_reduce(
+            query,
+            top_k=GRAPHRAG_MAP_REDUCE_TOP_K,
+            level=0,  # L0 = coarsest level for global/abstract queries
+        )
 
         if communities:
             # Run map-reduce

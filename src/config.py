@@ -721,7 +721,7 @@ GRAPHRAG_TRAVERSE_DEPTH = 2         # Hops for entity traversal
 GRAPHRAG_RRF_K = 60                 # RRF constant for score fusion
 
 # Hierarchical community parameters (Microsoft GraphRAG paper)
-# Level 0 (C0) = finest granularity, Level 2 (C2) = coarsest (corpus themes)
+# Level 0 (C0) = coarsest granularity (corpus themes), higher levels = finer
 GRAPHRAG_MAX_HIERARCHY_LEVELS = 3   # Number of levels: C0, C1, C2
 
 # PageRank centrality parameters

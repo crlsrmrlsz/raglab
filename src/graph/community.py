@@ -829,12 +829,15 @@ def detect_and_summarize_communities(
                 # Get node IDs for this community at this level
                 node_ids = level_data.communities.get(community_id, set())
 
-                if level_idx == 0:
-                    # Level 0: use community_id-based queries (more efficient)
+                # GDS Leiden writes community_id property for the FINEST level only
+                # With Microsoft convention (L0=coarsest), finest is max_level
+                max_level = hierarchy_levels - 1  # e.g., 2 for 3 levels
+                if level_idx == max_level:
+                    # Finest level: use community_id-based queries (more efficient)
                     members = get_community_members(driver, community_id)
                     relationships = get_community_relationships(driver, community_id)
                 else:
-                    # Level 1+: use node ID-based queries (aggregated communities)
+                    # Coarser levels: use node ID-based queries (aggregated communities)
                     members = get_community_members_by_node_ids(driver, node_ids)
                     relationships = get_community_relationships_by_node_ids(driver, node_ids)
 
