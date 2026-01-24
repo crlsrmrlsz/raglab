@@ -319,12 +319,17 @@ flowchart TB
 | Aspect | RAGLab | Microsoft GraphRAG |
 |--------|--------|-------------------|
 | **Entity validation** | Neo4j lookup | N/A (assumes exists) |
-| **Graph traversal** | `max_hops=2`, `limit=50` | Configurable depth |
-| **Chunk retrieval** | Weaviate batch fetch (ContainsAny) | Text unit lookup |
-| **Community context** | Yes, `top_k=3` communities | Yes, configurable |
-| **Community level** | All levels (similarity-based) | Selected level |
+| **Graph traversal** | Neo4j Cypher `max_hops=2`, `limit=50` | No traversal - uses stored text_unit_ids |
+| **Chunk retrieval** | Weaviate batch fetch (ContainsAny) | Text unit lookup by stored IDs |
+| **Community context** | By entity membership (aligned with Microsoft) | By entity membership |
+| **Community level** | L0 only (finest level where entities have community_id) | Selected level |
 | **Fusion method** | RRF (k=60) | RRF or weighted |
 | **Graph ranking** | By path_length (shorter=better) | By relevance score |
+
+**Key implementation difference:**
+- RAGLab uses **Neo4j Cypher traversal** (Neo4j GraphRAG pattern) for multi-hop discovery
+- Microsoft uses **direct text_unit_id lookup** (simpler, no traversal at query time)
+- RAGLab's approach finds structurally related entities beyond initial matches
 
 ### Global Search Implementation
 
@@ -478,6 +483,9 @@ def normalized_name(self) -> str:
 
 ### RAGLab (src/config.py)
 ```python
+# Chunking (recommended for GraphRAG)
+GRAPHRAG_SEMANTIC_STD_COEFFICIENT = 2.0  # More granular chunks for entity extraction
+
 # Extraction
 GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-3-haiku"
 GRAPHRAG_MAX_ENTITIES = 10           # Per chunk
@@ -528,17 +536,21 @@ global_search:
 
 ## 10. Key Differences Summary
 
-1. **Community embeddings:** RAGLab embeds community summaries and stores in Weaviate; Microsoft does not. This enables faster community retrieval for local queries via HNSW.
+1. **Graph traversal (Neo4j pattern):** RAGLab uses Cypher traversal (`MATCH path = (start)-[*1..2]-(neighbor)`) for multi-hop discovery. Microsoft uses direct text_unit_id lookup (no traversal). RAGLab's approach finds structurally related entities beyond initial matches, valuable for dual-domain corpus.
 
-2. **Dual storage:** RAGLab uses Neo4j for graph structure AND Weaviate for vector search. Microsoft uses Parquet files for everything.
+2. **Community context (now aligned):** RAGLab now uses entity membership for community retrieval, matching Microsoft's approach. Previously used embedding similarity.
 
-3. **Entity extraction fallback:** RAGLab has a 3-tier fallback (embedding → LLM → regex). Microsoft relies on embedding only.
+3. **Community embeddings:** RAGLab embeds community summaries and stores in Weaviate; Microsoft does not. This enables faster community retrieval for global queries via HNSW.
 
-4. **Community context in local queries:** RAGLab retrieves top 3 communities across ALL levels by similarity. Microsoft typically uses a specific level.
+4. **Dual storage:** RAGLab uses Neo4j for graph structure AND Weaviate for vector search. Microsoft uses Parquet files for everything.
 
-5. **Map-reduce input:** RAGLab formats community context as summary + top 5 entities + top 5 relationships. Microsoft uses full community reports with more detail.
+5. **Entity extraction fallback:** RAGLab has a 3-tier fallback (embedding → LLM → regex). Microsoft relies on embedding only.
 
-6. **Determinism:** RAGLab enforces determinism with both seed=42 AND concurrency=1. Microsoft only uses seed.
+6. **Semantic chunking:** RAGLab recommends semantic chunking with std=2.0 for GraphRAG (more granular chunks). Microsoft uses fixed 300-token chunks.
+
+7. **Map-reduce input:** RAGLab formats community context as summary + top 5 entities + top 5 relationships. Microsoft uses full community reports with more detail.
+
+8. **Determinism:** RAGLab enforces determinism with both seed=42 AND concurrency=1. Microsoft only uses seed.
 
 ---
 
