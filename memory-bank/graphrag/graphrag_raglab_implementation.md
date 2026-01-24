@@ -54,7 +54,7 @@ flowchart TB
         SUMMARY --> JSON[communities.json]
 
         NEO4J --> ENTITY_EMB[Entity Embeddings]
-        ENTITY_EMB --> WEAVIATE_ENT[(Weaviate<br/>Entities_section800_embed3large_v1)]
+        ENTITY_EMB --> WEAVIATE_ENT[(Weaviate<br/>Entity_section800_v1)]
     end
 
     subgraph Phase3["Query Time"]
@@ -445,7 +445,7 @@ def build_community_context(members, relationships, max_tokens=8000):
 
 | Artifact | Microsoft | RAGLab | Collection Name |
 |----------|-----------|--------|-----------------|
-| Entity descriptions | Yes | Yes | `Entities_section800_embed3large_v1` |
+| Entity descriptions | Yes | Yes | `Entity_section800_v1` |
 | Text units (chunks) | Yes | Yes | `RAG_section800_embed3large_v1` |
 | Community summaries | Yes | Yes | `Community_section800_v1` |
 
@@ -456,7 +456,7 @@ flowchart LR
     subgraph Collections["Weaviate Collections"]
         CHUNKS[(RAG_section800_embed3large_v1<br/>Chunk vectors)]
         COMMS[(Community_section800_v1<br/>Community summary vectors)]
-        ENTS[(Entities_section800_embed3large_v1<br/>Entity description vectors)]
+        ENTS[(Entity_section800_v1<br/>Entity description vectors)]
     end
 
     subgraph Usage["Query Time Usage"]
