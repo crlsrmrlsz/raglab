@@ -698,6 +698,11 @@ GRAPHRAG_MAX_EXTRACTION_TOKENS = 4000  # Max tokens for extraction response
 GRAPHRAG_MAX_ENTITIES = 10             # Max entities per chunk (reduced from 15 to prevent truncation)
 GRAPHRAG_MAX_RELATIONSHIPS = 7         # Max relationships per chunk (reduced from 10 to prevent truncation)
 
+# Gleaning: multi-pass extraction for improved recall (Microsoft GraphRAG paper)
+# Each gleaning round asks the LLM to find entities missed in previous passes
+# Set to 0 to disable gleaning (faster but lower recall)
+GRAPHRAG_MAX_GLEANINGS = 1  # Number of additional extraction passes (0 = disabled)
+
 # Entity types are now defined in src/graph/graphrag_types.yaml
 # See: from src.graph.graphrag_types import get_entity_types
 
@@ -783,6 +788,9 @@ from src.prompts import (
     # GraphRAG consolidation (Microsoft GraphRAG approach)
     GRAPHRAG_ENTITY_SUMMARIZE_PROMPT,
     GRAPHRAG_RELATIONSHIP_SUMMARIZE_PROMPT,
+    # GraphRAG gleaning (multi-pass extraction)
+    GRAPHRAG_LOOP_PROMPT,
+    GRAPHRAG_CONTINUE_PROMPT,
 )
 
 # Number of hypothetical documents to generate for HyDE (total)

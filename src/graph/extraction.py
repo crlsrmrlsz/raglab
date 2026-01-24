@@ -39,10 +39,13 @@ from src.config import (
     GRAPHRAG_CHUNK_EXTRACTION_PROMPT,
     GRAPHRAG_SUMMARY_MODEL,
     GRAPHRAG_STRICT_MODE,
+    GRAPHRAG_MAX_GLEANINGS,
 )
 from src.prompts import (
     GRAPHRAG_ENTITY_SUMMARIZE_PROMPT,
     GRAPHRAG_RELATIONSHIP_SUMMARIZE_PROMPT,
+    GRAPHRAG_LOOP_PROMPT,
+    GRAPHRAG_CONTINUE_PROMPT,
 )
 from src.graph.graphrag_types import get_entity_types, get_entity_types_string
 from src.shared.openrouter_client import call_structured_completion, call_chat_completion
@@ -117,21 +120,31 @@ def filter_entities_strict(
 def extract_chunk(
     chunk: dict[str, Any],
     model: str = GRAPHRAG_EXTRACTION_MODEL,
+    max_gleanings: int = GRAPHRAG_MAX_GLEANINGS,
 ) -> ExtractionResult:
     """Extract entities/relationships from a single chunk using curated types.
+
+    Uses Microsoft GraphRAG's gleaning mechanism for improved recall:
+    1. Initial extraction pass
+    2. Check if entities were missed (LOOP_PROMPT)
+    3. If yes, continue extracting (CONTINUE_PROMPT)
+    4. Repeat up to max_gleanings times
 
     Args:
         chunk: Chunk dict with 'text' field.
         model: LLM model for extraction.
+        max_gleanings: Maximum additional extraction passes (0 = disabled).
 
     Returns:
-        ExtractionResult with entities and relationships.
+        ExtractionResult with merged entities and relationships.
     """
     entity_types = get_entity_types_string()
+    text = chunk["text"]
 
+    # --- Initial extraction ---
     prompt = GRAPHRAG_CHUNK_EXTRACTION_PROMPT.format(
         entity_types=entity_types,
-        text=chunk["text"],
+        text=text,
         max_entities=GRAPHRAG_MAX_ENTITIES,
         max_relationships=GRAPHRAG_MAX_RELATIONSHIPS,
     )
@@ -143,6 +156,42 @@ def extract_chunk(
         max_tokens=GRAPHRAG_MAX_EXTRACTION_TOKENS,
     )
 
+    all_entities = list(result.entities)
+    all_relationships = list(result.relationships)
+
+    # --- Gleaning loop ---
+    for i in range(max_gleanings):
+        # Check if more entities to extract
+        if not _should_continue_gleaning(text, all_entities, all_relationships, model):
+            logger.debug(f"Gleaning stopped after {i} rounds (LLM said complete)")
+            break
+
+        # Extract additional entities
+        additional = _glean_additional_entities(
+            text=text,
+            previous_entities=all_entities,
+            previous_relationships=all_relationships,
+            entity_types=entity_types,
+            model=model,
+        )
+
+        if not additional.entities and not additional.relationships:
+            logger.debug(f"Gleaning stopped after {i+1} rounds (no new entities)")
+            break
+
+        all_entities.extend(additional.entities)
+        all_relationships.extend(additional.relationships)
+        logger.debug(
+            f"Gleaning round {i+1}: +{len(additional.entities)} entities, "
+            f"+{len(additional.relationships)} relationships"
+        )
+
+    # Deduplicate within chunk
+    final_entities = _deduplicate_entities(all_entities)
+    final_relationships = _deduplicate_relationships(all_relationships)
+
+    result = ExtractionResult(entities=final_entities, relationships=final_relationships)
+
     # Apply strict mode filtering if enabled
     if GRAPHRAG_STRICT_MODE:
         allowed = set(get_entity_types())
@@ -152,6 +201,137 @@ def extract_chunk(
         result = ExtractionResult(entities=filtered, relationships=result.relationships)
 
     return result
+
+
+def _should_continue_gleaning(
+    text: str,
+    entities: list[ExtractedEntity],
+    relationships: list[ExtractedRelationship],
+    model: str,
+) -> bool:
+    """Ask LLM if more entities remain to extract.
+
+    Args:
+        text: Original chunk text.
+        entities: Previously extracted entities.
+        relationships: Previously extracted relationships.
+        model: LLM model.
+
+    Returns:
+        True if LLM indicates more entities to extract.
+    """
+    # Build context of what was extracted
+    entity_summary = ", ".join(e.name for e in entities[:10])  # First 10 for context
+    rel_summary = ", ".join(
+        f"{r.source_entity}->{r.target_entity}" for r in relationships[:5]
+    )
+
+    context = f"""Text excerpt: {text[:500]}...
+
+Previously extracted entities: {entity_summary}
+Previously extracted relationships: {rel_summary}
+
+{GRAPHRAG_LOOP_PROMPT}"""
+
+    response = call_chat_completion(
+        messages=[{"role": "user", "content": context}],
+        model=model,
+        temperature=0.0,
+        max_tokens=5,
+    )
+
+    return response.strip().upper().startswith("Y")
+
+
+def _glean_additional_entities(
+    text: str,
+    previous_entities: list[ExtractedEntity],
+    previous_relationships: list[ExtractedRelationship],
+    entity_types: str,
+    model: str,
+) -> ExtractionResult:
+    """Extract additional entities missed in previous passes.
+
+    Args:
+        text: Original chunk text.
+        previous_entities: Already extracted entities.
+        previous_relationships: Already extracted relationships.
+        entity_types: Allowed entity types string.
+        model: LLM model.
+
+    Returns:
+        ExtractionResult with additional entities/relationships.
+    """
+    prev_entity_str = ", ".join(f"{e.name} ({e.entity_type})" for e in previous_entities)
+    prev_rel_str = ", ".join(
+        f"{r.source_entity} -> {r.target_entity}" for r in previous_relationships
+    )
+
+    prompt = GRAPHRAG_CONTINUE_PROMPT.format(
+        text=text,
+        previous_entities=prev_entity_str or "None",
+        previous_relationships=prev_rel_str or "None",
+        entity_types=entity_types,
+    )
+
+    return call_structured_completion(
+        messages=[{"role": "user", "content": prompt}],
+        model=model,
+        response_model=ExtractionResult,
+        temperature=0.0,
+        max_tokens=GRAPHRAG_MAX_EXTRACTION_TOKENS,
+    )
+
+
+def _deduplicate_entities(entities: list[ExtractedEntity]) -> list[ExtractedEntity]:
+    """Deduplicate entities within a chunk by normalized name.
+
+    Args:
+        entities: List of extracted entities.
+
+    Returns:
+        Deduplicated list, keeping first occurrence.
+    """
+    from src.graph.schemas import GraphEntity
+
+    seen: set[tuple[str, str]] = set()
+    unique: list[ExtractedEntity] = []
+    for e in entities:
+        ge = GraphEntity(name=e.name, entity_type=e.entity_type)
+        key = (ge.normalized_name(), e.entity_type.lower())
+        if key not in seen:
+            seen.add(key)
+            unique.append(e)
+    return unique
+
+
+def _deduplicate_relationships(
+    relationships: list[ExtractedRelationship],
+) -> list[ExtractedRelationship]:
+    """Deduplicate relationships within a chunk.
+
+    Args:
+        relationships: List of extracted relationships.
+
+    Returns:
+        Deduplicated list, keeping first occurrence.
+    """
+    from src.graph.schemas import GraphEntity
+
+    seen: set[tuple[str, str, str]] = set()
+    unique: list[ExtractedRelationship] = []
+    for r in relationships:
+        source_ge = GraphEntity(name=r.source_entity, entity_type="")
+        target_ge = GraphEntity(name=r.target_entity, entity_type="")
+        key = (
+            source_ge.normalized_name(),
+            target_ge.normalized_name(),
+            r.relationship_type.lower(),
+        )
+        if key not in seen:
+            seen.add(key)
+            unique.append(r)
+    return unique
 
 
 def extract_book(

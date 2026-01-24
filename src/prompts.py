@@ -169,6 +169,45 @@ IMPORTANT: Respond ONLY with valid JSON:
 
 
 # =============================================================================
+# GRAPHRAG GLEANING PROMPTS (Multi-pass extraction)
+# =============================================================================
+# From Microsoft GraphRAG paper (arXiv:2404.16130):
+# "We use multiple rounds of 'gleanings' to encourage the LLM to detect
+# any additional entities it may have missed on prior extraction rounds."
+
+# Loop check: Ask if more entities remain (expects Y/N)
+GRAPHRAG_LOOP_PROMPT = """Based on the text and your previous extraction, are there any important entities or relationships you may have missed?
+
+Consider:
+- Key people, concepts, or locations not yet captured
+- Relationships between entities not yet documented
+- Implicit entities that are important for understanding the text
+
+Answer with ONLY 'Y' if there are missed entities to extract, or 'N' if extraction is complete."""
+
+# Continue prompt: Encourage extraction of missed entities
+GRAPHRAG_CONTINUE_PROMPT = """MANY entities and relationships were missed in the previous extraction.
+
+Original text:
+{text}
+
+Previously extracted (DO NOT repeat these):
+Entities: {previous_entities}
+Relationships: {previous_relationships}
+
+ENTITY TYPES (use ONLY these): {entity_types}
+
+Extract ADDITIONAL entities and relationships that were missed. Focus on:
+- Entities that were implied but not explicitly extracted
+- Secondary characters, concepts, or locations
+- Relationships between previously extracted entities
+- Any important details overlooked
+
+IMPORTANT: Respond ONLY with valid JSON:
+{{"entities": [{{"name": "...", "entity_type": "...", "description": "..."}}], "relationships": [{{"source_entity": "...", "target_entity": "...", "relationship_type": "...", "description": "...", "weight": 1.0}}]}}"""
+
+
+# =============================================================================
 # GRAPHRAG CONSOLIDATION PROMPTS (Microsoft GraphRAG approach)
 # =============================================================================
 
