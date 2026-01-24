@@ -1,18 +1,24 @@
-"""GraphRAG entity extraction with curated entity types.
+"""GraphRAG entity extraction with curated entity types and consolidation.
 
 ## What This Module Does
 
 1. Constrained Extraction: LLM extracts entities using predefined types from graphrag_types.yaml
 2. Relationship Extraction: Relationships are extracted with open-ended types (per GraphRAG paper)
-3. Save Results: Stores extraction_results.json for Neo4j upload in Stage 6b
+3. Entity Consolidation: Merge duplicates by (normalized_name, entity_type) with LLM summarization
+4. Relationship Consolidation: Merge duplicates by (source, target, type) with LLM summarization
+5. Save Results: Stores extraction_results.json for Neo4j upload in Stage 6b
 
-## Key Design Decision
+## Key Design Decisions
 
 Entity types are curated in graphrag_types.yaml rather than auto-discovered.
 This provides:
 - Consistent taxonomy across extraction runs
 - Better control over entity granularity
-- Lower indexing cost (no consolidation LLM calls)
+
+Microsoft GraphRAG consolidation approach:
+- Entities merged by (normalized_name, entity_type) - allows same name with different types
+- Descriptions are LLM-summarized when duplicates have multiple unique descriptions
+- source_chunk_ids tracked as list for provenance (all source chunks preserved)
 """
 
 from typing import Any, Optional
@@ -31,9 +37,14 @@ from src.config import (
     DIR_GRAPH_DATA,
     DIR_FINAL_CHUNKS,
     GRAPHRAG_CHUNK_EXTRACTION_PROMPT,
+    GRAPHRAG_SUMMARY_MODEL,
+)
+from src.prompts import (
+    GRAPHRAG_ENTITY_SUMMARIZE_PROMPT,
+    GRAPHRAG_RELATIONSHIP_SUMMARIZE_PROMPT,
 )
 from src.graph.graphrag_types import get_entity_types_string
-from src.shared.openrouter_client import call_structured_completion
+from src.shared.openrouter_client import call_structured_completion, call_chat_completion
 from src.shared.files import setup_logging, OverwriteContext
 
 logger = setup_logging(__name__)
@@ -193,14 +204,24 @@ def load_book_files(strategy: str = "section") -> list[Path]:
     return sorted(chunk_dir.glob("*.json"))
 
 
-def merge_extractions(extractions_dir: Path) -> dict[str, Any]:
-    """Merge all per-book extraction files into aggregated results.
+def merge_extractions(
+    extractions_dir: Path,
+    model: str = GRAPHRAG_SUMMARY_MODEL,
+) -> dict[str, Any]:
+    """Merge all per-book extraction files and consolidate duplicates.
+
+    Microsoft GraphRAG approach:
+    1. Merge entities/relationships from all book extraction files
+    2. Consolidate entities by (normalized_name, entity_type)
+    3. Consolidate relationships by (source, target, type)
+    4. LLM-summarize descriptions for duplicates
 
     Args:
         extractions_dir: Directory containing per-book extraction JSON files.
+        model: LLM model for description summarization.
 
     Returns:
-        Dict with merged entities, relationships, counts, and stats.
+        Dict with consolidated entities, relationships, counts, and stats.
     """
     all_entities: list[dict[str, Any]] = []
     all_relationships: list[dict[str, Any]] = []
@@ -222,18 +243,228 @@ def merge_extractions(extractions_dir: Path) -> dict[str, Any]:
         stats["processed_chunks"] += book_stats.get("processed_chunks", 0)
         stats["failed_chunks"] += book_stats.get("failed_chunks", 0)
 
-    stats["total_entities"] = len(all_entities)
-    stats["total_relationships"] = len(all_relationships)
+    stats["raw_entities"] = len(all_entities)
+    stats["raw_relationships"] = len(all_relationships)
     stats["unique_entity_types"] = len(entity_counter)
     stats["unique_relationship_types"] = len(relationship_counter)
 
+    # Consolidate duplicates with LLM summarization (Microsoft GraphRAG approach)
+    logger.info("Consolidating entities...")
+    consolidated_entities = consolidate_entities(all_entities, model=model)
+
+    logger.info("Consolidating relationships...")
+    consolidated_relationships = consolidate_relationships(all_relationships, model=model)
+
+    stats["total_entities"] = len(consolidated_entities)
+    stats["total_relationships"] = len(consolidated_relationships)
+
     return {
-        "entities": all_entities,
-        "relationships": all_relationships,
+        "entities": consolidated_entities,
+        "relationships": consolidated_relationships,
         "entity_type_counts": dict(entity_counter.most_common()),
         "relationship_type_counts": dict(relationship_counter.most_common()),
         "stats": stats,
     }
+
+
+# ============================================================================
+# Entity/Relationship Consolidation (Microsoft GraphRAG approach)
+# ============================================================================
+
+def summarize_descriptions(
+    descriptions: list[str],
+    prompt_template: str,
+    model: str = GRAPHRAG_SUMMARY_MODEL,
+    **format_kwargs,
+) -> str:
+    """Summarize multiple descriptions into one using LLM.
+
+    Args:
+        descriptions: List of description strings to summarize.
+        prompt_template: The prompt template with {descriptions} placeholder.
+        model: LLM model for summarization.
+        **format_kwargs: Additional format arguments for the prompt template.
+
+    Returns:
+        Summarized description string.
+    """
+    # Format descriptions as numbered list
+    desc_text = "\n".join(f"- {d}" for d in descriptions if d.strip())
+
+    prompt = prompt_template.format(descriptions=desc_text, **format_kwargs)
+
+    return call_chat_completion(
+        messages=[{"role": "user", "content": prompt}],
+        model=model,
+        temperature=0.0,
+        max_tokens=200,
+    ).strip()
+
+
+def consolidate_entities(
+    entities: list[dict[str, Any]],
+    model: str = GRAPHRAG_SUMMARY_MODEL,
+) -> list[dict[str, Any]]:
+    """Consolidate duplicate entities by (normalized_name, entity_type).
+
+    Microsoft GraphRAG approach:
+    - Group entities by (normalized_name, entity_type)
+    - For groups with multiple descriptions: LLM summarize
+    - Track all source_chunk_ids as a list
+
+    Args:
+        entities: List of entity dicts from extraction.
+        model: LLM model for description summarization.
+
+    Returns:
+        List of consolidated entity dicts with unique (name, type) pairs.
+    """
+    from src.graph.schemas import GraphEntity
+
+    # Group by (normalized_name, entity_type)
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+
+    for entity in entities:
+        ge = GraphEntity(
+            name=entity["name"],
+            entity_type=entity.get("entity_type", ""),
+        )
+        key = (ge.normalized_name(), entity.get("entity_type", ""))
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(entity)
+
+    consolidated: list[dict[str, Any]] = []
+    summarized_count = 0
+
+    for (normalized_name, entity_type), group in groups.items():
+        # Collect all unique descriptions
+        descriptions = list({e.get("description", "") for e in group if e.get("description", "").strip()})
+
+        # Collect all source chunk IDs
+        source_chunk_ids = [e.get("source_chunk_id") for e in group if e.get("source_chunk_id")]
+
+        # Use first entity's name (preserve original casing)
+        name = group[0]["name"]
+
+        # Decide on description
+        if len(descriptions) > 1:
+            # Multiple descriptions: LLM summarize
+            description = summarize_descriptions(
+                descriptions,
+                GRAPHRAG_ENTITY_SUMMARIZE_PROMPT,
+                model=model,
+                entity_name=name,
+                entity_type=entity_type,
+            )
+            summarized_count += 1
+        elif descriptions:
+            description = descriptions[0]
+        else:
+            description = ""
+
+        consolidated.append({
+            "name": name,
+            "normalized_name": normalized_name,
+            "entity_type": entity_type,
+            "description": description,
+            "source_chunk_ids": source_chunk_ids,
+        })
+
+    logger.info(
+        f"Consolidated {len(entities)} entities -> {len(consolidated)} unique "
+        f"({summarized_count} LLM summarizations)"
+    )
+
+    return consolidated
+
+
+def consolidate_relationships(
+    relationships: list[dict[str, Any]],
+    model: str = GRAPHRAG_SUMMARY_MODEL,
+) -> list[dict[str, Any]]:
+    """Consolidate duplicate relationships by (source, target, type).
+
+    Microsoft GraphRAG approach:
+    - Group by (source_normalized, target_normalized, relationship_type)
+    - For groups with multiple descriptions: LLM summarize
+    - Average weights from duplicates
+    - Track all source_chunk_ids as a list
+
+    Args:
+        relationships: List of relationship dicts from extraction.
+        model: LLM model for description summarization.
+
+    Returns:
+        List of consolidated relationship dicts.
+    """
+    from src.graph.schemas import GraphEntity
+
+    # Group by (source_normalized, target_normalized, relationship_type)
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+
+    for rel in relationships:
+        source_ge = GraphEntity(name=rel["source_entity"], entity_type="")
+        target_ge = GraphEntity(name=rel["target_entity"], entity_type="")
+        key = (
+            source_ge.normalized_name(),
+            target_ge.normalized_name(),
+            rel.get("relationship_type", "RELATED"),
+        )
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(rel)
+
+    consolidated: list[dict[str, Any]] = []
+    summarized_count = 0
+
+    for (source_norm, target_norm, rel_type), group in groups.items():
+        # Collect unique descriptions
+        descriptions = list({r.get("description", "") for r in group if r.get("description", "").strip()})
+
+        # Collect all source chunk IDs
+        source_chunk_ids = [r.get("source_chunk_id") for r in group if r.get("source_chunk_id")]
+
+        # Average weights
+        weights = [r.get("weight", 1.0) for r in group]
+        avg_weight = sum(weights) / len(weights) if weights else 1.0
+
+        # Use first relationship's entity names (preserve original casing)
+        source_entity = group[0]["source_entity"]
+        target_entity = group[0]["target_entity"]
+
+        # Decide on description
+        if len(descriptions) > 1:
+            description = summarize_descriptions(
+                descriptions,
+                GRAPHRAG_RELATIONSHIP_SUMMARIZE_PROMPT,
+                model=model,
+                source=source_entity,
+                target=target_entity,
+            )
+            summarized_count += 1
+        elif descriptions:
+            description = descriptions[0]
+        else:
+            description = ""
+
+        consolidated.append({
+            "source_entity": source_entity,
+            "target_entity": target_entity,
+            "source_normalized": source_norm,
+            "target_normalized": target_norm,
+            "relationship_type": rel_type,
+            "description": description,
+            "weight": avg_weight,
+            "source_chunk_ids": source_chunk_ids,
+        })
+
+    logger.info(
+        f"Consolidated {len(relationships)} relationships -> {len(consolidated)} unique "
+        f"({summarized_count} LLM summarizations)"
+    )
+
+    return consolidated
 
 
 # ============================================================================

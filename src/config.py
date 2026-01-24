@@ -776,6 +776,9 @@ from src.prompts import (
     GRAPHRAG_QUERY_EXTRACTION_PROMPT,
     GRAPHRAG_COMMUNITY_PROMPT,
     GRAPHRAG_CHUNK_EXTRACTION_PROMPT,
+    # GraphRAG consolidation (Microsoft GraphRAG approach)
+    GRAPHRAG_ENTITY_SUMMARIZE_PROMPT,
+    GRAPHRAG_RELATIONSHIP_SUMMARIZE_PROMPT,
 )
 
 # Number of hypothetical documents to generate for HyDE (total)

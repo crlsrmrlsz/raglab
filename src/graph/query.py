@@ -79,12 +79,12 @@ def retrieve_graph_context(
         limit: Maximum results per entity.
 
     Returns:
-        List of dicts with entity info and source_chunk_id.
+        List of dicts with entity info and source_chunk_ids (list).
 
     Example:
         >>> context = retrieve_graph_context("What causes stress?", driver)
         >>> for c in context:
-        ...     print(c["name"], c["source_chunk_id"])
+        ...     print(c["name"], c["source_chunk_ids"])
     """
     # Extract entities from query
     query_entities = extract_query_entities(query, driver)
@@ -118,6 +118,7 @@ def get_chunk_ids_from_graph(
     """Extract unique chunk IDs from graph context.
 
     Used to fetch full chunk content from Weaviate or files.
+    Handles both old format (source_chunk_id) and new format (source_chunk_ids list).
 
     Args:
         graph_context: List from retrieve_graph_context().
@@ -127,7 +128,13 @@ def get_chunk_ids_from_graph(
     """
     chunk_ids = set()
     for entity in graph_context:
-        if entity.get("source_chunk_id"):
+        # Handle new format: source_chunk_ids as list
+        if entity.get("source_chunk_ids"):
+            for cid in entity["source_chunk_ids"]:
+                if cid:
+                    chunk_ids.add(cid)
+        # Backward compatibility: source_chunk_id as string
+        elif entity.get("source_chunk_id"):
             chunk_ids.add(entity["source_chunk_id"])
     return list(chunk_ids)
 
@@ -461,7 +468,7 @@ def _build_graph_ranked_list(
     This list is used for RRF merging with vector results.
 
     Args:
-        graph_context: List of entities with path_length and source_chunk_id.
+        graph_context: List of entities with path_length and source_chunk_ids (list).
         fetched_chunks: SearchResult objects fetched from Weaviate.
 
     Returns:
@@ -471,13 +478,21 @@ def _build_graph_ranked_list(
     # A chunk might be reached via multiple entities; use shortest path
     chunk_path_lengths: dict[str, int] = {}
     for entity in graph_context:
-        chunk_id = entity.get("source_chunk_id")
         path_len = entity.get("path_length", 999)
-        if chunk_id:
-            if chunk_id not in chunk_path_lengths:
-                chunk_path_lengths[chunk_id] = path_len
-            else:
-                chunk_path_lengths[chunk_id] = min(chunk_path_lengths[chunk_id], path_len)
+
+        # Handle new format: source_chunk_ids as list
+        chunk_ids = entity.get("source_chunk_ids", [])
+        if not chunk_ids:
+            # Backward compatibility: source_chunk_id as string
+            chunk_id = entity.get("source_chunk_id")
+            chunk_ids = [chunk_id] if chunk_id else []
+
+        for chunk_id in chunk_ids:
+            if chunk_id:
+                if chunk_id not in chunk_path_lengths:
+                    chunk_path_lengths[chunk_id] = path_len
+                else:
+                    chunk_path_lengths[chunk_id] = min(chunk_path_lengths[chunk_id], path_len)
 
     # Create lookup for fetched chunks
     fetched_by_id = {c.chunk_id: c for c in fetched_chunks}

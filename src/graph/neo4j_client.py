@@ -149,17 +149,18 @@ def create_indexes(driver: Driver) -> None:
         FOR (e:Entity)
         ON (e.normalized_name)
         """,
+        # Composite index for entity MERGE key (Microsoft GraphRAG approach)
+        # Allows same entity name with different types (e.g., "dopamine" as NEUROTRANSMITTER vs MEDICATION)
+        """
+        CREATE INDEX entity_name_type IF NOT EXISTS
+        FOR (e:Entity)
+        ON (e.normalized_name, e.entity_type)
+        """,
         # Index for filtering by entity type
         """
         CREATE INDEX entity_type IF NOT EXISTS
         FOR (e:Entity)
         ON (e.entity_type)
-        """,
-        # Index for chunk source tracking
-        """
-        CREATE INDEX entity_chunk IF NOT EXISTS
-        FOR (e:Entity)
-        ON (e.source_chunk_id)
         """,
     ]
 
@@ -193,15 +194,16 @@ def upload_entities(
     entities: list[dict[str, Any]],
     batch_size: int = 100,
 ) -> int:
-    """Upload entities to Neo4j with Python-computed normalization.
+    """Upload entities to Neo4j with composite merge key (name + type).
 
-    Uses MERGE to handle duplicates (same normalized_name = same node).
-    Normalization is computed in Python for better deduplication
-    (Unicode, stopwords, punctuation handling).
+    Microsoft GraphRAG approach:
+    - MERGE by (normalized_name, entity_type) allowing same name with different types
+    - Entities come pre-consolidated with summarized descriptions
+    - source_chunk_ids tracked as list for provenance
 
     Args:
         driver: Neo4j driver instance.
-        entities: List of entity dicts from extraction.
+        entities: List of entity dicts from consolidation (with source_chunk_ids as list).
         batch_size: Number of entities per transaction.
 
     Returns:
@@ -215,13 +217,19 @@ def upload_entities(
     """
     from src.graph.schemas import GraphEntity
 
-    # Pre-compute normalized names in Python (better than Cypher toLower/trim)
+    # Pre-compute normalized names in Python if not already present
     for entity in entities:
-        ge = GraphEntity(
-            name=entity["name"],
-            entity_type=entity.get("entity_type", ""),
-        )
-        entity["normalized_name"] = ge.normalized_name()
+        if "normalized_name" not in entity:
+            ge = GraphEntity(
+                name=entity["name"],
+                entity_type=entity.get("entity_type", ""),
+            )
+            entity["normalized_name"] = ge.normalized_name()
+
+        # Ensure source_chunk_ids is a list (for backward compatibility)
+        if "source_chunk_ids" not in entity:
+            chunk_id = entity.get("source_chunk_id")
+            entity["source_chunk_ids"] = [chunk_id] if chunk_id else []
 
     total = 0
 
@@ -230,21 +238,17 @@ def upload_entities(
         batch = entities[i : i + batch_size]
 
         # UNWIND batch for efficient multi-row insert
+        # MERGE by (normalized_name, entity_type) - Microsoft GraphRAG approach
         query = """
         UNWIND $entities AS entity
-        MERGE (e:Entity {normalized_name: entity.normalized_name})
+        MERGE (e:Entity {normalized_name: entity.normalized_name, entity_type: entity.entity_type})
         ON CREATE SET
             e.name = entity.name,
-            e.entity_type = entity.entity_type,
             e.description = entity.description,
-            e.source_chunk_id = entity.source_chunk_id,
+            e.source_chunk_ids = entity.source_chunk_ids,
             e.created_at = datetime()
         ON MATCH SET
-            e.description = CASE
-                WHEN size(entity.description) > size(coalesce(e.description, ''))
-                THEN entity.description
-                ELSE e.description
-            END
+            e.source_chunk_ids = e.source_chunk_ids + entity.source_chunk_ids
         RETURN count(e) as count
         """
 
@@ -261,14 +265,16 @@ def upload_relationships(
     relationships: list[dict[str, Any]],
     batch_size: int = 100,
 ) -> int:
-    """Upload relationships to Neo4j with Python-computed normalization.
+    """Upload relationships to Neo4j with pre-consolidated data.
 
-    Matches entities by normalized_name and creates relationships.
-    Uses MERGE to avoid duplicate relationships.
+    Microsoft GraphRAG approach:
+    - Relationships come pre-consolidated with summarized descriptions
+    - source_chunk_ids tracked as list for provenance
+    - Matches entities by normalized_name only (any type)
 
     Args:
         driver: Neo4j driver instance.
-        relationships: List of relationship dicts from extraction.
+        relationships: List of relationship dicts from consolidation (with source_chunk_ids as list).
         batch_size: Number of relationships per transaction.
 
     Returns:
@@ -282,12 +288,19 @@ def upload_relationships(
     """
     from src.graph.schemas import GraphEntity
 
-    # Pre-compute normalized names for source and target entities
+    # Pre-compute normalized names for source and target entities if not present
     for rel in relationships:
-        source_ge = GraphEntity(name=rel["source_entity"], entity_type="")
-        target_ge = GraphEntity(name=rel["target_entity"], entity_type="")
-        rel["source_normalized"] = source_ge.normalized_name()
-        rel["target_normalized"] = target_ge.normalized_name()
+        if "source_normalized" not in rel:
+            source_ge = GraphEntity(name=rel["source_entity"], entity_type="")
+            rel["source_normalized"] = source_ge.normalized_name()
+        if "target_normalized" not in rel:
+            target_ge = GraphEntity(name=rel["target_entity"], entity_type="")
+            rel["target_normalized"] = target_ge.normalized_name()
+
+        # Ensure source_chunk_ids is a list (for backward compatibility)
+        if "source_chunk_ids" not in rel:
+            chunk_id = rel.get("source_chunk_id")
+            rel["source_chunk_ids"] = [chunk_id] if chunk_id else []
 
     total = 0
 
@@ -302,8 +315,10 @@ def upload_relationships(
         ON CREATE SET
             r.description = rel.description,
             r.weight = rel.weight,
-            r.source_chunk_id = rel.source_chunk_id,
+            r.source_chunk_ids = rel.source_chunk_ids,
             r.created_at = datetime()
+        ON MATCH SET
+            r.source_chunk_ids = r.source_chunk_ids + rel.source_chunk_ids
         RETURN count(r) as count
         """
 
@@ -432,7 +447,7 @@ def find_entity_neighbors(
         neighbor.name as name,
         neighbor.entity_type as entity_type,
         neighbor.description as description,
-        neighbor.source_chunk_id as source_chunk_id,
+        neighbor.source_chunk_ids as source_chunk_ids,
         length(path) as path_length
     ORDER BY path_length, name
     LIMIT $limit
@@ -475,7 +490,7 @@ def find_entities_by_names(
         e.name as name,
         e.entity_type as entity_type,
         e.description as description,
-        e.source_chunk_id as source_chunk_id
+        e.source_chunk_ids as source_chunk_ids
     """
 
     result = driver.execute_query(query, normalized_names=normalized_names)

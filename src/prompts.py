@@ -169,6 +169,33 @@ IMPORTANT: Respond ONLY with valid JSON:
 
 
 # =============================================================================
+# GRAPHRAG CONSOLIDATION PROMPTS (Microsoft GraphRAG approach)
+# =============================================================================
+
+# Entity description summarization
+# Used during indexing to merge duplicate entities into coherent descriptions
+GRAPHRAG_ENTITY_SUMMARIZE_PROMPT = """Summarize these descriptions of "{entity_name}" ({entity_type}) into one coherent description.
+
+Descriptions:
+{descriptions}
+
+Write a single description (2-3 sentences) capturing the key information. Do not mention "sources" or "descriptions".
+
+Summary:"""
+
+# Relationship description summarization
+# Used during indexing to merge duplicate relationships
+GRAPHRAG_RELATIONSHIP_SUMMARIZE_PROMPT = """Summarize these descriptions of the relationship between "{source}" and "{target}" into one sentence.
+
+Descriptions:
+{descriptions}
+
+Write a clear, concise description (1-2 sentences).
+
+Summary:"""
+
+
+# =============================================================================
 # MAP-REDUCE PROMPTS (GraphRAG Global Query Handling)
 # =============================================================================
 
