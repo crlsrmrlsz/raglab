@@ -32,7 +32,6 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from src.config import (
-    GRAPHRAG_MAP_REDUCE_TOP_K,
     GRAPHRAG_MAP_MAX_TOKENS,
     GRAPHRAG_REDUCE_MAX_TOKENS,
     GRAPHRAG_SUMMARY_MODEL,

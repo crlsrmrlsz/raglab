@@ -729,7 +729,10 @@ GRAPHRAG_PAGERANK_DAMPING = 0.85    # Standard damping factor
 GRAPHRAG_PAGERANK_ITERATIONS = 20   # Max iterations for convergence
 
 # Map-reduce for global queries (Microsoft GraphRAG paper)
-GRAPHRAG_MAP_REDUCE_TOP_K = 5       # Communities for map-reduce
+# Note: Microsoft uses ALL communities at selected level for global queries.
+# top_k filtering removed to align with reference implementation.
+# GRAPHRAG_MAP_REDUCE_TOP_K kept for backward compatibility only.
+GRAPHRAG_MAP_REDUCE_TOP_K = 5       # DEPRECATED: use all L0 communities instead
 GRAPHRAG_MAP_MAX_TOKENS = 300       # Max tokens per map response
 GRAPHRAG_REDUCE_MAX_TOKENS = 500    # Max tokens for reduce response
 

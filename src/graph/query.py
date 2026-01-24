@@ -338,8 +338,8 @@ def retrieve_community_context(
 
 def retrieve_communities_for_map_reduce(
     query: str,
-    top_k: int = GRAPHRAG_TOP_COMMUNITIES,
     level: Optional[int] = None,
+    top_k: Optional[int] = None,
 ) -> list[Community]:
     """Retrieve full Community objects for map-reduce processing.
 
@@ -347,13 +347,17 @@ def retrieve_communities_for_map_reduce(
     this returns full Community objects with members and relationships
     for use in map-reduce global queries.
 
+    Microsoft GraphRAG uses ALL communities at the selected level for
+    global queries (map-reduce over all community reports). The top_k
+    parameter is optional for performance tuning on large corpora.
+
     Args:
         query: User query string.
-        top_k: Number of communities to retrieve.
-        level: Optional hierarchy level filter (0=coarsest for global queries).
+        level: Hierarchy level filter (0=coarsest for global queries).
+        top_k: Optional limit on communities (None = use all, Microsoft-aligned).
 
     Returns:
-        List of Community objects (full data for map-reduce).
+        List of Community objects sorted by relevance (full data for map-reduce).
     """
     # Load communities from JSON (has full data)
     try:
@@ -373,7 +377,7 @@ def retrieve_communities_for_map_reduce(
     if not communities:
         return []
 
-    # Embedding-based retrieval
+    # Sort by relevance (embedding similarity or keyword matching)
     has_embeddings = any(c.embedding for c in communities)
 
     if has_embeddings:
@@ -386,7 +390,7 @@ def retrieve_communities_for_map_reduce(
                 scored.append((similarity, community))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        return [community for _, community in scored[:top_k]]
+        sorted_communities = [community for _, community in scored]
     else:
         # Fallback: keyword matching
         query_words = set(query.lower().split())
@@ -395,11 +399,15 @@ def retrieve_communities_for_map_reduce(
         for community in communities:
             summary_words = set(community.summary.lower().split())
             overlap = len(query_words & summary_words)
-            if overlap > 0:
-                scored.append((overlap, community))
+            scored.append((overlap, community))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        return [community for _, community in scored[:top_k]]
+        sorted_communities = [community for _, community in scored]
+
+    # Apply top_k limit only if specified (Microsoft uses all for global queries)
+    if top_k is not None:
+        return sorted_communities[:top_k]
+    return sorted_communities
 
 
 def get_graph_chunk_ids(
@@ -703,12 +711,12 @@ def hybrid_graph_retrieval_with_map_reduce(
     if use_map_reduce and should_use_map_reduce(query, extracted_entities):
         logger.info("Global query detected, using map-reduce")
 
-        # Retrieve L0 (coarsest) communities for global query map-reduce
-        from src.config import GRAPHRAG_MAP_REDUCE_TOP_K
+        # Retrieve ALL L0 (coarsest) communities for global query map-reduce
+        # Microsoft GraphRAG: map-reduce over all community reports at selected level
         communities = retrieve_communities_for_map_reduce(
             query,
-            top_k=GRAPHRAG_MAP_REDUCE_TOP_K,
             level=0,  # L0 = coarsest level for global/abstract queries
+            # top_k=None uses all communities (Microsoft-aligned)
         )
 
         if communities:
