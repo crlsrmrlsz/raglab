@@ -137,8 +137,7 @@ flowchart TB
 | `GRAPHRAG_LEIDEN_CONCURRENCY` | 1 | config.py:714 | Single-threaded for reproducibility |
 | `GRAPHRAG_MAX_HIERARCHY_LEVELS` | 3 | config.py:730 | L0, L1, L2 levels |
 | `GRAPHRAG_MIN_COMMUNITY_SIZE` | 3 | config.py:712 | Min nodes per community |
-| `GRAPHRAG_MAX_SUMMARY_TOKENS` | 300 | config.py:718 | Max tokens per community summary |
-| `GRAPHRAG_MAX_CONTEXT_TOKENS` | 6000 | config.py:719 | Max input tokens for summarization |
+| `GRAPHRAG_MAX_CONTEXT_TOKENS` | 8000 | config.py:719 | Max input tokens for summarization (matches Microsoft) |
 
 ---
 

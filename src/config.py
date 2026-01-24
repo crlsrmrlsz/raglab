@@ -714,9 +714,9 @@ GRAPHRAG_LEIDEN_SEED = 42           # Fixed seed for deterministic results
 GRAPHRAG_LEIDEN_CONCURRENCY = 1     # Single-threaded for reproducibility
 
 # Community summarization parameters
-# Increased from 200 to allow room for complete sentences
-GRAPHRAG_MAX_SUMMARY_TOKENS = 300   # Max tokens per community summary (buffer for sentence completion)
-GRAPHRAG_MAX_CONTEXT_TOKENS = 6000  # Max input tokens for summarization
+# Microsoft GraphRAG (arXiv:2404.16130) does not cap summary output tokens
+# GRAPHRAG_MAX_SUMMARY_TOKENS removed - allow complete summaries
+GRAPHRAG_MAX_CONTEXT_TOKENS = 8000  # Max input tokens for summarization (matches Microsoft)
 
 # GraphRAG prompts are imported from src/prompts.py (see bottom of file)
 
@@ -789,6 +789,7 @@ from src.prompts import (
     # GraphRAG
     GRAPHRAG_QUERY_EXTRACTION_PROMPT,
     GRAPHRAG_COMMUNITY_PROMPT,
+    GRAPHRAG_HIERARCHICAL_COMMUNITY_PROMPT,
     GRAPHRAG_CHUNK_EXTRACTION_PROMPT,
     # GraphRAG consolidation (Microsoft GraphRAG approach)
     GRAPHRAG_ENTITY_SUMMARIZE_PROMPT,

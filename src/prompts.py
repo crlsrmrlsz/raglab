@@ -136,6 +136,28 @@ Ensure all sentences are complete. Do not end mid-sentence.
 
 Summary:"""
 
+# Hierarchical community summarization prompt (Microsoft GraphRAG bottom-up approach)
+# Used when a community aggregates multiple sub-communities and child summaries
+# are substituted for raw entity data due to token limits
+GRAPHRAG_HIERARCHICAL_COMMUNITY_PROMPT = """You are analyzing a community of related entities from a knowledge graph.
+This community aggregates multiple sub-communities detected via the Leiden algorithm.
+
+The context below includes:
+- Sub-community summaries (marked with [Sub-Community]) representing clusters of related entities
+- Cross-community relationships connecting entities across sub-communities
+
+Community context:
+{community_context}
+
+Write a comprehensive summary (3-4 paragraphs) that:
+1. Identifies the overarching theme connecting these sub-communities
+2. Synthesizes insights across sub-community themes
+3. Highlights important cross-cutting relationships and patterns
+
+Ensure all sentences are complete.
+
+Summary:"""
+
 
 # =============================================================================
 # GRAPHRAG CHUNK EXTRACTION PROMPT

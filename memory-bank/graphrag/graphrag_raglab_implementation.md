@@ -96,7 +96,7 @@ flowchart TB
 | Description Summarization | LLM consolidation | LLM consolidation | Matches |
 | Community Detection | Leiden (graspologic) | Leiden (Neo4j GDS) | Different library |
 | Community Hierarchy | C0 (coarsest) to C3 | L0 (coarsest) to L2 (3 levels) | Matches convention |
-| Community Summaries | Bottom-up LLM | LLM per community | Simpler |
+| Community Summaries | Bottom-up LLM | **Bottom-up with child substitution** | Matches |
 | Entity Embeddings | Description embeddings | Description embeddings | Matches |
 
 ### Query Features
@@ -359,32 +359,50 @@ python -m src.stages.run_stage_6b_neo4j --from summaries
 
 ## 6. Community Summarization
 
-### Process
+### Process (Microsoft Bottom-Up Approach)
+
+RAGLab implements Microsoft's bottom-up community summarization algorithm (arXiv:2404.16130):
+
+1. **Processing Order**: Finest level (L2) processed first, then L1, then L0 (coarsest)
+2. **Child Summary Substitution**: When raw entity/relationship data exceeds token limit, child community summaries are substituted
+3. **No Output Token Limit**: Summaries are allowed to be complete (no truncation)
 
 ```mermaid
 flowchart TB
+    subgraph Order["Bottom-Up Processing Order"]
+        L2[Level 2<br/>Finest - specific topics] --> L1[Level 1<br/>Domain themes]
+        L1 --> L0[Level 0<br/>Coarsest - corpus themes]
+    end
+
     subgraph Input["Community Data"]
-        MEMBERS[get_community_members<br/>Sorted by PageRank] --> CTX[build_community_context]
-        RELS[get_community_relationships] --> CTX
+        MEMBERS[get_community_members<br/>Sorted by PageRank] --> CHECK{Raw tokens<br/>> 8000?}
+        RELS[get_community_relationships] --> CHECK
+    end
+
+    subgraph Context["Context Building"]
+        CHECK --> |No| RAW[build_community_context<br/>Raw entity/relationship data]
+        CHECK --> |Yes| HIER[build_hierarchical_context<br/>Substitute child summaries]
+        HIER --> |"[Sub-Community]"| CHILD[Child summaries from<br/>finer level]
     end
 
     subgraph Summarize["LLM Summarization"]
-        CTX --> PROMPT[GRAPHRAG_COMMUNITY_PROMPT]
-        PROMPT --> LLM[GPT-4o-mini<br/>temperature=0.3<br/>max_tokens=300]
-        LLM --> SUMMARY[Community Summary<br/>150-200 words]
+        RAW --> PROMPT1[GRAPHRAG_COMMUNITY_PROMPT]
+        CHILD --> PROMPT2[GRAPHRAG_HIERARCHICAL_COMMUNITY_PROMPT]
+        PROMPT1 --> LLM[GPT-4o-mini<br/>temperature=0.3<br/>no max_tokens]
+        PROMPT2 --> LLM
+        LLM --> SUMMARY[Community Summary<br/>Complete, no truncation]
     end
 
-    subgraph Embed["Embedding"]
-        SUMMARY --> EMBED[embed_texts]
-        EMBED --> VECTOR[Summary Embedding<br/>3072 dimensions]
-    end
-
-    subgraph Store["Storage"]
+    subgraph Store["Storage + Tracking"]
+        SUMMARY --> TRACK[child_summaries dict<br/>for parent processing]
+        SUMMARY --> WEAVIATE[(Weaviate)]
         SUMMARY --> JSON[communities.json]
-        VECTOR --> WEAVIATE[(Weaviate<br/>Community_section800_v1)]
     end
 
     style WEAVIATE fill:#fa8072
+    style L2 fill:#90EE90
+    style L1 fill:#FFD700
+    style L0 fill:#87CEEB
 ```
 
 ### Context Building
@@ -393,7 +411,7 @@ Members are sorted by **PageRank** (not degree) for context building:
 
 ```python
 # src/graph/community.py:508-551
-def build_community_context(members, relationships, max_tokens=6000):
+def build_community_context(members, relationships, max_tokens=8000):
     lines = ["## Entities"]
     for member in members:  # Already sorted by PageRank
         desc = f" - {member.description}" if member.description else ""
@@ -413,9 +431,10 @@ def build_community_context(members, relationships, max_tokens=6000):
 
 | Aspect | Microsoft Reference | RAGLab |
 |--------|--------------------|----|
-| Context building | Bottom-up (leaf summaries → parents) | Per-community (no inheritance) |
+| Context building | Bottom-up (leaf summaries → parents) | **Bottom-up with child substitution** |
 | Member ordering | By `combined_degree` | By **PageRank** |
-| Token limit | 8,000 | 6,000 |
+| Token limit | 8,000 | **8,000** (matches Microsoft) |
+| Output token limit | None (complete summaries) | **None** (matches Microsoft) |
 | Output format | JSON with findings array | Plain text summary |
 
 ---
@@ -703,9 +722,9 @@ GRAPHRAG_MIN_COMMUNITY_SIZE = 3   # Minimum members to summarize
 GRAPHRAG_LEIDEN_SEED = 42         # For determinism
 GRAPHRAG_LEIDEN_CONCURRENCY = 1   # Single-threaded for reproducibility
 
-# Community Summarization
-GRAPHRAG_MAX_SUMMARY_TOKENS = 300
-GRAPHRAG_MAX_CONTEXT_TOKENS = 6000
+# Community Summarization (Microsoft bottom-up approach)
+# GRAPHRAG_MAX_SUMMARY_TOKENS removed - allow complete summaries
+GRAPHRAG_MAX_CONTEXT_TOKENS = 8000  # Matches Microsoft
 GRAPHRAG_MAX_HIERARCHY_LEVELS = 3  # L0, L1, L2
 
 # PageRank
@@ -737,7 +756,7 @@ GRAPHRAG_REDUCE_MAX_TOKENS = 500
 | Max relationships/chunk | Unlimited | 7 |
 | Leiden resolution | Configurable | 1.0 |
 | PageRank damping | Not specified | 0.85 |
-| Max context tokens (local) | 12,000 | 6,000 |
+| Max context tokens (summary) | 8,000 | **8,000** (matches) |
 | Text unit prop | 0.5 (50%) | N/A (RRF merge) |
 | Community prop | 0.15 (15%) | N/A (separate context) |
 | RRF k | N/A | 60 |

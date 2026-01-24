@@ -40,7 +40,7 @@ from src.config import (
     GRAPHRAG_LEIDEN_CONCURRENCY,
     GRAPHRAG_SUMMARY_MODEL,
     GRAPHRAG_COMMUNITY_PROMPT,
-    GRAPHRAG_MAX_SUMMARY_TOKENS,
+    GRAPHRAG_HIERARCHICAL_COMMUNITY_PROMPT,
     GRAPHRAG_MAX_CONTEXT_TOKENS,
     GRAPHRAG_MAX_HIERARCHY_LEVELS,
     DIR_GRAPH_DATA,
@@ -551,10 +551,165 @@ def build_community_context(
     return context
 
 
+def _estimate_tokens(text: str) -> int:
+    """Estimate token count from text (chars / 4 approximation)."""
+    return len(text) // 4
+
+
+def _format_child_summary_block(child_key: str, summary: str) -> str:
+    """Format a child community summary for inclusion in parent context.
+
+    Args:
+        child_key: Child community key (e.g., "community_L2_42").
+        summary: The child community's summary text.
+
+    Returns:
+        Formatted block for inclusion in hierarchical context.
+    """
+    return f"\n[Sub-Community: {child_key}]\n{summary}\n"
+
+
+def build_hierarchical_context(
+    community_id: int,
+    level: int,
+    levels: dict[int, "CommunityLevel"],
+    driver: Driver,
+    child_summaries: dict[str, str],
+    max_tokens: int = GRAPHRAG_MAX_CONTEXT_TOKENS,
+) -> tuple[str, bool]:
+    """Build context with child summary substitution when over token limit.
+
+    Implements Microsoft GraphRAG's bottom-up summarization (arXiv:2404.16130):
+    1. Try raw entity/relationship data first
+    2. If over limit: get children from levels[level+1].child_map
+    3. Rank children by raw token count (descending)
+    4. Iteratively substitute largest child's raw data with its summary
+    5. Rebuild context until under limit
+
+    Args:
+        community_id: The Leiden-assigned community ID at this level.
+        level: Current hierarchy level (0=coarsest, 2=finest).
+        levels: Dict mapping level index to CommunityLevel objects.
+        driver: Neo4j driver for fetching entity/relationship data.
+        child_summaries: Dict of child_key -> summary for substitution.
+        max_tokens: Maximum tokens for context.
+
+    Returns:
+        Tuple of (context_string, used_substitution_flag).
+        used_substitution_flag is True if any child summaries were substituted.
+    """
+    level_data = levels[level]
+    node_ids = level_data.communities.get(community_id, set())
+
+    # Get members and relationships
+    members = get_community_members_by_node_ids(driver, node_ids)
+    relationships = get_community_relationships_by_node_ids(driver, node_ids)
+
+    # Try raw context first
+    raw_context = build_community_context(members, relationships, max_tokens=max_tokens)
+    raw_tokens = _estimate_tokens(raw_context)
+
+    if raw_tokens <= max_tokens:
+        return raw_context, False
+
+    # Need to substitute child summaries
+    # Get children from the next finer level (level + 1)
+    finer_level = level + 1
+    if finer_level not in levels:
+        # No finer level exists, use truncated raw context
+        logger.warning(
+            f"Community L{level}_{community_id}: context exceeds {max_tokens} tokens, "
+            f"no finer level for substitution, using truncated context"
+        )
+        return raw_context, False
+
+    # Get child community IDs from child_map
+    child_community_ids = level_data.child_map.get(community_id, [])
+
+    if not child_community_ids:
+        # No children found, use truncated raw context
+        return raw_context, False
+
+    logger.debug(f"L{level}_{community_id}: {len(child_community_ids)} children for substitution")
+
+    # Calculate token count for each child's raw data
+    child_token_counts: list[tuple[int, int]] = []  # (child_id, token_count)
+    finer_level_data = levels[finer_level]
+
+    for child_id in child_community_ids:
+        child_node_ids = finer_level_data.communities.get(child_id, set())
+        child_members = get_community_members_by_node_ids(driver, child_node_ids)
+        child_rels = get_community_relationships_by_node_ids(driver, child_node_ids)
+        child_context = build_community_context(child_members, child_rels, max_tokens=max_tokens)
+        child_token_counts.append((child_id, _estimate_tokens(child_context)))
+
+    # Sort by token count descending (substitute largest first)
+    child_token_counts.sort(key=lambda x: x[1], reverse=True)
+
+    # Build context with progressive substitution
+    # Start with all children using raw data
+    children_using_summary: set[int] = set()
+
+    for child_id, _ in child_token_counts:
+        children_using_summary.add(child_id)
+
+        # Rebuild context with substitutions
+        context_parts = []
+        cross_community_rels = []
+
+        # Process each child: use summary if in substitution set
+        for cid in child_community_ids:
+            child_key = build_community_key(finer_level, cid)
+
+            if cid in children_using_summary and child_key in child_summaries:
+                # Use child summary
+                context_parts.append(_format_child_summary_block(child_key, child_summaries[child_key]))
+            else:
+                # Use raw data
+                child_node_ids = finer_level_data.communities.get(cid, set())
+                child_members = get_community_members_by_node_ids(driver, child_node_ids)
+                child_rels = get_community_relationships_by_node_ids(driver, child_node_ids)
+                child_raw = build_community_context(child_members, child_rels, max_tokens=max_tokens)
+                context_parts.append(f"\n[Child Community L{finer_level}_{cid}]\n{child_raw}\n")
+
+        # Add cross-community relationships (relationships between entities in different children)
+        all_child_node_ids = set()
+        for cid in child_community_ids:
+            all_child_node_ids.update(finer_level_data.communities.get(cid, set()))
+
+        cross_rels = get_community_relationships_by_node_ids(driver, all_child_node_ids)
+        if cross_rels:
+            context_parts.append("\n## Cross-Community Relationships")
+            for rel in cross_rels[:20]:  # Limit cross-community rels
+                desc = f": {rel.description}" if rel.description else ""
+                context_parts.append(
+                    f"- {rel.source} --[{rel.relationship_type}]--> {rel.target}{desc}"
+                )
+
+        full_context = "\n".join(context_parts)
+        context_tokens = _estimate_tokens(full_context)
+
+        if context_tokens <= max_tokens:
+            logger.info(
+                f"L{level}_{community_id}: substituted {len(children_using_summary)} child summaries "
+                f"({context_tokens} tokens)"
+            )
+            return full_context, True
+
+    # All children substituted but still over limit - use truncated
+    logger.warning(
+        f"L{level}_{community_id}: all children substituted but still {context_tokens} tokens, truncating"
+    )
+    max_chars = max_tokens * 4
+    return full_context[:max_chars] + "\n[... truncated]", True
+
+
 def summarize_community(
     members: list[CommunityMember],
     relationships: list[CommunityRelationship],
     model: str = GRAPHRAG_SUMMARY_MODEL,
+    prebuilt_context: Optional[str] = None,
+    used_substitution: bool = False,
 ) -> tuple[str, Optional[list[float]]]:
     """Generate LLM summary AND embedding for a community.
 
@@ -562,28 +717,40 @@ def summarize_community(
     a thematic summary, then creates an embedding vector
     for semantic retrieval.
 
+    Microsoft GraphRAG bottom-up approach (arXiv:2404.16130):
+    - When prebuilt_context is provided, it may contain child summaries
+    - If used_substitution is True, use GRAPHRAG_HIERARCHICAL_COMMUNITY_PROMPT
+    - No max_tokens limit on output to allow complete summaries
+
     Args:
         members: List of community members (pre-sorted by PageRank).
         relationships: List of CommunityRelationship objects.
         model: LLM model for summarization.
+        prebuilt_context: Pre-built context string (may contain child summaries).
+        used_substitution: True if child summaries were substituted.
 
     Returns:
         Tuple of (summary_text, embedding_vector).
         Embedding may be None if generation fails.
     """
-    # Build context
-    context = build_community_context(members, relationships)
+    # Use prebuilt context if provided, otherwise build from members/relationships
+    if prebuilt_context is not None:
+        context = prebuilt_context
+    else:
+        context = build_community_context(members, relationships)
 
-    # Build prompt
-    prompt = GRAPHRAG_COMMUNITY_PROMPT.format(community_context=context)
+    # Select prompt based on whether child summaries were used
+    if used_substitution:
+        prompt = GRAPHRAG_HIERARCHICAL_COMMUNITY_PROMPT.format(community_context=context)
+    else:
+        prompt = GRAPHRAG_COMMUNITY_PROMPT.format(community_context=context)
 
-    # Call LLM
+    # Call LLM - no max_tokens to allow complete summaries (Microsoft approach)
     messages = [{"role": "user", "content": prompt}]
     summary = call_chat_completion(
         messages=messages,
         model=model,
         temperature=0.3,
-        max_tokens=GRAPHRAG_MAX_SUMMARY_TOKENS,
     )
     summary = summary.strip()
 
@@ -813,12 +980,23 @@ def detect_and_summarize_communities(
             save_communities(communities)
     else:
         # Full hierarchy mode - process all levels
-        for level_idx in range(hierarchy_levels):
+        # Microsoft GraphRAG bottom-up approach: process finest-to-coarsest
+        # so child summaries exist when processing parent communities
+        max_level = hierarchy_levels - 1  # e.g., 2 for 3 levels (L0, L1, L2)
+
+        # Track child summaries for parent context building
+        child_summaries: dict[str, str] = {}
+
+        # Process levels in reverse order: finest (L2) to coarsest (L0)
+        for level_idx in reversed(range(hierarchy_levels)):
             level_data = levels[level_idx]
             level_community_ids = filter_communities_by_size(level_data, min_size)
             total_at_level = len(level_community_ids)
 
-            logger.info(f"Processing Level {level_idx}: {total_at_level} communities (>= {min_size} members)")
+            logger.info(
+                f"Processing Level {level_idx} (bottom-up): "
+                f"{total_at_level} communities (>= {min_size} members)"
+            )
 
             for idx, community_id in enumerate(sorted(level_community_ids)):
                 community_key = build_community_key(level_idx, community_id)
@@ -826,32 +1004,53 @@ def detect_and_summarize_communities(
 
                 # Skip if already in Weaviate (resume mode)
                 if community_key in existing_ids:
+                    # Still need to load summary for child_summaries if resuming
+                    # Try to get from existing communities list or Weaviate
                     continue
 
                 # Get node IDs for this community at this level
                 node_ids = level_data.communities.get(community_id, set())
 
                 # GDS Leiden writes community_id property for the FINEST level only
-                # With Microsoft convention (L0=coarsest), finest is max_level
-                max_level = hierarchy_levels - 1  # e.g., 2 for 3 levels
                 if level_idx == max_level:
                     # Finest level: use community_id-based queries (more efficient)
                     members = get_community_members(driver, community_id)
                     relationships = get_community_relationships(driver, community_id)
+                    # Finest level always uses raw data (no children to substitute)
+                    prebuilt_context = None
+                    used_substitution = False
                 else:
-                    # Coarser levels: use node ID-based queries (aggregated communities)
+                    # Coarser levels: use hierarchical context with potential child substitution
                     members = get_community_members_by_node_ids(driver, node_ids)
                     relationships = get_community_relationships_by_node_ids(driver, node_ids)
+                    # Try to build context with child summary substitution if needed
+                    prebuilt_context, used_substitution = build_hierarchical_context(
+                        community_id=community_id,
+                        level=level_idx,
+                        levels=levels,
+                        driver=driver,
+                        child_summaries=child_summaries,
+                    )
 
                 if len(members) < min_size:
                     continue
 
                 # Generate summary
+                sub_note = " (using child summaries)" if used_substitution else ""
                 logger.info(
                     f"[L{level_idx} {idx + 1}/{total_at_level}] Community {community_id} "
-                    f"({len(members)} members, {len(relationships)} relationships)"
+                    f"({len(members)} members, {len(relationships)} relationships){sub_note}"
                 )
-                summary, embedding = summarize_community(members, relationships, model=model)
+                summary, embedding = summarize_community(
+                    members,
+                    relationships,
+                    model=model,
+                    prebuilt_context=prebuilt_context,
+                    used_substitution=used_substitution,
+                )
+
+                # Track summary for parent communities
+                child_summaries[community_key] = summary
 
                 # Create and store community
                 community = Community(
