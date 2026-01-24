@@ -1,40 +1,28 @@
 # GraphRAG Entity Types
 # Optimized for dual-domain corpus: Neuroscience (8 books) + Philosophy/Wisdom (11 books)
 #
-# Reference: Microsoft GraphRAG uses 4 defaults (organization, person, geo, event)
-# This corpus needs 33 types due to dual-domain nature and technical vocabulary
+# Design: 8 types following industry best practices (Microsoft: 4, LangChain: "basic types")
+# Goal: Connect brain mechanisms → psychological states → behaviors → philosophical principles
+#
+# Previous version had 33 types with significant overlap (RESEARCHER/PHILOSOPHER/HISTORICAL_FIGURE,
+# PSYCHOLOGICAL_PHENOMENON/PSYCHOLOGICAL_CONCEPT, VIRTUE/VICE/ETHICAL_CONCEPT). Consolidated based on:
+# - Corpus extraction analysis (discovered_types.json): PERSON fragmented across 6 types (~9k entities)
+# - Evaluation questions: queries connect brain→behavior→philosophy, not fine-grained subtypes
+# - Industry consensus: 4-6 generic + 2-4 domain-specific maximum
 
 entity_types:
-  # Neuroscience-primary (18)
-  - BRAIN_REGION
-  - NEURAL_STRUCTURE
-  - NEURAL_SYSTEM
-  - NEUROTRANSMITTER
-  - HORMONE
-  - COGNITIVE_PROCESS
-  - BEHAVIOR
-  - EMOTION
-  - MENTAL_STATE
-  - PSYCHOLOGICAL_PHENOMENON
-  - HUMAN_DRIVE
-  - DISORDER
-  - ENVIRONMENTAL_FACTOR
-  - DEVELOPMENTAL_STAGE
-  - INTERVENTION
-  - THEORY
-  - STUDY
-  # Philosophy-primary (15)
-  - PERSON
-  - PHILOSOPHICAL_SCHOOL
-  - WORK
-  - PRINCIPLE
-  - VIRTUE
-  - VICE
-  - ETHICAL_CONCEPT
-  - METAPHYSICAL_CONCEPT
-  - PSYCHOLOGICAL_CONCEPT
-  - HUMAN_RELATIONSHIP
-  - LIFE_DOMAIN
-  - IDEAL
-  - ARGUMENT
-  - PRACTICE
+  # Generic (2) - minimal base
+  - PERSON           # researchers, philosophers, historical figures (Sapolsky, Epictetus, Kahneman)
+  - WORK             # books, papers, texts (Behave, Meditations, Thinking Fast and Slow)
+
+  # Neuroscience (3) - causal mechanisms
+  - BRAIN_STRUCTURE  # regions, systems (amygdala, prefrontal cortex, thalamus, nucleus accumbens)
+  - CHEMICAL         # neurotransmitters, hormones (dopamine, serotonin, oxytocin, cortisol)
+  - DISORDER         # clinical conditions (PTSD, depression, addiction)
+
+  # Psychology bridge (2) - observable and internal
+  - MENTAL_STATE     # internal experiences (emotion, consciousness, suffering, happiness, self-control)
+  - BEHAVIOR         # observable patterns (procrastination, aggression, empathy, conformity)
+
+  # Philosophy (1) - interpretive frameworks
+  - PRINCIPLE        # ideas, theories, virtues (dichotomy of control, wu wei, hedonic treadmill, virtue)
