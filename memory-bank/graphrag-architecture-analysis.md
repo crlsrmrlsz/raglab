@@ -209,9 +209,9 @@ flowchart TB
                 VectorSearch["Standard vector search<br/>query embedding → top-k chunks"]
             end
 
-            subgraph CommunityPath["Community Path (Weaviate)"]
+            subgraph CommunityPath["Community Path (Neo4j → JSON)"]
                 direction TB
-                CommunitySearch["query_communities_by_vector()<br/>top_k=3 (GRAPHRAG_TOP_COMMUNITIES)<br/>ALL levels by similarity"]
+                CommunitySearch["get_entity_community_ids()<br/>Query community_id from matched entities<br/>Load from communities.json"]
             end
         end
 
@@ -282,7 +282,7 @@ flowchart TB
 | `GRAPHRAG_ENTITY_MIN_SIMILARITY` | 0.3 | config.py:744 | Minimum cosine similarity |
 | `GRAPHRAG_USE_EMBEDDING_EXTRACTION` | True | config.py:745 | Use embedding (vs LLM only) |
 | `GRAPHRAG_TRAVERSE_DEPTH` | 2 | config.py:725 | Neo4j traversal hops |
-| `GRAPHRAG_TOP_COMMUNITIES` | 3 | config.py:724 | Communities for local queries |
+| `GRAPHRAG_TOP_COMMUNITIES` | 3 | config.py:724 | Communities for global queries (local uses entity membership) |
 | `GRAPHRAG_RRF_K` | 60 | config.py:726 | RRF fusion constant |
 | `GRAPHRAG_MAP_MAX_TOKENS` | 300 | config.py:738 | Max tokens per map response |
 | `GRAPHRAG_REDUCE_MAX_TOKENS` | 500 | config.py:739 | Max tokens for reduce |
@@ -503,7 +503,7 @@ GRAPHRAG_MAX_HIERARCHY_LEVELS = 3    # L0, L1, L2
 
 # Query
 GRAPHRAG_TRAVERSE_DEPTH = 2          # Hops for traversal
-GRAPHRAG_TOP_COMMUNITIES = 3         # Communities for local queries
+GRAPHRAG_TOP_COMMUNITIES = 3         # Communities for global queries (local uses entity membership)
 GRAPHRAG_RRF_K = 60                  # RRF constant
 GRAPHRAG_ENTITY_EXTRACTION_TOP_K = 10
 GRAPHRAG_ENTITY_MIN_SIMILARITY = 0.3
