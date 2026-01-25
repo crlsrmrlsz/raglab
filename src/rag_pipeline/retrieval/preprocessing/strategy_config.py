@@ -116,31 +116,6 @@ class CollectionConstraint:
 
 
 @dataclass
-class SearchTypeConstraint:
-    """Defines search type requirements for a strategy.
-
-    Attributes:
-        mode: How search type is constrained:
-            - "any": Strategy works with any search type (keyword, hybrid)
-            - "fixed": Strategy requires specific search type
-            - "internal": Strategy performs its own retrieval (no external search)
-        fixed_value: Required search type when mode="fixed"
-    """
-
-    mode: Literal["any", "fixed", "internal"]
-    fixed_value: Optional[str] = None
-
-    def __post_init__(self):
-        """Validate constraint configuration."""
-        if self.mode == "fixed" and self.fixed_value is None:
-            raise ValueError("fixed mode requires fixed_value")
-
-    def is_internal(self) -> bool:
-        """Check if strategy performs its own retrieval."""
-        return self.mode == "internal"
-
-
-@dataclass
 class AlphaConstraint:
     """Defines alpha (search balance) requirements for a strategy.
 
@@ -282,7 +257,8 @@ class StrategyConfig:
         alpha_constraint: How alpha (search balance) is constrained.
         reranking_constraint: How reranking is constrained.
         collection_constraint: How collection selection is constrained.
-        search_type_constraint: How search type is constrained.
+        has_internal_retrieval: Whether strategy performs its own retrieval
+            (e.g., GraphRAG does graph traversal + vector search internally).
         includes_original_in_embedding: Whether original query should be
             included when averaging embeddings (HyDE paper requirement).
 
@@ -291,9 +267,9 @@ class StrategyConfig:
         >>> hyde_config.is_valid_alpha(1.0)
         True
         >>> hyde_config.reranking_constraint.mode
-        'forbidden'
+        'optional'
         >>> graphrag_config = get_strategy_config("graphrag")
-        >>> graphrag_config.uses_dedicated_index()
+        >>> graphrag_config.has_internal_search()
         True
     """
 
@@ -309,9 +285,7 @@ class StrategyConfig:
     collection_constraint: CollectionConstraint = field(
         default_factory=lambda: CollectionConstraint(mode="any")
     )
-    search_type_constraint: SearchTypeConstraint = field(
-        default_factory=lambda: SearchTypeConstraint(mode="any")
-    )
+    has_internal_retrieval: bool = False
     includes_original_in_embedding: bool = False
 
     # ==========================================================================
@@ -324,7 +298,7 @@ class StrategyConfig:
 
     def has_internal_search(self) -> bool:
         """Check if strategy performs its own retrieval."""
-        return self.search_type_constraint.is_internal()
+        return self.has_internal_retrieval
 
     def is_valid_alpha(self, alpha: float) -> bool:
         """Check if alpha is valid for this strategy."""
@@ -460,7 +434,7 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
             dedicated_collection=get_graphrag_chunk_collection_name(),
         ),
         # GraphRAG performs its own hybrid retrieval (graph + vector)
-        search_type_constraint=SearchTypeConstraint(mode="internal"),
+        has_internal_retrieval=True,
     ),
 }
 
