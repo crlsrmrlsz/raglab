@@ -409,20 +409,14 @@ AVAILABLE_PREPROCESSING_STRATEGIES = [
 # Default strategy for UI and preprocess_query() when not specified
 DEFAULT_PREPROCESSING_STRATEGY = "hyde"
 
-# Preprocessing compatibility by collection type
-# GraphRAG requires chunk IDs to match between extraction and search.
-# Only section collections have compatible IDs because:
-# - section: Original chunk IDs used for entity extraction
-# - contextual: Uses semantic_std2 as input, so has semantic chunk IDs (no match)
-# - semantic: Different chunk boundaries = different IDs = no match
-# - raptor: Summary nodes have different IDs; only leaf chunks match
-GRAPHRAG_COMPATIBLE_COLLECTIONS = ["section"]
-
+# Preprocessing compatibility by collection type for standard strategies
+# Note: GraphRAG uses its own dedicated collection (semantic_std2) via StrategyConfig,
+# so it's not included here. The StrategyConfig.collection_constraint handles it.
 PREPROCESSING_COMPATIBILITY = {
-    "section": ["none", "hyde", "decomposition", "graphrag"],
-    "contextual": ["none", "hyde", "decomposition"],  # No graphrag - uses semantic chunk IDs
-    "semantic": ["none", "hyde", "decomposition"],  # No graphrag - chunk ID mismatch
-    "raptor": ["none", "hyde", "decomposition"],  # No graphrag - partial match only
+    "section": ["none", "hyde", "decomposition"],
+    "contextual": ["none", "hyde", "decomposition"],
+    "semantic": ["none", "hyde", "decomposition"],
+    "raptor": ["none", "hyde", "decomposition"],
 }
 
 
@@ -753,17 +747,34 @@ GRAPHRAG_STRICT_MODE = True
 # Better for entity extraction (each chunk covers fewer topics)
 GRAPHRAG_SEMANTIC_STD_COEFFICIENT = 2.0
 
+# GraphRAG uses semantic_std2 chunks exclusively for consistency between
+# indexing (entity extraction) and query (chunk retrieval)
+GRAPHRAG_CHUNKING_STRATEGY = "semantic_std2"
+
 
 def get_entity_collection_name() -> str:
     """Generate entity collection name for GraphRAG embedding extraction.
 
-    Uses same naming pattern as community collection for consistency.
+    Uses GRAPHRAG_CHUNKING_STRATEGY for consistent entity-chunk mapping.
 
     Returns:
-        Collection name like "Entity_section800_v1".
+        Collection name like "Entity_semantic_std2_v1".
     """
-    strategy_safe = CHUNKING_STRATEGY_NAME.replace(".", "_")
+    strategy_safe = GRAPHRAG_CHUNKING_STRATEGY.replace(".", "_")
     return f"Entity_{strategy_safe}_{COLLECTION_VERSION}"
+
+
+def get_graphrag_chunk_collection_name() -> str:
+    """Generate chunk collection name for GraphRAG retrieval.
+
+    This is the collection used at query time to fetch chunks by ID after
+    graph traversal. Must match the collection created during indexing.
+
+    Returns:
+        Collection name like "RAG_semantic_std2_embed3large_v1".
+    """
+    strategy_safe = GRAPHRAG_CHUNKING_STRATEGY.replace(".", "_")
+    return f"RAG_{strategy_safe}_{EMBEDDING_MODEL_SHORT}_{COLLECTION_VERSION}"
 
 
 # Output directory for graph data (under chunks since graph derives from chunks)

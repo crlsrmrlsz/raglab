@@ -92,6 +92,7 @@ from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_ar
 from src.rag_pipeline.retrieval.preprocessing.strategy_config import (
     get_strategy_config,
     is_valid_combination,
+    list_strategy_configs,
 )
 
 # Comprehensive evaluation imports (lazy-loaded in function)
@@ -508,16 +509,32 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         logger.error("No RAG collections found in Weaviate. Run stage 6 first.")
         return
 
-    # Build base combinations: (collection, alpha, strategy)
+    # Separate strategies into standard (grid) and dedicated (single run)
+    # Dedicated strategies use their own collection and don't participate in the grid
+    standard_strategies = []
+    dedicated_strategies = []
+    for config in list_strategy_configs():
+        if config.uses_dedicated_index() or config.has_internal_search():
+            dedicated_strategies.append(config)
+        else:
+            standard_strategies.append(config)
+
+    logger.info(f"Standard strategies (grid): {[s.strategy_id for s in standard_strategies]}")
+    logger.info(f"Dedicated strategies (single run): {[s.strategy_id for s in dedicated_strategies]}")
+
+    # Build base combinations: (collection, search_type, alpha, strategy)
     # Uses StrategyConfig constraints to filter invalid combinations
     # top_k will be the innermost loop for caching optimization
     base_combinations = []
     skipped_combinations = []
+
+    # Standard strategies: iterate over collections and alphas (grid)
     for collection in collections:
         collection_strategy = extract_strategy_from_collection(collection)
         valid_preprocessing = get_valid_preprocessing_strategies(collection_strategy)
         for alpha in alpha_values:
-            for strategy in all_strategies:
+            for config in standard_strategies:
+                strategy = config.strategy_id
                 # Check collection compatibility (existing logic)
                 if strategy not in valid_preprocessing:
                     skipped_combinations.append(
@@ -531,6 +548,23 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
                     base_combinations.append((collection, "hybrid", alpha, strategy))
                 else:
                     skipped_combinations.append((collection, alpha, strategy, error_msg))
+
+    # Dedicated strategies: use their dedicated collection (not in grid)
+    for config in dedicated_strategies:
+        dedicated_collection = config.collection_constraint.dedicated_collection
+        alpha = config.alpha_constraint.get_default()
+        # Check if dedicated collection exists in available collections
+        if dedicated_collection in collections:
+            base_combinations.append((dedicated_collection, "hybrid", alpha, config.strategy_id))
+            logger.info(
+                f"Added dedicated strategy: {config.strategy_id} with "
+                f"collection={dedicated_collection}, alpha={alpha}"
+            )
+        else:
+            logger.warning(
+                f"Skipping {config.strategy_id}: dedicated collection "
+                f"'{dedicated_collection}' not found in Weaviate"
+            )
 
     # Calculate total combinations (base * top_k values)
     total_combinations = len(base_combinations) * len(top_k_values)

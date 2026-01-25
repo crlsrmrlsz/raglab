@@ -36,6 +36,57 @@ Alpha controls the search balance (replaces search_type dimension):
 from dataclasses import dataclass, field
 from typing import Optional, Literal
 
+from src.config import get_graphrag_chunk_collection_name
+
+
+@dataclass
+class CollectionConstraint:
+    """Defines collection requirements for a strategy.
+
+    Attributes:
+        mode: How collection is constrained:
+            - "any": Strategy works with any compatible collection
+            - "dedicated": Strategy uses its own dedicated index (ignores selection)
+        dedicated_collection: Collection name when mode="dedicated"
+    """
+
+    mode: Literal["any", "dedicated"]
+    dedicated_collection: Optional[str] = None
+
+    def __post_init__(self):
+        """Validate constraint configuration."""
+        if self.mode == "dedicated" and self.dedicated_collection is None:
+            raise ValueError("dedicated mode requires dedicated_collection")
+
+    def uses_dedicated_index(self) -> bool:
+        """Check if strategy uses dedicated index (ignores collection selection)."""
+        return self.mode == "dedicated"
+
+
+@dataclass
+class SearchTypeConstraint:
+    """Defines search type requirements for a strategy.
+
+    Attributes:
+        mode: How search type is constrained:
+            - "any": Strategy works with any search type (keyword, hybrid)
+            - "fixed": Strategy requires specific search type
+            - "internal": Strategy performs its own retrieval (no external search)
+        fixed_value: Required search type when mode="fixed"
+    """
+
+    mode: Literal["any", "fixed", "internal"]
+    fixed_value: Optional[str] = None
+
+    def __post_init__(self):
+        """Validate constraint configuration."""
+        if self.mode == "fixed" and self.fixed_value is None:
+            raise ValueError("fixed mode requires fixed_value")
+
+    def is_internal(self) -> bool:
+        """Check if strategy performs its own retrieval."""
+        return self.mode == "internal"
+
 
 @dataclass
 class AlphaConstraint:
@@ -123,10 +174,13 @@ class StrategyConfig:
         display_name: Human-readable name for UI.
         description: Short description for UI help text.
         alpha_constraint: How alpha (search balance) is constrained.
-        compatible_collections: If set, restrict to these collection types.
-            None means compatible with all collections.
+        collection_constraint: How collection selection is constrained.
+        search_type_constraint: How search type is constrained.
+        compatible_collections: DEPRECATED - use collection_constraint instead.
+            If set, restrict to these collection types.
         includes_original_in_embedding: Whether original query should be
             included when averaging embeddings (HyDE paper requirement).
+        requires_reranking: If True, cross-encoder reranking is mandatory.
 
     Example:
         >>> hyde_config = get_strategy_config("hyde")
@@ -134,6 +188,9 @@ class StrategyConfig:
         True
         >>> hyde_config.is_valid_alpha(0.5)
         False
+        >>> graphrag_config = get_strategy_config("graphrag")
+        >>> graphrag_config.uses_dedicated_index()
+        True
     """
 
     strategy_id: str
@@ -142,9 +199,23 @@ class StrategyConfig:
     alpha_constraint: AlphaConstraint = field(
         default_factory=lambda: AlphaConstraint(mode="any")
     )
-    compatible_collections: Optional[set[str]] = None
+    collection_constraint: CollectionConstraint = field(
+        default_factory=lambda: CollectionConstraint(mode="any")
+    )
+    search_type_constraint: SearchTypeConstraint = field(
+        default_factory=lambda: SearchTypeConstraint(mode="any")
+    )
+    compatible_collections: Optional[set[str]] = None  # DEPRECATED
     includes_original_in_embedding: bool = False
-    requires_reranking: bool = False  # If True, cross-encoder reranking is mandatory
+    requires_reranking: bool = False
+
+    def uses_dedicated_index(self) -> bool:
+        """Check if strategy uses dedicated index (ignores collection selection)."""
+        return self.collection_constraint.uses_dedicated_index()
+
+    def has_internal_search(self) -> bool:
+        """Check if strategy performs its own retrieval."""
+        return self.search_type_constraint.is_internal()
 
     def is_valid_alpha(self, alpha: float) -> bool:
         """Check if alpha is valid for this strategy.
@@ -243,11 +314,16 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
     "graphrag": StrategyConfig(
         strategy_id="graphrag",
         display_name="GraphRAG",
-        description="Pure graph retrieval with combined_degree ranking (arXiv:2404.16130)",
-        # GraphRAG requires matching chunk IDs (only section collections)
-        compatible_collections={"section"},
-        # GraphRAG constraints TBD - for now allow any alpha
-        alpha_constraint=AlphaConstraint(mode="any"),
+        description="Knowledge graph + community retrieval (arXiv:2404.16130)",
+        # GraphRAG uses dedicated semantic_std2 collection (dynamically generated)
+        collection_constraint=CollectionConstraint(
+            mode="dedicated",
+            dedicated_collection=get_graphrag_chunk_collection_name(),
+        ),
+        # GraphRAG performs its own hybrid retrieval (graph + vector)
+        search_type_constraint=SearchTypeConstraint(mode="internal"),
+        # Alpha is fixed for internal search consistency
+        alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
     ),
 }
 

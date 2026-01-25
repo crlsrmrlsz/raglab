@@ -96,14 +96,6 @@ if "retrieval_settings" not in st.session_state:
 # ============================================================================
 
 
-def _find_section_collection(collection_infos: list[CollectionInfo]) -> str | None:
-    """Find the section collection name from available collections."""
-    for info in collection_infos:
-        if info.strategy == "section":
-            return info.collection_name
-    return None
-
-
 def _format_config_summary() -> str:
     """Format compact config summary for display."""
     settings = st.session_state.retrieval_settings
@@ -395,14 +387,32 @@ enable_preprocessing = selected_strategy != "none"
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("### Collection")
 
-if selected_strategy == "graphrag":
-    # GraphRAG requires section collection
-    st.sidebar.caption("graphrag uses section chunks (required for entity matching)")
-    selected_collection = _find_section_collection(collection_infos)
-    if not selected_collection:
-        st.sidebar.error("No section collection found. Run Stage 4 with section strategy first.")
+# Get strategy config for constraint checking
+strategy_config = get_strategy_config(selected_strategy)
+
+if strategy_config.uses_dedicated_index():
+    # Strategy uses dedicated collection (e.g., GraphRAG uses semantic_std2)
+    dedicated_name = strategy_config.collection_constraint.dedicated_collection
+    st.sidebar.selectbox(
+        "Chunking Strategy",
+        options=[dedicated_name],
+        disabled=True,
+        help="This strategy uses a dedicated index.",
+    )
+    st.sidebar.caption(f"Uses dedicated index: {dedicated_name}")
+    # Check if dedicated collection exists
+    if dedicated_name in [c.collection_name for c in collection_infos]:
+        selected_collection = dedicated_name
+    else:
+        st.sidebar.error(
+            f"Collection '{dedicated_name}' not found. Run the chunking and upload pipeline:\n"
+            "1. Stage 4: python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0\n"
+            "2. Stage 5: python -m src.stages.run_stage_5_embedding --strategy semantic_std2\n"
+            "3. Stage 6: python -m src.stages.run_stage_6_weaviate --strategy semantic_std2"
+        )
+        selected_collection = None
 elif collection_infos:
-    # Filter to compatible collections
+    # Standard strategies: filter to compatible collections
     compatible = [
         info for info in collection_infos
         if selected_strategy in get_valid_preprocessing_strategies(info.strategy)
@@ -426,12 +436,23 @@ else:
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("### Retrieval")
 
-# Get strategy config for alpha constraints
-strategy_config = get_strategy_config(selected_strategy)
+# strategy_config was already fetched above for collection constraint
 alpha_constraint = strategy_config.alpha_constraint
 
 # Render alpha control based on constraint
-if alpha_constraint.mode == "fixed":
+if strategy_config.has_internal_search():
+    # Strategy performs its own retrieval (e.g., GraphRAG)
+    st.sidebar.slider(
+        "Alpha",
+        min_value=0.0,
+        max_value=1.0,
+        value=1.0,
+        disabled=True,
+        help="Search type is controlled by the strategy.",
+    )
+    st.sidebar.caption("Search: **Internal** (graph + vector retrieval)")
+    alpha = 1.0  # Default for internal strategies
+elif alpha_constraint.mode == "fixed":
     # Strategy requires specific alpha (e.g., HyDE requires alpha=1.0)
     alpha = alpha_constraint.fixed_value
     if alpha == 1.0:
@@ -440,6 +461,14 @@ if alpha_constraint.mode == "fixed":
         alpha_label = "Keyword"
     else:
         alpha_label = f"Hybrid ({alpha})"
+    st.sidebar.slider(
+        "Alpha",
+        min_value=0.0,
+        max_value=1.0,
+        value=alpha,
+        disabled=True,
+        help="Alpha is fixed for this strategy.",
+    )
     st.sidebar.caption(f"Search: **{alpha_label}** (required by {selected_strategy})")
 elif alpha_constraint.mode == "range":
     # Strategy allows alpha within range

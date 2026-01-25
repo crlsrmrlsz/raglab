@@ -7,11 +7,11 @@ for Neo4j upload in Stage 6b.
 ## Usage
 
 ```bash
-# Full extraction (default: section chunks)
+# Full extraction (default: semantic_std2 chunks)
 python -m src.stages.run_stage_4_5_graph_extract
 
 # Use different chunking strategy
-python -m src.stages.run_stage_4_5_graph_extract --strategy semantic
+python -m src.stages.run_stage_4_5_graph_extract --strategy section
 
 # Resume after interruption (skip processed books)
 python -m src.stages.run_stage_4_5_graph_extract --overwrite skip
@@ -36,7 +36,7 @@ from pathlib import Path
 
 from src.graph.extraction import run_extraction, load_book_files
 from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_arg
-from src.config import GRAPHRAG_EXTRACTION_MODEL, DIR_CLEANING_LOGS
+from src.config import GRAPHRAG_EXTRACTION_MODEL, DIR_CLEANING_LOGS, GRAPHRAG_CHUNKING_STRATEGY
 
 logger = setup_logging(__name__)
 
@@ -63,8 +63,8 @@ def main():
         description="Stage 4.5: Extract entities/relationships for GraphRAG"
     )
     parser.add_argument(
-        "--strategy", type=str, default="section",
-        help="Chunking strategy (default: section)",
+        "--strategy", type=str, default=GRAPHRAG_CHUNKING_STRATEGY,
+        help=f"Chunking strategy (default: {GRAPHRAG_CHUNKING_STRATEGY})",
     )
     parser.add_argument(
         "--overwrite", type=str, default="prompt",
