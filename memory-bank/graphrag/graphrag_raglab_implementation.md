@@ -178,7 +178,7 @@ flowchart TB
 ### Extraction Process
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph Chunk["Per Chunk"]
         TEXT[Chunk Text] --> PROMPT["Extraction Prompt"]
         PROMPT --> LLM["Claude 3 Haiku"]
