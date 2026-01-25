@@ -428,8 +428,8 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
         description="Hypothetical Document Embeddings (arXiv:2212.10496)",
         # Paper requirement: pure semantic search (dense retrieval)
         alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
-        # HyDE relies on embedding similarity; reranking would defeat the purpose
-        reranking_constraint=RerankingConstraint(mode="forbidden"),
+        # Reranking optional: test if cross-encoder improves HyDE results
+        reranking_constraint=RerankingConstraint(mode="optional"),
         # Collection: any standard collection
         collection_constraint=CollectionConstraint(mode="any"),
         # Paper requirement: average original query + hypotheticals

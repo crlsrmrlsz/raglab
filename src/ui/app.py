@@ -503,12 +503,14 @@ top_k = st.sidebar.slider(
 )
 
 # -----------------------------------------------------------------------------
-# Reranking (always visible, may be forced by strategy)
+# Reranking (constraint-aware based on selected strategy)
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("### Reranking")
 
-# Some strategies require reranking (e.g., decomposition per arXiv:2507.00355)
-if strategy_config.requires_reranking:
+reranking_constraint = strategy_config.reranking_constraint
+
+if reranking_constraint.mode == "required":
+    # Strategy requires reranking (e.g., decomposition per arXiv:2507.00355)
     use_reranking = True
     st.sidebar.checkbox(
         "Enable Cross-Encoder",
@@ -517,7 +519,18 @@ if strategy_config.requires_reranking:
         help="Required by this preprocessing strategy.",
     )
     st.sidebar.caption(f"Required by {selected_strategy}")
+elif reranking_constraint.mode == "forbidden":
+    # Strategy forbids reranking (e.g., graphrag uses combined_degree ranking)
+    use_reranking = False
+    st.sidebar.checkbox(
+        "Enable Cross-Encoder",
+        value=False,
+        disabled=True,
+        help="Not compatible with this preprocessing strategy.",
+    )
+    st.sidebar.caption(f"Disabled for {selected_strategy}")
 else:
+    # Strategy allows optional reranking (none, hyde)
     use_reranking = st.sidebar.checkbox(
         "Enable Cross-Encoder",
         value=False,
