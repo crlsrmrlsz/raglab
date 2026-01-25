@@ -10,7 +10,7 @@ Preprocessing Strategies (query transformation):
 - none: No transformation (baseline for comparison)
 - hyde: Generate hypothetical answer for semantic matching (arXiv:2212.10496)
 - decomposition: Break into sub-questions + RRF merge (+36.7% MRR@10, arXiv:2507.00355)
-- graphrag: Hybrid graph + vector retrieval via RRF (arXiv:2404.16130)
+- graphrag: Pure graph retrieval with combined_degree ranking (arXiv:2404.16130)
 
 Note: Keyword/BM25 search is a search_type dimension, not a preprocessing strategy.
 See config.py SEARCH_TYPES for search_type options (keyword, hybrid).
@@ -178,7 +178,7 @@ def decomposition_strategy(query: str, model: Optional[str] = None) -> Preproces
 
 
 def graphrag_strategy(query: str, model: Optional[str] = None) -> PreprocessedQuery:
-    """GraphRAG: Hybrid graph + vector retrieval.
+    """GraphRAG: Pure graph retrieval with combined_degree ranking.
 
     This strategy extracts entities from the query using embedding similarity
     (primary) or LLM (fallback). Entities are stored in PreprocessedQuery.query_entities
@@ -189,7 +189,8 @@ def graphrag_strategy(query: str, model: Optional[str] = None) -> PreprocessedQu
     - Fallback: LLM-based extraction if embedding returns empty (~1-2s)
 
     The actual graph retrieval happens in the search phase where it can access
-    the Neo4j driver for entity validation and traversal.
+    the Neo4j driver for entity validation and traversal. Chunks are ranked
+    by combined_degree (start_degree + neighbor_degree) per Microsoft's design.
 
     Research: arXiv:2404.16130 - GraphRAG: +72-83% win rate vs baseline
 

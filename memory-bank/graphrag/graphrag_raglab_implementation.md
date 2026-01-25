@@ -57,20 +57,18 @@ flowchart TB
         ENTITY_EMB --> WEAVIATE_ENT[(Weaviate<br/>Entity_section800_v1)]
     end
 
-    subgraph Phase3["Query Time"]
+    subgraph Phase3["Query Time (Graph-Only)"]
         QUERY[User Query] --> ENTITY_EXT[query_entities.py<br/>Embedding + LLM fallback]
         ENTITY_EXT --> |matched entities| NEO4J
         NEO4J --> |graph traversal| NEIGHBORS[Related Entities]
         NEIGHBORS --> CHUNK_IDS[Source Chunk IDs]
 
-        QUERY --> VECTOR[Weaviate Vector Search<br/>RAG_section800_embed3large_v1]
-
-        CHUNK_IDS --> RRF[RRF Merge<br/>k=60]
-        VECTOR --> RRF
+        CHUNK_IDS --> FETCH[Weaviate Batch Fetch<br/>by chunk_id]
+        FETCH --> RANK[Rank by combined_degree<br/>start_degree + neighbor_degree]
 
         ENTITY_EXT --> |community lookup| COMM_CTX[Community Context<br/>by entity membership]
 
-        RRF --> GENERATION[Answer Generation]
+        RANK --> GENERATION[Answer Generation]
         COMM_CTX --> GENERATION
     end
 
@@ -106,7 +104,7 @@ flowchart TB
 | Local Search | Entity matching → traversal | Entity matching → traversal | Matches |
 | Entity Matching | Embedding similarity | Embedding similarity + LLM fallback | Enhanced |
 | Relationship Prioritization | combined_degree | **combined_degree** (start + neighbor degree) | Matches |
-| Token Budget | 50% text, 10% community | RRF merge (no explicit budget) | Different |
+| Token Budget | 50% text, 10% community | combined_degree ranking (no explicit budget) | Different |
 | Community Context | In token budget | By entity membership (separate) | Different |
 | Global Search | Map-reduce over communities | Map-reduce over L0 communities | Matches |
 | Query Classification | LLM-based | LLM-based | Matches |
@@ -460,13 +458,13 @@ flowchart LR
     end
 
     subgraph Usage["Query Time Usage"]
-        QUERY[User Query] --> CHUNKS
+        QUERY[User Query] --> ENTS
         QUERY --> COMMS
-        QUERY --> ENTS
 
         ENTS --> |Entity extraction| NEO4J[(Neo4j)]
+        NEO4J --> |Graph traversal| CHUNKS
+        CHUNKS --> |Batch fetch| RESULTS[Final Results]
         COMMS --> |Global queries| MAPRED[Map-Reduce]
-        CHUNKS --> |RRF merge| RESULTS[Final Results]
     end
 
     style CHUNKS fill:#fa8072
@@ -525,17 +523,10 @@ flowchart TB
         TRAVERSE --> GRAPH_CHUNKS[Graph Chunk IDs<br/>from source_chunk_ids]
     end
 
-    subgraph VectorSearch["Parallel Vector Search"]
-        QUERY --> WEAVIATE[Weaviate hybrid search<br/>RAG collection]
-        WEAVIATE --> VECTOR_CHUNKS[Vector Results]
-    end
-
-    subgraph RRFMerge["RRF Fusion"]
-        GRAPH_CHUNKS --> FETCH[fetch_chunks_by_ids<br/>Batch retrieval]
+    subgraph ChunkRetrieval["Chunk Retrieval (Graph-Only)"]
+        GRAPH_CHUNKS --> FETCH[fetch_chunks_by_ids<br/>Batch retrieval from Weaviate]
         FETCH --> RANK_GRAPH[_build_graph_ranked_list<br/>Sort by combined_degree]
-        RANK_GRAPH --> RRF[reciprocal_rank_fusion<br/>k=60]
-        VECTOR_CHUNKS --> RRF
-        RRF --> MERGED[Merged Results<br/>Chunks in BOTH lists boosted]
+        RANK_GRAPH --> RESULTS[Ranked Results<br/>Hub entities = more informative]
     end
 
     subgraph CommunityContext["Community Context"]
@@ -544,10 +535,9 @@ flowchart TB
         LOAD_COMM --> CONTEXT[Community Summaries]
     end
 
-    MERGED --> ANSWER[Answer Generation]
+    RESULTS --> ANSWER[Answer Generation]
     CONTEXT --> ANSWER
 
-    style WEAVIATE fill:#fa8072
     style NEO4J fill:#4db33d,color:white
 ```
 
@@ -557,20 +547,20 @@ flowchart TB
 |--------|--------------------|----|
 | Entity matching | Embedding similarity | Embedding + LLM fallback + Regex |
 | Relationship ranking | `combined_degree` | `combined_degree` (start + neighbor degree) |
-| Context composition | Token budget allocation | RRF merge (no explicit budget) |
+| Context composition | Token budget allocation | combined_degree ranking (no explicit budget) |
 | Community retrieval | In token budget | By entity membership (separate context) |
 
-### RRF Score Calculation
+### Combined Degree Ranking
 
-RAGLab uses standard RRF with k=60:
+RAGLab ranks chunks by `combined_degree` (Microsoft's approach):
 
 ```python
-# score = sum(1 / (k + rank_i)) for each list containing the item
-# Example: chunk at vector_rank=5, graph_rank=3
-# score = 1/(60+5) + 1/(60+3) = 0.0154 + 0.0159 = 0.0313
+# combined_degree = start_degree + neighbor_degree
+# Higher combined_degree = hub entities = more informative chunks
+# Chunks reached via multiple entities use MAX combined_degree
 ```
 
-Items appearing in **both** vector and graph results get boosted scores.
+This aligns with Microsoft's relationship prioritization strategy.
 
 ---
 

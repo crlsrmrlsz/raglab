@@ -12,7 +12,7 @@ encapsulates its own retrieval logic:
 - **StandardRetrieval**: Direct Weaviate search (no preprocessing)
 - **HyDERetrieval**: Generate hypotheticals → average embeddings → single search
 - **DecompositionRetrieval**: Break into sub-questions → parallel searches → union → rerank
-- **GraphRAGRetrieval**: Extract entities → vector search → graph traversal → RRF merge
+- **GraphRAGRetrieval**: Extract entities → graph traversal → combined_degree ranking
 
 This eliminates the confusing conditional logic that previously checked
 `if strategy == "hyde" and multi_queries and len(multi_queries) > 1:`.

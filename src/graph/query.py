@@ -1,30 +1,39 @@
-"""Graph retrieval strategy for hybrid GraphRAG + vector search.
+"""Graph retrieval strategies for GraphRAG.
 
-## RAG Theory: Hybrid Retrieval in GraphRAG
+## RAG Theory: Graph-Based Retrieval (Microsoft GraphRAG)
 
-GraphRAG combines two retrieval methods:
+GraphRAG uses two retrieval methods:
 1. **Local search**: Entity matching → Graph traversal → Related chunks
+   - Ranks by combined_degree (relationship hub importance)
 2. **Global search**: Query → Community summary matching → Theme context
+   - Map-reduce over Leiden communities
 
-The hybrid approach uses RRF (Reciprocal Rank Fusion) to merge:
-- Vector search results (semantic similarity)
-- Graph traversal results (relationship-based via chunk lookup)
-- Community summaries (thematic context)
+For local queries, pure graph traversal (Microsoft's design):
+- Leverages relationship structure (hub entities = more informative)
+- No vector search on chunks (entity descriptions only for matching)
+- Faster retrieval (single graph traversal path)
 
 ## Library Usage
 
 Uses existing infrastructure:
-- Neo4j for graph queries
-- Weaviate for vector search and chunk fetching
-- RRF from src/rag_pipeline/retrieval/rrf.py
+- Neo4j for graph queries and entity matching
+- Weaviate for chunk fetching (batch filter, not vector search)
+- RRF preserved for decomposition strategy compatibility
 
-## Data Flow
+## Data Flow (Local Queries - Graph-Only)
 
 1. Query → Extract entity mentions (embedding similarity + LLM fallback)
 2. Match entities in Neo4j → Traverse graph → Get related chunk IDs
-3. Vector search in Weaviate → Get similar chunks
-4. Fetch graph-only chunks from Weaviate (not in vector results)
-5. RRF merge vector + graph result sets → Return top-k chunks
+3. Fetch chunks from Weaviate by ID (batch filter)
+4. Rank by combined_degree (Microsoft approach: hub entities = more informative)
+5. Return top-k chunks
+
+## Data Flow (Global Queries - Map-Reduce)
+
+1. Query → Classify as global (no entities, abstract question)
+2. Retrieve L0 communities (coarsest level)
+3. Map: Parallel LLM calls → partial answers per community
+4. Reduce: Synthesize final answer
 """
 
 from typing import Any, Optional
@@ -619,10 +628,13 @@ def hybrid_graph_retrieval(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Merge vector search results with graph traversal using RRF.
 
+    NOTE: This function is preserved for decomposition strategy compatibility.
+    For GraphRAG, use graph_retrieval() instead (pure graph, no vector search).
+
     Enhances vector search with knowledge graph context:
     1. Traverses graph from query entities to find related chunk IDs
     2. Fetches ALL graph-discovered chunks from Weaviate
-    3. Ranks graph chunks by path_length (closer to query entity = higher rank)
+    3. Ranks graph chunks by combined_degree (hub importance)
     4. Uses RRF to merge vector list + graph list (chunks in both get boosted)
     5. Adds community summaries for thematic context
 
@@ -641,11 +653,6 @@ def hybrid_graph_retrieval(
         Tuple of:
         - RRF-merged results (vector + graph sources combined)
         - Metadata dict with entities, graph context, and communities
-
-    Example:
-        >>> driver = get_driver()
-        >>> results, meta = hybrid_graph_retrieval("What is dopamine?", driver, vector_results)
-        >>> print(meta["query_entities"])
     """
     # Get graph chunk IDs and metadata
     graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
@@ -774,6 +781,9 @@ def hybrid_graph_retrieval_with_map_reduce(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Enhanced hybrid retrieval with optional map-reduce for global queries.
 
+    NOTE: This function is preserved for decomposition strategy compatibility.
+    For GraphRAG, use graph_retrieval_with_map_reduce() instead (pure graph).
+
     Extends hybrid_graph_retrieval with map-reduce support:
     - For local queries: Standard RRF merge (entity traversal + vector)
     - For global queries: Map-reduce over community summaries
@@ -790,7 +800,7 @@ def hybrid_graph_retrieval_with_map_reduce(
         Tuple of (results, metadata).
         For global queries with map-reduce, metadata includes "map_reduce_result".
     """
-    from .map_reduce import classify_query, map_reduce_global_query, should_use_map_reduce
+    from .map_reduce import map_reduce_global_query, should_use_map_reduce
 
     # First, get graph context regardless of query type
     graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
@@ -887,3 +897,185 @@ def format_graph_context_for_generation(
         context = context[:max_chars] + "\n[... truncated]"
 
     return context
+
+
+# ============================================================================
+# Graph-Only Retrieval (Microsoft GraphRAG Design)
+# ============================================================================
+
+
+def graph_retrieval(
+    query: str,
+    driver: Driver,
+    top_k: int = 10,
+    collection_name: Optional[str] = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Pure graph retrieval without vector search (Microsoft GraphRAG design).
+
+    Flow:
+        1. Extract entities from query (embedding similarity + LLM fallback)
+        2. Traverse graph from matched entities
+        3. Fetch ALL chunks from graph traversal
+        4. Rank by combined_degree (start_degree + neighbor_degree)
+        5. Add community summaries (by entity membership)
+        6. Return top-k chunks
+
+    Args:
+        query: User query string.
+        driver: Neo4j driver instance.
+        top_k: Number of results to return.
+        collection_name: Weaviate collection (default: from config).
+
+    Returns:
+        Tuple of:
+        - Results list (dicts with chunk data, ranked by combined_degree)
+        - Metadata dict (entities, graph context, communities)
+
+    Raises:
+        neo4j.exceptions.ServiceUnavailable: If Neo4j connection fails.
+
+    Example:
+        >>> driver = get_driver()
+        >>> results, meta = graph_retrieval("What is dopamine?", driver, top_k=10)
+        >>> len(results) <= 10
+        True
+    """
+    # Get graph chunk IDs and metadata
+    graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
+
+    # Get community context by entity membership (Microsoft approach)
+    query_entities = graph_meta.get("query_entities", [])
+    community_context = retrieve_community_context_by_membership(
+        entity_names=query_entities,
+        driver=driver,
+    )
+
+    # Build metadata
+    metadata = {
+        "extracted_entities": graph_meta.get("extracted_entities", []),
+        "query_entities": query_entities,
+        "graph_context": graph_meta.get("graph_context", []),
+        "community_context": community_context,
+        "graph_chunk_count": len(graph_chunk_ids),
+    }
+
+    if not graph_chunk_ids:
+        logger.info("No graph chunks found, returning empty results")
+        return [], metadata
+
+    # Fetch ALL graph-discovered chunks from Weaviate (batch filter, not vector search)
+    all_graph_chunks = fetch_chunks_by_ids(graph_chunk_ids, collection_name)
+
+    if not all_graph_chunks:
+        logger.warning(f"No chunks fetched for {len(graph_chunk_ids)} graph IDs")
+        return [], metadata
+
+    # Rank by combined_degree (Microsoft approach: hub entities = more informative)
+    graph_context = graph_meta.get("graph_context", [])
+    ranked_results = _build_graph_ranked_list(graph_context, all_graph_chunks)
+
+    # Convert to dicts for consistency with existing interface
+    result_dicts = []
+    for r in ranked_results[:top_k]:
+        result_dicts.append({
+            "chunk_id": r.chunk_id,
+            "book_id": r.book_id,
+            "section": r.section,
+            "context": r.context,
+            "text": r.text,
+            "token_count": r.token_count,
+            "similarity": r.score,
+            "is_summary": r.is_summary,
+            "tree_level": r.tree_level,
+            "graph_found": True,
+        })
+
+    metadata["graph_fetched"] = len(all_graph_chunks)
+
+    logger.info(
+        f"Graph retrieval: {len(query_entities)} entities -> "
+        f"{len(graph_chunk_ids)} chunks -> {len(result_dicts)} results"
+    )
+
+    return result_dicts, metadata
+
+
+def graph_retrieval_with_map_reduce(
+    query: str,
+    driver: Driver,
+    top_k: int = 10,
+    collection_name: Optional[str] = None,
+    use_map_reduce: bool = True,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Graph-only retrieval with optional map-reduce for global queries.
+
+    Wraps graph_retrieval() with map-reduce support:
+    - Local queries: Pure graph traversal ranked by combined_degree
+    - Global queries: Map-reduce over community summaries
+
+    Args:
+        query: User query string.
+        driver: Neo4j driver instance.
+        top_k: Number of results to return.
+        collection_name: Weaviate collection name.
+        use_map_reduce: Whether to use map-reduce for global queries.
+
+    Returns:
+        Tuple of (results, metadata).
+        For global queries, metadata includes "map_reduce_result".
+    """
+    from .map_reduce import map_reduce_global_query, should_use_map_reduce
+
+    # Get graph context to check for global query
+    graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
+    extracted_entities = graph_meta.get("extracted_entities", [])
+
+    # Global query path: map-reduce over communities
+    if use_map_reduce and should_use_map_reduce(query, extracted_entities):
+        logger.info("Global query detected, using map-reduce")
+
+        communities = retrieve_communities_for_map_reduce(query, level=0)
+
+        if communities:
+            mr_result = map_reduce_global_query(query, communities)
+
+            metadata = {
+                "extracted_entities": extracted_entities,
+                "query_entities": graph_meta.get("query_entities", []),
+                "graph_context": graph_meta.get("graph_context", []),
+                "community_context": [
+                    {"community_id": c.community_id, "summary": c.summary, "member_count": c.member_count}
+                    for c in communities
+                ],
+                "query_type": "global",
+                "map_reduce_result": {
+                    "final_answer": mr_result.final_answer,
+                    "communities_used": mr_result.communities_used,
+                    "map_time_ms": mr_result.map_time_ms,
+                    "reduce_time_ms": mr_result.reduce_time_ms,
+                    "total_time_ms": mr_result.total_time_ms,
+                },
+            }
+
+            logger.info(
+                f"Map-reduce complete: {len(mr_result.communities_used)} communities, "
+                f"{mr_result.total_time_ms:.0f}ms total"
+            )
+
+            # Return empty results (answer in metadata["map_reduce_result"])
+            return [], metadata
+        else:
+            logger.warning(
+                "Global query detected but no communities available, "
+                "falling back to local graph retrieval"
+            )
+
+    # Local query path: pure graph retrieval
+    results, metadata = graph_retrieval(
+        query=query,
+        driver=driver,
+        top_k=top_k,
+        collection_name=collection_name,
+    )
+    metadata["query_type"] = "local"
+    return results, metadata

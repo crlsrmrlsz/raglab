@@ -243,7 +243,7 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
     "graphrag": StrategyConfig(
         strategy_id="graphrag",
         display_name="GraphRAG",
-        description="Hybrid graph + vector retrieval (arXiv:2404.16130)",
+        description="Pure graph retrieval with combined_degree ranking (arXiv:2404.16130)",
         # GraphRAG requires matching chunk IDs (only section collections)
         compatible_collections={"section"},
         # GraphRAG constraints TBD - for now allow any alpha

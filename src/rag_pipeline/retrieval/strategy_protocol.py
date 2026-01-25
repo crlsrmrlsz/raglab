@@ -94,7 +94,7 @@ class RetrievalStrategy(Protocol):
         - StandardRetrieval: No preprocessing, direct Weaviate search
         - HyDERetrieval: Generate hypotheticals → average embeddings → single search
         - DecompositionRetrieval: Break into sub-questions → parallel searches → RRF merge
-        - GraphRAGRetrieval: Extract entities → vector search → graph traversal → RRF merge
+        - GraphRAGRetrieval: Extract entities → graph traversal → combined_degree ranking
 
     Example:
         >>> strategy = HyDERetrieval()
