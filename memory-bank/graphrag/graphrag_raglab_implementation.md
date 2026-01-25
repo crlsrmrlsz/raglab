@@ -139,23 +139,23 @@ flowchart TB
     end
 
     subgraph Stage45["Stage 4.5: Entity Extraction"]
-        CHUNKS_JSON --> EXTRACT[extract_chunk()<br/>Per chunk with gleaning]
+        CHUNKS_JSON --> EXTRACT["Extract per chunk"]
         EXTRACT --> BOOK_JSON["Per-book extractions"]
-        BOOK_JSON --> MERGE[merge_extractions()]
-        MERGE --> CONSOLIDATE[consolidate_entities()<br/>consolidate_relationships()]
+        BOOK_JSON --> MERGE["Merge extractions"]
+        MERGE --> CONSOLIDATE["Consolidate entities"]
         CONSOLIDATE --> FINAL["extraction_results.json"]
     end
 
     subgraph Stage6b["Stage 6b: Neo4j + Communities"]
-        FINAL --> UPLOAD[upload_extraction_results()]
+        FINAL --> UPLOAD["Upload to Neo4j"]
         UPLOAD --> NEO4J[("Neo4j")]
-        NEO4J --> PROJECT[project_graph()<br/>GDS undirected projection]
+        NEO4J --> PROJECT["GDS projection"]
         PROJECT --> LEIDEN["run_leiden<br/>deterministic"]
-        LEIDEN --> CHECKPOINT[leiden_checkpoint.json]
-        LEIDEN --> WRITE_COMM[write_communities_to_neo4j()]
+        LEIDEN --> CHECKPOINT["leiden_checkpoint.json"]
+        LEIDEN --> WRITE_COMM["Write communities"]
         LEIDEN --> PAGERANK["compute_pagerank"]
-        PAGERANK --> WRITE_PR[write_pagerank_to_neo4j()]
-        LEIDEN --> SUMMARIZE[summarize_community()<br/>Per community LLM + embedding]
+        PAGERANK --> WRITE_PR["Write PageRank"]
+        LEIDEN --> SUMMARIZE["Summarize communities"]
         SUMMARIZE --> WEAVIATE[("Weaviate")]
         SUMMARIZE --> COMM_JSON[communities.json]
     end
@@ -202,11 +202,11 @@ flowchart LR
 ### RAGLab vs Reference: Extraction Format
 
 **Microsoft Reference** (delimited tuples):
-```
-(\"entity\"<|>CENTRAL INSTITUTION<|>ORGANIZATION<|>Description)
+```text
+("entity"|CENTRAL INSTITUTION|ORGANIZATION|Description)
 ##
-(\"relationship\"<|>SOURCE<|>TARGET<|>Description<|>9)
-<|COMPLETE|>
+("relationship"|SOURCE|TARGET|Description|9)
+|COMPLETE|
 ```
 
 **RAGLab** (Pydantic JSON Schema):
@@ -477,7 +477,8 @@ flowchart LR
 
 ### Neo4j Graph Model
 
-```
+```cypher
+// Entity node
 (:Entity {
     name: "dopamine",
     normalized_name: "dopamine",
@@ -489,6 +490,7 @@ flowchart LR
     created_at: datetime()
 })
 
+// Relationship
 -[:RELATED_TO {
     type: "MODULATES",
     description: "Dopamine modulates reward processing",
