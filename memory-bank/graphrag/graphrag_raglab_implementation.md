@@ -34,7 +34,7 @@ RAGLab implements GraphRAG based on Microsoft's paper (arXiv:2404.16130) and ref
 ```mermaid
 flowchart TB
     subgraph Phase1["Stage 4.5: Extraction"]
-        CHUNKS[Section Chunks<br/>data/chunks/section/*.json] --> EXTRACT[extraction.py]
+        CHUNKS[Semantic Chunks std=2<br/>data/chunks/semantic_std2/*.json] --> EXTRACT[extraction.py]
         EXTRACT --> |LLM calls| ENTITIES[Entities + Relationships]
         ENTITIES --> CONSOLIDATE[Consolidation<br/>by normalized_name + type]
         CONSOLIDATE --> RESULTS[extraction_results.json<br/>data/graph/extraction_results.json]
@@ -54,7 +54,7 @@ flowchart TB
         SUMMARY --> JSON[communities.json]
 
         NEO4J --> ENTITY_EMB[Entity Embeddings]
-        ENTITY_EMB --> WEAVIATE_ENT[(Weaviate<br/>Entity_section800_v1)]
+        ENTITY_EMB --> WEAVIATE_ENT[(Weaviate<br/>Entity_semantic_std2_v1)]
     end
 
     subgraph Phase3["Query Time (Graph-Only)"]
@@ -85,7 +85,7 @@ flowchart TB
 
 | Feature | Microsoft Reference | RAGLab Implementation | Status |
 |---------|--------------------|-----------------------|--------|
-| Chunking | 600 tokens (paper) | 800 tokens (configurable) | Different |
+| Chunking | 600 tokens (paper) | **Semantic (std=2)** for topic coherence | Different |
 | Entity Extraction | LLM with delimited output | LLM with **Pydantic JSON Schema** | Different format |
 | Gleaning | 1+ rounds | 1 round (configurable) | Matches |
 | Entity Types | Configurable in settings.yaml | **graphrag_types.yaml** (8 types) | Matches |
@@ -134,8 +134,8 @@ flowchart TB
         EXTRACT_DOC --> MARKDOWN[Markdown Files]
         MARKDOWN --> CLEAN[Stage 2: Cleaning]
         CLEAN --> SEGMENT[Stage 3: Segmentation]
-        SEGMENT --> CHUNK[Stage 4: Section Chunking<br/>800 tokens, 2 sentences overlap]
-        CHUNK --> CHUNKS_JSON[data/chunks/section/*.json]
+        SEGMENT --> CHUNK[Stage 4: Semantic Chunking<br/>std=2 for topic-coherent boundaries]
+        CHUNK --> CHUNKS_JSON[data/chunks/semantic_std2/*.json]
     end
 
     subgraph Stage45["Stage 4.5: Entity Extraction"]
@@ -166,7 +166,7 @@ flowchart TB
 
 ### Key Differences from Reference
 
-1. **Chunking Strategy**: RAGLab uses section-aware chunking (800 tokens) vs reference's 600 tokens
+1. **Chunking Strategy**: RAGLab uses **semantic chunking (std=2)** for topic-coherent boundaries that improve entity extraction quality, vs reference's 600-token fixed chunks
 2. **Output Format**: JSON files vs Parquet columnar storage
 3. **Graph Storage**: Native Neo4j graph database vs Parquet entity/relationship tables
 4. **Deterministic Leiden**: Uses `seed=42` and `concurrency=1` for reproducibility
@@ -443,18 +443,20 @@ def build_community_context(members, relationships, max_tokens=8000):
 
 | Artifact | Microsoft | RAGLab | Collection Name |
 |----------|-----------|--------|-----------------|
-| Entity descriptions | Yes | Yes | `Entity_section800_v1` |
-| Text units (chunks) | Yes | Yes | `RAG_section800_embed3large_v1` |
+| Entity descriptions | Yes | Yes | `Entity_semantic_std2_v1` |
+| Text units (chunks) | Yes | Yes | `RAG_semantic_std2_embed3large_v1` |
 | Community summaries | Yes | Yes | `Community_section800_v1` |
+
+> **Note**: GraphRAG uses semantic_std2 chunks exclusively (configured via `GRAPHRAG_CHUNKING_STRATEGY`). Community collection uses a different naming convention as it's derived from the summarization process, not the chunking strategy.
 
 ### Weaviate Collections
 
 ```mermaid
 flowchart LR
     subgraph Collections["Weaviate Collections"]
-        CHUNKS[(RAG_section800_embed3large_v1<br/>Chunk vectors)]
+        CHUNKS[(RAG_semantic_std2_embed3large_v1<br/>Chunk vectors)]
         COMMS[(Community_section800_v1<br/>Community summary vectors)]
-        ENTS[(Entity_section800_v1<br/>Entity description vectors)]
+        ENTS[(Entity_semantic_std2_v1<br/>Entity description vectors)]
     end
 
     subgraph Usage["Query Time Usage"]
@@ -696,6 +698,12 @@ class CommunityMember(BaseModel):
 ### GraphRAG Settings (`src/config.py`)
 
 ```python
+# Chunking Strategy (single source of truth for GraphRAG)
+GRAPHRAG_CHUNKING_STRATEGY = "semantic_std2"  # Uses semantic chunks for topic coherence
+# Collection names derived via:
+#   get_entity_collection_name() -> "Entity_semantic_std2_v1"
+#   get_graphrag_chunk_collection_name() -> "RAG_semantic_std2_embed3large_v1"
+
 # Extraction
 GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-3-haiku"
 GRAPHRAG_SUMMARY_MODEL = "openai/gpt-4o-mini"
@@ -740,7 +748,7 @@ GRAPHRAG_REDUCE_MAX_TOKENS = 500
 
 | Parameter | Microsoft Default | RAGLab Value |
 |-----------|------------------|--------------|
-| Chunk size | 300 (default), 600 (paper) | 800 |
+| Chunk size | 300 (default), 600 (paper) | **Semantic (std=2)** - topic-coherent |
 | Gleanings | 0-1 | 1 |
 | Max entities/chunk | Unlimited | 10 |
 | Max relationships/chunk | Unlimited | 7 |
@@ -993,6 +1001,32 @@ well-connected in the knowledge graph, providing more informative context.
 **Microsoft**: No native graph DB (Parquet tables)
 **RAGLab**: **Neo4j** with native graph queries and GDS algorithms
 
+### 9. StrategyConfig Integration
+
+GraphRAG uses the `StrategyConfig` system (`src/rag_pipeline/retrieval/preprocessing/strategy_config.py`) to enforce constraints:
+
+```python
+# GraphRAG strategy configuration
+"graphrag": StrategyConfig(
+    strategy_id="graphrag",
+    display_name="GraphRAG",
+    description="Knowledge graph + community retrieval (arXiv:2404.16130)",
+    collection_constraint=CollectionConstraint(
+        mode="dedicated",
+        dedicated_collection=get_graphrag_chunk_collection_name(),  # "RAG_semantic_std2_embed3large_v1"
+    ),
+    search_type_constraint=SearchTypeConstraint(mode="internal"),  # No external search type
+    alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),  # Fixed alpha
+),
+```
+
+**UI Behavior**: When GraphRAG is selected:
+- Collection selector shows dedicated collection (disabled)
+- Alpha slider shows fixed value (disabled)
+- Search type is internal (bypasses Weaviate vector search)
+
+**Evaluation Behavior**: GraphRAG runs as a single configuration, not in the standard grid search.
+
 ---
 
 ## 15. What's Not Implemented
@@ -1056,6 +1090,8 @@ RAGLab implements the core GraphRAG pipeline with several enhancements:
 - Pydantic validation for extraction
 - Enhanced entity normalization
 - Pure graph retrieval with combined_degree ranking (matches Microsoft design)
+- **Semantic chunking (std=2)** for topic-coherent chunks that improve entity extraction
+- **StrategyConfig integration** for constraint-aware UI and evaluation
 
 **Simplifications**:
 - Simpler community summary format
@@ -1068,3 +1104,4 @@ RAGLab implements the core GraphRAG pipeline with several enhancements:
 - Production-ready storage (Weaviate, Neo4j)
 - Modular stage-based pipeline
 - Crash-proof with checkpoints
+- Single source of truth for GraphRAG chunking strategy (`GRAPHRAG_CHUNKING_STRATEGY`)
