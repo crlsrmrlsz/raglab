@@ -93,6 +93,8 @@ from src.rag_pipeline.retrieval.preprocessing.strategy_config import (
     get_strategy_config,
     is_valid_combination,
     list_strategy_configs,
+    EVAL_TOP_K,
+    get_all_collections,
 )
 
 # Comprehensive evaluation imports (lazy-loaded in function)
@@ -443,12 +445,10 @@ def generate_report(
 def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
     """Run comprehensive evaluation across all VALID combinations with failure tracking.
 
-    Tests: collections x search_types x (alphas for hybrid) x preprocessing_strategies x top_k
-    - search_type: "keyword" (BM25) or "hybrid" (vector+BM25)
-    - For keyword search_type, alpha is ignored (set to 0.0 in results)
-    - For hybrid search_type, alpha values [0.5, 1.0] are tested
-    - Filters out invalid preprocessing strategies (e.g., graphrag + semantic collection)
-    - No reranking (always disabled for speed)
+    Tests: collections × alphas × reranking × preprocessing_strategies
+    - Uses StrategyConfig constraints to filter invalid combinations
+    - Reranking is a grid dimension (optional for 'none', required/forbidden for others)
+    - top_k is fixed at EVAL_TOP_K (not a grid dimension)
     - Uses curated question subset
     - Generates enhanced leaderboard report with statistical analysis
     - Outputs article-ready summary with key findings
@@ -461,7 +461,6 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
     import time
     from src.ui.services.search import list_collections, extract_strategy_from_collection
     from src.rag_pipeline.retrieval.preprocessing.strategies import list_strategies
-    from src.config import get_valid_preprocessing_strategies
     from src.evaluation.schemas import FailedCombinationsReport
 
     # Generate timestamp early for consistent naming across log, checkpoint, and results
@@ -481,36 +480,17 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         return
     logger.info(f"Loaded {len(questions)} questions from {questions_filepath.name}")
 
-    # Get all dimensions
-    collections = list_collections()
-    # Alpha controls search balance: 0.0=keyword, 0.5=hybrid, 1.0=semantic
-    # No separate search_type dimension - alpha subsumes it
-    alpha_values = [0.0, 0.5, 1.0]
-    top_k_values = [10, 20]
-    all_strategies = list_strategies()
-
-    # Filter semantic collections to only 0.3 and 0.75 thresholds
-    # Collection names: RAG_semantic_0_3_embed3large_v1 -> strategy "semantic_0.3"
-    ALLOWED_SEMANTIC_THRESHOLDS = ["semantic_0.3", "semantic_0.75"]
-    filtered_collections = []
-    for coll in collections:
-        strategy = extract_strategy_from_collection(coll)
-        if strategy.startswith("semantic_"):
-            if strategy in ALLOWED_SEMANTIC_THRESHOLDS:
-                filtered_collections.append(coll)
-            else:
-                logger.info(f"Skipping collection: {coll} (strategy '{strategy}' not in allowed thresholds)")
-        else:
-            # Non-semantic collections pass through
-            filtered_collections.append(coll)
-    collections = filtered_collections
-
-    if not collections:
+    # Get available collections from Weaviate
+    available_collections = list_collections()
+    if not available_collections:
         logger.error("No RAG collections found in Weaviate. Run stage 6 first.")
         return
 
+    # Fixed parameters (not grid dimensions)
+    top_k = EVAL_TOP_K  # Fixed at 15
+    logger.info(f"Fixed parameters: top_k={top_k}")
+
     # Separate strategies into standard (grid) and dedicated (single run)
-    # Dedicated strategies use their own collection and don't participate in the grid
     standard_strategies = []
     dedicated_strategies = []
     for config in list_strategy_configs():
@@ -522,43 +502,58 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
     logger.info(f"Standard strategies (grid): {[s.strategy_id for s in standard_strategies]}")
     logger.info(f"Dedicated strategies (single run): {[s.strategy_id for s in dedicated_strategies]}")
 
-    # Build base combinations: (collection, search_type, alpha, strategy)
-    # Uses StrategyConfig constraints to filter invalid combinations
-    # top_k will be the innermost loop for caching optimization
-    base_combinations = []
+    # Build valid combinations using StrategyConfig constraints
+    # Tuple: (collection, alpha, reranking, strategy)
+    combinations = []
     skipped_combinations = []
 
-    # Standard strategies: iterate over collections and alphas (grid)
-    for collection in collections:
-        collection_strategy = extract_strategy_from_collection(collection)
-        valid_preprocessing = get_valid_preprocessing_strategies(collection_strategy)
-        for alpha in alpha_values:
-            for config in standard_strategies:
-                strategy = config.strategy_id
-                # Check collection compatibility (existing logic)
-                if strategy not in valid_preprocessing:
-                    skipped_combinations.append(
-                        (collection, alpha, strategy, f"{strategy} incompatible with {collection_strategy}")
-                    )
-                    continue
-                # Check alpha constraint via StrategyConfig
-                is_valid, error_msg = is_valid_combination(strategy, collection_strategy, alpha)
-                if is_valid:
-                    # search_type is always "hybrid" - alpha controls balance
-                    base_combinations.append((collection, "hybrid", alpha, strategy))
-                else:
-                    skipped_combinations.append((collection, alpha, strategy, error_msg))
+    # Standard strategies: iterate over their allowed values
+    for config in standard_strategies:
+        strategy = config.strategy_id
+        allowed_collections = config.get_allowed_collections()
+        allowed_alphas = config.get_allowed_alphas()
+        allowed_rerankings = config.get_allowed_rerankings()
 
-    # Dedicated strategies: use their dedicated collection (not in grid)
+        for collection_type in allowed_collections:
+            # Find matching Weaviate collection
+            matching_collection = None
+            for coll in available_collections:
+                coll_strategy = extract_strategy_from_collection(coll)
+                if coll_strategy == collection_type:
+                    matching_collection = coll
+                    break
+
+            if not matching_collection:
+                skipped_combinations.append(
+                    (collection_type, "N/A", "N/A", strategy, f"Collection '{collection_type}' not in Weaviate")
+                )
+                continue
+
+            for alpha in allowed_alphas:
+                for rerank in allowed_rerankings:
+                    # Validate via StrategyConfig
+                    is_valid, error_msg = is_valid_combination(
+                        strategy, collection_type, alpha, rerank
+                    )
+                    if is_valid:
+                        combinations.append((matching_collection, alpha, rerank, strategy))
+                    else:
+                        skipped_combinations.append(
+                            (matching_collection, alpha, rerank, strategy, error_msg)
+                        )
+
+    # Dedicated strategies: use their dedicated collection and defaults
     for config in dedicated_strategies:
         dedicated_collection = config.collection_constraint.dedicated_collection
-        alpha = config.alpha_constraint.get_default()
+        alpha = config.get_default_alpha()
+        rerank = config.get_default_reranking()
+
         # Check if dedicated collection exists in available collections
-        if dedicated_collection in collections:
-            base_combinations.append((dedicated_collection, "hybrid", alpha, config.strategy_id))
+        if dedicated_collection in available_collections:
+            combinations.append((dedicated_collection, alpha, rerank, config.strategy_id))
             logger.info(
                 f"Added dedicated strategy: {config.strategy_id} with "
-                f"collection={dedicated_collection}, alpha={alpha}"
+                f"collection={dedicated_collection}, alpha={alpha}, rerank={rerank}"
             )
         else:
             logger.warning(
@@ -566,20 +561,20 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
                 f"'{dedicated_collection}' not found in Weaviate"
             )
 
-    # Calculate total combinations (base * top_k values)
-    total_combinations = len(base_combinations) * len(top_k_values)
+    total_combinations = len(combinations)
+    all_strategies = list_strategies()
 
     # Log what we're testing
     logger.info(f"Testing {total_combinations} valid combinations:")
-    logger.info(f"  Collections ({len(collections)}): {collections}")
-    logger.info(f"  Alpha values ({len(alpha_values)}): {alpha_values}")
-    logger.info(f"  Top-K values ({len(top_k_values)}): {top_k_values}")
-    logger.info(f"  Preprocessing strategies ({len(all_strategies)}): {all_strategies}")
-    logger.info(f"  Base combinations: {len(base_combinations)} (top_k is innermost loop for caching)")
+    logger.info(f"  Available collections: {available_collections}")
+    logger.info(f"  Defined collection types: {get_all_collections()}")
+    logger.info(f"  Top-K: {top_k} (fixed)")
+    logger.info(f"  Preprocessing strategies: {all_strategies}")
     logger.info(f"  Skipped invalid: {len(skipped_combinations)}")
     if skipped_combinations:
-        for coll, alpha, strat, reason in skipped_combinations[:5]:
-            logger.info(f"    - {strat} + alpha={alpha} on {coll}: {reason}")
+        for item in skipped_combinations[:5]:
+            coll, alpha, rerank, strat, reason = item
+            logger.info(f"    - {strat} + alpha={alpha} + rerank={rerank} on {coll}: {reason}")
         if len(skipped_combinations) > 5:
             logger.info(f"    ... and {len(skipped_combinations) - 5} more")
 
@@ -587,7 +582,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
     all_results = []
     count = 0
 
-    # Define checkpoint and failure tracking paths (uses timestamp from start of function)
+    # Define checkpoint and failure tracking paths
     comprehensive_run_id = f"comprehensive_{timestamp}"
     checkpoint_path = RESULTS_DIR / f"comprehensive_checkpoint_{timestamp}.json"
 
@@ -597,143 +592,124 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         timestamp=datetime.now().isoformat(),
     )
 
-    # Initialize retrieval cache (scoped to this comprehensive run)
-    # Cache key: (question_id, collection, search_type, alpha, strategy) - top_k NOT in key
-    # This allows us to retrieve once with max(top_k) and slice for smaller values
-    retrieval_cache: dict[tuple[str, str, str, float, str], list[str]] = {}
-    max_retrieval_k = max(top_k_values)
+    for collection, alpha, use_reranking, strategy in combinations:
+        count += 1
+        rerank_str = "ON" if use_reranking else "off"
+        logger.info(
+            f"\n[{count}/{total_combinations}] "
+            f"{collection} | alpha={alpha} | rerank={rerank_str} | strategy={strategy}"
+        )
 
-    # Iterate with top_k as INNERMOST loop for caching optimization
-    # First top_k (10): cache miss, retrieves 20, caches
-    # Second top_k (20): cache hit, uses cached 20
-    for collection, search_type, alpha, strategy in base_combinations:
-        for top_k in top_k_values:
-            count += 1
-            # Format alpha display: show for hybrid, mark as N/A for keyword
-            alpha_display = f"alpha={alpha}" if search_type == "hybrid" else "alpha=N/A (keyword)"
-            logger.info(
-                f"\n[{count}/{total_combinations}] "
-                f"{collection} | {search_type} | {alpha_display} | top_k={top_k} | strategy={strategy}"
+        try:
+            results = run_evaluation(
+                test_questions=questions,
+                metrics=EVAL_DEFAULT_METRICS,
+                top_k=top_k,
+                generation_model=args.generation_model,
+                evaluation_model=args.evaluation_model,
+                collection_name=collection,
+                use_reranking=use_reranking,
+                alpha=alpha,
+                preprocessing_strategy=strategy,
+                preprocessing_model=None,
+                save_trace=True,
+                search_type="hybrid",  # Alpha controls balance
             )
 
-            try:
-                # Some strategies require reranking (e.g., decomposition per paper)
-                strategy_config = get_strategy_config(strategy)
-                use_reranking = strategy_config.requires_reranking
+            # Store configuration + scores + difficulty breakdown + trace path
+            trace_path = results.get("trace_path")
+            questions_processed = results.get("questions_processed", len(questions))
+            questions_failed = results.get("questions_failed", 0)
+            failed_questions = results.get("failed_questions", [])
 
-                results = run_evaluation(
-                    test_questions=questions,
-                    metrics=EVAL_DEFAULT_METRICS,
-                    top_k=top_k,
-                    generation_model=args.generation_model,
-                    evaluation_model=args.evaluation_model,
-                    collection_name=collection,
-                    use_reranking=use_reranking,
-                    alpha=alpha,
-                    preprocessing_strategy=strategy,
-                    preprocessing_model=None,
-                    save_trace=True,  # Enable traces for debugging and recalculation
-                    retrieval_cache=retrieval_cache,  # Caching for top_k optimization
-                    max_retrieval_k=max_retrieval_k,  # Always retrieve max, slice for smaller
-                    search_type=search_type,  # NEW: keyword or hybrid
-                )
+            all_results.append({
+                "collection": collection,
+                "alpha": alpha,
+                "reranking": use_reranking,
+                "top_k": top_k,
+                "strategy": strategy,
+                "scores": results["scores"],
+                "difficulty_breakdown": results.get("difficulty_breakdown", {}),
+                "num_questions": len(questions),
+                "questions_processed": questions_processed,
+                "questions_failed": questions_failed,
+                "failed_questions": failed_questions,
+                "trace_path": str(trace_path) if trace_path else None,
+            })
 
-                # Store configuration + scores + difficulty breakdown + trace path
-                trace_path = results.get("trace_path")
-                questions_processed = results.get("questions_processed", len(questions))
-                questions_failed = results.get("questions_failed", 0)
-                failed_questions = results.get("failed_questions", [])
+            scores = results["scores"]
+            status_suffix = f" ({questions_failed} questions failed)" if questions_failed > 0 else ""
+            logger.info(
+                f"  -> faith={scores.get('faithfulness', 0):.3f} "
+                f"relev={scores.get('relevancy', 0):.3f} "
+                f"ctx_prec={scores.get('context_precision', 0):.3f} "
+                f"ctx_rec={scores.get('context_recall', 0):.3f} "
+                f"ans_corr={scores.get('answer_correctness', 0):.3f}{status_suffix}"
+            )
 
-                all_results.append({
-                    "collection": collection,
-                    "search_type": search_type,
-                    "alpha": alpha,
-                    "top_k": top_k,
-                    "strategy": strategy,
-                    "scores": results["scores"],
-                    "difficulty_breakdown": results.get("difficulty_breakdown", {}),
-                    "num_questions": len(questions),
-                    "questions_processed": questions_processed,
-                    "questions_failed": questions_failed,
-                    "failed_questions": failed_questions,
-                    "trace_path": str(trace_path) if trace_path else None,
-                })
+        except Exception as e:
+            logger.error(f"  -> FAILED: {e}")
 
-                scores = results["scores"]
-                status_suffix = f" ({questions_failed} questions failed)" if questions_failed > 0 else ""
-                logger.info(
-                    f"  -> faith={scores.get('faithfulness', 0):.3f} "
-                    f"relev={scores.get('relevancy', 0):.3f} "
-                    f"ctx_prec={scores.get('context_precision', 0):.3f} "
-                    f"ctx_rec={scores.get('context_recall', 0):.3f} "
-                    f"ans_corr={scores.get('answer_correctness', 0):.3f}{status_suffix}"
-                )
+            # Determine failure stage from error type
+            error_type = type(e).__name__
+            if "preprocessing" in str(e).lower():
+                failed_at_stage = "preprocessing"
+            elif "retrieval" in str(e).lower() or "weaviate" in str(e).lower():
+                failed_at_stage = "retrieval"
+            elif "generation" in str(e).lower():
+                failed_at_stage = "generation"
+            else:
+                failed_at_stage = "ragas_evaluation"
 
-            except Exception as e:
-                logger.error(f"  -> FAILED: {e}")
+            # Add to failed report
+            failed_report.add_failure(
+                collection=collection,
+                alpha=alpha,
+                top_k=top_k,
+                strategy=strategy,
+                error=e,
+                failed_at_stage=failed_at_stage,
+            )
 
-                # Determine failure stage from error type
-                error_type = type(e).__name__
-                if "preprocessing" in str(e).lower():
-                    failed_at_stage = "preprocessing"
-                elif "retrieval" in str(e).lower() or "weaviate" in str(e).lower():
-                    failed_at_stage = "retrieval"
-                elif "generation" in str(e).lower():
-                    failed_at_stage = "generation"
-                else:
-                    failed_at_stage = "ragas_evaluation"
+            all_results.append({
+                "collection": collection,
+                "alpha": alpha,
+                "reranking": use_reranking,
+                "top_k": top_k,
+                "strategy": strategy,
+                "scores": {m: 0 for m in EVAL_DEFAULT_METRICS},
+                "num_questions": len(questions),
+                "error": str(e),
+                "error_type": error_type,
+            })
 
-                # Add to failed report
-                failed_report.add_failure(
-                    collection=collection,
-                    alpha=alpha,
-                    top_k=top_k,
-                    strategy=strategy,
-                    error=e,
-                    failed_at_stage=failed_at_stage,
-                )
-
-                all_results.append({
-                    "collection": collection,
-                    "search_type": search_type,
-                    "alpha": alpha,
-                    "top_k": top_k,
-                    "strategy": strategy,
-                    "scores": {m: 0 for m in EVAL_DEFAULT_METRICS},
-                    "num_questions": len(questions),
-                    "error": str(e),
-                    "error_type": error_type,
-                })
-
-            # Save checkpoint after every combination for crash resilience
-            checkpoint_data = {
-                "timestamp": datetime.now().isoformat(),
-                "completed": count,
-                "total": total_combinations,
-                "progress_pct": round(count / total_combinations * 100, 1),
-                "results": all_results,
-                "grid_params": {
-                    "collections": collections,
-                    "alpha_values": alpha_values,
-                    "top_k_values": top_k_values,
-                    "strategies": all_strategies,
-                },
-            }
-            with open(checkpoint_path, "w") as f:
-                json.dump(checkpoint_data, f, indent=2)
-            logger.info(f"  Checkpoint saved: {count}/{total_combinations} ({checkpoint_data['progress_pct']}%)")
+        # Save checkpoint after every combination for crash resilience
+        checkpoint_data = {
+            "timestamp": datetime.now().isoformat(),
+            "completed": count,
+            "total": total_combinations,
+            "progress_pct": round(count / total_combinations * 100, 1),
+            "results": all_results,
+            "grid_params": {
+                "collections": available_collections,
+                "top_k": top_k,
+                "strategies": all_strategies,
+            },
+        }
+        with open(checkpoint_path, "w") as f:
+            json.dump(checkpoint_data, f, indent=2)
+        logger.info(f"  Checkpoint saved: {count}/{total_combinations} ({checkpoint_data['progress_pct']}%)")
 
     # Calculate total duration
     duration_seconds = time.time() - start_time
 
-    # Generate comprehensive report (uses same timestamp as checkpoint for consistency)
+    # Generate comprehensive report
     output_path = Path(args.output) if args.output else RESULTS_DIR / f"comprehensive_{timestamp}.json"
 
     # Build grid parameters for report
     grid_params = {
-        "collections": collections,
-        "alpha_values": alpha_values,
-        "top_k_values": top_k_values,
+        "collections": available_collections,
+        "top_k": top_k,
         "strategies": all_strategies,
         "valid_combinations_count": total_combinations,
     }
@@ -814,9 +790,9 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
         )
 
         try:
-            # Some strategies require reranking (e.g., decomposition per paper)
+            # Get reranking from StrategyConfig default
             strategy_config = get_strategy_config(fc.strategy)
-            use_reranking = strategy_config.requires_reranking
+            use_reranking = strategy_config.get_default_reranking()
 
             results = run_evaluation(
                 test_questions=questions,
@@ -1021,7 +997,7 @@ def generate_comprehensive_report(
     # Compute statistical analysis
     strategy_analysis = compute_statistical_breakdown(successful_runs, "strategy")
     alpha_analysis = compute_statistical_breakdown(successful_runs, "alpha")
-    top_k_analysis = compute_statistical_breakdown(successful_runs, "top_k")
+    reranking_analysis = compute_statistical_breakdown(successful_runs, "reranking")
     collection_analysis = compute_statistical_breakdown(successful_runs, "collection")
 
     # Find best configurations
@@ -1054,7 +1030,7 @@ def generate_comprehensive_report(
         "statistical_analysis": {
             "by_strategy": strategy_analysis,
             "by_alpha": alpha_analysis,
-            "by_top_k": top_k_analysis,
+            "by_reranking": reranking_analysis,
             "by_collection": collection_analysis,
         },
         "best_configurations": best_configs,
@@ -1086,7 +1062,7 @@ def generate_comprehensive_report(
     print(f"Duration: {duration_str}")
     print(f"Successful: {len(successful_runs)} | Failed: {len(failed_runs)}")
     print("\n" + "-" * 118)
-    print(f"{'Rank':<5} {'Collection':<35} {'Alpha':<7} {'TopK':<6} {'Strategy':<15} {'Faith':<8} {'Relev':<8} {'CtxPrec':<8} {'CtxRec':<8}")
+    print(f"{'Rank':<5} {'Collection':<35} {'Alpha':<7} {'Rerank':<8} {'Strategy':<15} {'Faith':<8} {'Relev':<8} {'CtxPrec':<8} {'CtxRec':<8}")
     print("-" * 118)
 
     for i, result in enumerate(sorted_results, 1):
@@ -1096,11 +1072,12 @@ def generate_comprehensive_report(
         ctx_prec = scores.get("context_precision") or 0
         ctx_rec = scores.get("context_recall") or 0
         collection_short = result["collection"][:35]
+        rerank_str = "ON" if result.get("reranking") else "off"
         error_marker = " *" if "error" in result else ""
 
         print(
             f"{i:<5} {collection_short:<35} {result['alpha']:<7} "
-            f"{result['top_k']:<6} {result['strategy']:<15} {faith:<8.3f} {relev:<8.3f} "
+            f"{rerank_str:<8} {result['strategy']:<15} {faith:<8.3f} {relev:<8.3f} "
             f"{ctx_prec:<8.3f} {ctx_rec:<8.3f}{error_marker}"
         )
 
@@ -1120,7 +1097,7 @@ def generate_comprehensive_report(
 
     _print_breakdown("BREAKDOWN BY PREPROCESSING STRATEGY", strategy_analysis, str.upper)
     _print_breakdown("BREAKDOWN BY ALPHA (0.0=keyword, 1.0=vector)", alpha_analysis, lambda a: f"ALPHA={a}")
-    _print_breakdown("BREAKDOWN BY TOP_K", top_k_analysis, lambda k: f"TOP_K={k}")
+    _print_breakdown("BREAKDOWN BY RERANKING", reranking_analysis, lambda r: f"RERANK={'ON' if r == 'True' else 'off'}")
     _print_breakdown("BREAKDOWN BY COLLECTION", collection_analysis)
 
     # =========================================================================
@@ -1336,15 +1313,24 @@ def main() -> None:
     # Determine collection name
     collection_name = args.collection or get_collection_name()
 
-    # Check if strategy requires reranking
+    # Validate reranking against strategy constraints
     strategy_config = get_strategy_config(args.preprocessing)
     use_reranking = args.reranking
-    if strategy_config.requires_reranking and not args.reranking:
-        logger.warning(
-            f"Strategy '{args.preprocessing}' requires reranking (per paper). "
-            "Enabling reranking automatically."
-        )
-        use_reranking = True
+
+    if not strategy_config.is_valid_reranking(use_reranking):
+        rerank_mode = strategy_config.reranking_constraint.mode
+        if rerank_mode == "required":
+            logger.warning(
+                f"Strategy '{args.preprocessing}' requires reranking (per paper). "
+                "Enabling reranking automatically."
+            )
+            use_reranking = True
+        elif rerank_mode == "forbidden":
+            logger.warning(
+                f"Strategy '{args.preprocessing}' forbids reranking. "
+                "Disabling reranking automatically."
+            )
+            use_reranking = False
 
     # Run evaluation
     logger.info("Starting RAGAS evaluation...")
