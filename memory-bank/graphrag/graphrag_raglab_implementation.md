@@ -34,15 +34,15 @@ RAGLab implements GraphRAG based on Microsoft's paper (arXiv:2404.16130) and ref
 ```mermaid
 flowchart TB
     subgraph Phase1["Stage 4.5: Extraction"]
-        CHUNKS[Semantic Chunks std=2<br/>data/chunks/semantic_std2/*.json] --> EXTRACT[extraction.py]
+        CHUNKS["Semantic Chunks std=2"] --> EXTRACT[extraction.py]
         EXTRACT --> |LLM calls| ENTITIES[Entities + Relationships]
         ENTITIES --> CONSOLIDATE[Consolidation<br/>by normalized_name + type]
-        CONSOLIDATE --> RESULTS[extraction_results.json<br/>data/graph/extraction_results.json]
+        CONSOLIDATE --> RESULTS["extraction_results.json"]
     end
 
     subgraph Phase2["Stage 6b: Graph Construction"]
         RESULTS --> UPLOAD[neo4j_client.py]
-        UPLOAD --> NEO4J[(Neo4j<br/>localhost:7687)]
+        UPLOAD --> NEO4J[("Neo4j")]
 
         NEO4J --> GDS[GDS Projection<br/>graphrag]
         GDS --> LEIDEN[community.py<br/>Leiden Algorithm]
@@ -50,11 +50,11 @@ flowchart TB
         PAGERANK --> NEO4J
 
         LEIDEN --> SUMMARY[Community Summaries<br/>LLM + Embeddings]
-        SUMMARY --> WEAVIATE_COMM[(Weaviate<br/>Community_section800_v1)]
+        SUMMARY --> WEAVIATE_COMM[("Weaviate Communities")]
         SUMMARY --> JSON[communities.json]
 
         NEO4J --> ENTITY_EMB[Entity Embeddings]
-        ENTITY_EMB --> WEAVIATE_ENT[(Weaviate<br/>Entity_semantic_std2_v1)]
+        ENTITY_EMB --> WEAVIATE_ENT[("Weaviate Entities")]
     end
 
     subgraph Phase3["Query Time (Graph-Only)"]
@@ -135,28 +135,28 @@ flowchart TB
         MARKDOWN --> CLEAN[Stage 2: Cleaning]
         CLEAN --> SEGMENT[Stage 3: Segmentation]
         SEGMENT --> CHUNK[Stage 4: Semantic Chunking<br/>std=2 for topic-coherent boundaries]
-        CHUNK --> CHUNKS_JSON[data/chunks/semantic_std2/*.json]
+        CHUNK --> CHUNKS_JSON["semantic_std2 chunks"]
     end
 
     subgraph Stage45["Stage 4.5: Entity Extraction"]
         CHUNKS_JSON --> EXTRACT[extract_chunk()<br/>Per chunk with gleaning]
-        EXTRACT --> BOOK_JSON[data/graph/extractions/*.json<br/>Per book extraction results]
+        EXTRACT --> BOOK_JSON["Per-book extractions"]
         BOOK_JSON --> MERGE[merge_extractions()]
         MERGE --> CONSOLIDATE[consolidate_entities()<br/>consolidate_relationships()]
-        CONSOLIDATE --> FINAL[data/graph/extraction_results.json]
+        CONSOLIDATE --> FINAL["extraction_results.json"]
     end
 
     subgraph Stage6b["Stage 6b: Neo4j + Communities"]
         FINAL --> UPLOAD[upload_extraction_results()]
-        UPLOAD --> NEO4J[(Neo4j<br/>Entity nodes + RELATED_TO edges)]
+        UPLOAD --> NEO4J[("Neo4j")]
         NEO4J --> PROJECT[project_graph()<br/>GDS undirected projection]
-        PROJECT --> LEIDEN[run_leiden()<br/>seed=42, concurrency=1]
+        PROJECT --> LEIDEN["run_leiden<br/>deterministic"]
         LEIDEN --> CHECKPOINT[leiden_checkpoint.json]
         LEIDEN --> WRITE_COMM[write_communities_to_neo4j()]
-        LEIDEN --> PAGERANK[compute_pagerank()<br/>damping=0.85]
+        LEIDEN --> PAGERANK["compute_pagerank"]
         PAGERANK --> WRITE_PR[write_pagerank_to_neo4j()]
         LEIDEN --> SUMMARIZE[summarize_community()<br/>Per community LLM + embedding]
-        SUMMARIZE --> WEAVIATE[(Weaviate Community Collection)]
+        SUMMARIZE --> WEAVIATE[("Weaviate")]
         SUMMARIZE --> COMM_JSON[communities.json]
     end
 
@@ -181,7 +181,7 @@ flowchart TB
 flowchart LR
     subgraph Chunk["Per Chunk"]
         TEXT[Chunk Text] --> PROMPT[GRAPHRAG_CHUNK_EXTRACTION_PROMPT<br/>+ entity_types from YAML]
-        PROMPT --> LLM[Claude 3 Haiku<br/>temperature=0.0]
+        PROMPT --> LLM["Claude 3 Haiku"]
         LLM --> |Pydantic JSON| RESULT[ExtractionResult<br/>entities + relationships]
     end
 
@@ -292,12 +292,12 @@ entity_types:
 flowchart TB
     subgraph Projection["Graph Projection"]
         NEO4J[(Neo4j Graph)] --> PROJECT[gds.graph.project]
-        PROJECT --> GDS_GRAPH[In-Memory GDS Graph<br/>name='graphrag']
+        PROJECT --> GDS_GRAPH["In-Memory GDS Graph"]
     end
 
     subgraph Algorithm["Leiden Algorithm"]
         GDS_GRAPH --> LEIDEN[gds.leiden.stream]
-        LEIDEN --> |Deterministic| CONFIG["gamma=1.0<br/>maxLevels=10<br/>randomSeed=42<br/>concurrency=1"]
+        LEIDEN --> |Deterministic| CONFIG["Leiden Config<br/>seed=42, single-thread"]
         CONFIG --> RESULT[node_communities<br/>with intermediateCommunityIds]
     end
 
@@ -373,27 +373,27 @@ flowchart TB
     end
 
     subgraph Input["Community Data"]
-        MEMBERS[get_community_members<br/>Sorted by PageRank] --> CHECK{Raw tokens<br/>> 8000?}
+        MEMBERS[get_community_members<br/>Sorted by PageRank] --> CHECK{"Raw tokens<br/>over 8000?"}
         RELS[get_community_relationships] --> CHECK
     end
 
     subgraph Context["Context Building"]
         CHECK --> |No| RAW[build_community_context<br/>Raw entity/relationship data]
         CHECK --> |Yes| HIER[build_hierarchical_context<br/>Substitute child summaries]
-        HIER --> |"[Sub-Community]"| CHILD[Child summaries from<br/>finer level]
+        HIER --> |Sub-Community| CHILD[Child summaries from<br/>finer level]
     end
 
     subgraph Summarize["LLM Summarization"]
         RAW --> PROMPT1[GRAPHRAG_COMMUNITY_PROMPT]
         CHILD --> PROMPT2[GRAPHRAG_HIERARCHICAL_COMMUNITY_PROMPT]
-        PROMPT1 --> LLM[GPT-4o-mini<br/>temperature=0.3<br/>no max_tokens]
+        PROMPT1 --> LLM["GPT-4o-mini"]
         PROMPT2 --> LLM
         LLM --> SUMMARY[Community Summary<br/>Complete, no truncation]
     end
 
     subgraph Store["Storage + Tracking"]
         SUMMARY --> TRACK[child_summaries dict<br/>for parent processing]
-        SUMMARY --> WEAVIATE[(Weaviate)]
+        SUMMARY --> WEAVIATE[("Weaviate")]
         SUMMARY --> JSON[communities.json]
     end
 
@@ -454,16 +454,16 @@ def build_community_context(members, relationships, max_tokens=8000):
 ```mermaid
 flowchart LR
     subgraph Collections["Weaviate Collections"]
-        CHUNKS[(RAG_semantic_std2_embed3large_v1<br/>Chunk vectors)]
-        COMMS[(Community_section800_v1<br/>Community summary vectors)]
-        ENTS[(Entity_semantic_std2_v1<br/>Entity description vectors)]
+        CHUNKS[("Chunk vectors")]
+        COMMS[("Community summaries")]
+        ENTS[("Entity descriptions")]
     end
 
     subgraph Usage["Query Time Usage"]
         QUERY[User Query] --> ENTS
         QUERY --> COMMS
 
-        ENTS --> |Entity extraction| NEO4J[(Neo4j)]
+        ENTS --> |Entity extraction| NEO4J[("Neo4j")]
         NEO4J --> |Graph traversal| CHUNKS
         CHUNKS --> |Batch fetch| RESULTS[Final Results]
         COMMS --> |Global queries| MAPRED[Map-Reduce]
@@ -510,7 +510,7 @@ flowchart LR
 flowchart TB
     subgraph EntityExtraction["Entity Extraction"]
         QUERY[User Query] --> EMBED[embed_texts]
-        EMBED --> SEARCH[Weaviate Vector Search<br/>Entities collection<br/>top_k=10, min_similarity=0.3]
+        EMBED --> SEARCH["Weaviate Vector Search<br/>Entities collection"]
         SEARCH --> ENTITIES[Matched Entities]
 
         ENTITIES --> |empty?| LLM_FALLBACK[LLM Extraction<br/>extract_query_entities_llm]
@@ -521,13 +521,13 @@ flowchart TB
 
     subgraph GraphTraversal["Neo4j Traversal"]
         ENTITIES --> VALIDATE[find_entities_by_names<br/>Validate in Neo4j]
-        VALIDATE --> TRAVERSE[find_entity_neighbors<br/>max_hops=2, limit=50]
+        VALIDATE --> TRAVERSE["find_entity_neighbors<br/>2-hop traversal"]
         TRAVERSE --> GRAPH_CHUNKS[Graph Chunk IDs<br/>from source_chunk_ids]
     end
 
     subgraph ChunkRetrieval["Chunk Retrieval (Graph-Only)"]
         GRAPH_CHUNKS --> FETCH[fetch_chunks_by_ids<br/>Batch retrieval from Weaviate]
-        FETCH --> RANK_GRAPH[_build_graph_ranked_list<br/>Sort by combined_degree]
+        FETCH --> RANK_GRAPH["Rank by combined_degree"]
         RANK_GRAPH --> RESULTS[Ranked Results<br/>Hub entities = more informative]
     end
 
@@ -573,8 +573,8 @@ This aligns with Microsoft's relationship prioritization strategy.
 ```mermaid
 flowchart TB
     subgraph Classification["Query Classification"]
-        QUERY[User Query] --> CLASSIFY[classify_query<br/>LLM: "local" or "global"]
-        CLASSIFY --> |global| RETRIEVE[retrieve_communities_for_map_reduce<br/>All L0 communities]
+        QUERY[User Query] --> CLASSIFY["classify_query<br/>local or global"]
+        CLASSIFY --> |global| RETRIEVE["Retrieve L0 communities"]
         CLASSIFY --> |local| LOCAL[Pure graph retrieval<br/>combined_degree ranking]
     end
 
@@ -583,7 +583,7 @@ flowchart TB
         RETRIEVE --> C2[Community 2]
         RETRIEVE --> CN[Community N]
 
-        C1 --> |async| MAP1[LLM: GRAPHRAG_MAP_PROMPT<br/>max_tokens=300]
+        C1 --> |async| MAP1["LLM Map"]
         C2 --> |async| MAP2[LLM]
         CN --> |async| MAPN[LLM]
 
@@ -601,7 +601,7 @@ flowchart TB
     end
 
     subgraph ReducePhase["Reduce Phase"]
-        KEEP --> REDUCE[LLM: GRAPHRAG_REDUCE_PROMPT<br/>max_tokens=500]
+        KEEP --> REDUCE["LLM Reduce"]
         REDUCE --> FINAL[Final Synthesized Answer]
     end
 
