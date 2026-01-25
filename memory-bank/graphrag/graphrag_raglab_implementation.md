@@ -42,7 +42,7 @@ flowchart TB
 
     subgraph Phase2["Stage 6b: Graph Construction"]
         RESULTS --> UPLOAD[neo4j_client.py]
-        UPLOAD --> NEO4J[("Neo4j")]
+        UPLOAD --> NEO4J[(Neo4j)]
 
         NEO4J --> GDS[GDS Projection<br/>graphrag]
         GDS --> LEIDEN[community.py<br/>Leiden Algorithm]
@@ -50,11 +50,11 @@ flowchart TB
         PAGERANK --> NEO4J
 
         LEIDEN --> SUMMARY[Community Summaries<br/>LLM + Embeddings]
-        SUMMARY --> WEAVIATE_COMM[("Weaviate Communities")]
+        SUMMARY --> WEAVIATE_COMM[(Weaviate Communities)]
         SUMMARY --> JSON[communities.json]
 
         NEO4J --> ENTITY_EMB[Entity Embeddings]
-        ENTITY_EMB --> WEAVIATE_ENT[("Weaviate Entities")]
+        ENTITY_EMB --> WEAVIATE_ENT[(Weaviate Entities)]
     end
 
     subgraph Phase3["Query Time (Graph-Only)"]
@@ -148,7 +148,7 @@ flowchart TB
 
     subgraph Stage6b["Stage 6b: Neo4j + Communities"]
         FINAL --> UPLOAD["Upload to Neo4j"]
-        UPLOAD --> NEO4J[("Neo4j")]
+        UPLOAD --> NEO4J[(Neo4j)]
         NEO4J --> PROJECT["GDS projection"]
         PROJECT --> LEIDEN["run_leiden<br/>deterministic"]
         LEIDEN --> CHECKPOINT["leiden_checkpoint.json"]
@@ -156,7 +156,7 @@ flowchart TB
         LEIDEN --> PAGERANK["compute_pagerank"]
         PAGERANK --> WRITE_PR["Write PageRank"]
         LEIDEN --> SUMMARIZE["Summarize communities"]
-        SUMMARIZE --> WEAVIATE[("Weaviate")]
+        SUMMARIZE --> WEAVIATE[(Weaviate)]
         SUMMARIZE --> COMM_JSON[communities.json]
     end
 
@@ -180,21 +180,21 @@ flowchart TB
 ```mermaid
 flowchart LR
     subgraph Chunk["Per Chunk"]
-        TEXT[Chunk Text] --> PROMPT[GRAPHRAG_CHUNK_EXTRACTION_PROMPT<br/>+ entity_types from YAML]
+        TEXT[Chunk Text] --> PROMPT["Extraction Prompt"]
         PROMPT --> LLM["Claude 3 Haiku"]
-        LLM --> |Pydantic JSON| RESULT[ExtractionResult<br/>entities + relationships]
+        LLM --> |Pydantic JSON| RESULT["ExtractionResult"]
     end
 
     subgraph Gleaning["Gleaning Loop"]
-        RESULT --> CHECK{_should_continue_gleaning?}
-        CHECK --> |Y| CONTINUE[GRAPHRAG_CONTINUE_PROMPT]
+        RESULT --> CHECK{"Continue gleaning?"}
+        CHECK --> |Y| CONTINUE["Continue Prompt"]
         CONTINUE --> LLM
-        CHECK --> |N| DEDUP[_deduplicate_entities]
+        CHECK --> |N| DEDUP["Deduplicate"]
     end
 
     subgraph Filter["Strict Mode"]
-        DEDUP --> STRICT{GRAPHRAG_STRICT_MODE?}
-        STRICT --> |Yes| FILTER[filter_entities_strict<br/>Remove non-matching types]
+        DEDUP --> STRICT{"Strict mode?"}
+        STRICT --> |Yes| FILTER["Filter entities"]
         STRICT --> |No| PASS[Pass through]
     end
 ```
@@ -392,7 +392,7 @@ flowchart TB
 
     subgraph Store["Storage + Tracking"]
         SUMMARY --> TRACK[child_summaries dict<br/>for parent processing]
-        SUMMARY --> WEAVIATE[("Weaviate")]
+        SUMMARY --> WEAVIATE[(Weaviate)]
         SUMMARY --> JSON[communities.json]
     end
 
@@ -453,16 +453,16 @@ def build_community_context(members, relationships, max_tokens=8000):
 ```mermaid
 flowchart LR
     subgraph Collections["Weaviate Collections"]
-        CHUNKS[("Chunk vectors")]
-        COMMS[("Community summaries")]
-        ENTS[("Entity descriptions")]
+        CHUNKS[Chunk vectors]
+        COMMS[Community summaries]
+        ENTS[Entity descriptions]
     end
 
     subgraph Usage["Query Time Usage"]
         QUERY[User Query] --> ENTS
         QUERY --> COMMS
 
-        ENTS --> |Entity extraction| NEO4J[("Neo4j")]
+        ENTS --> |Entity extraction| NEO4J[Neo4j]
         NEO4J --> |Graph traversal| CHUNKS
         CHUNKS --> |Batch fetch| RESULTS[Final Results]
         COMMS --> |Global queries| MAPRED[Map-Reduce]
@@ -476,30 +476,22 @@ flowchart LR
 
 ### Neo4j Graph Model
 
-```cypher
-// Entity node
-(:Entity {
-    name: "dopamine",
-    normalized_name: "dopamine",
-    entity_type: "CHEMICAL",
-    description: "Neurotransmitter involved in reward and motivation",
-    source_chunk_ids: ["behave::chunk_1", "behave::chunk_5"],
-    community_id: 42,
-    pagerank: 0.0042,
-    created_at: datetime()
-})
+**Entity node:**
 
-// Relationship
--[:RELATED_TO {
-    type: "MODULATES",
-    description: "Dopamine modulates reward processing",
-    weight: 0.95,
-    source_chunk_ids: ["behave::chunk_2"],
-    created_at: datetime()
-}]->
+    :Entity {
+        name: "dopamine",
+        entity_type: "CHEMICAL",
+        description: "...",
+        source_chunk_ids: ["chunk_1", "chunk_5"],
+        community_id: 42,
+        pagerank: 0.0042
+    }
 
-(:Entity {...})
-```
+**Relationship:**
+
+    -[:RELATED_TO {type: "MODULATES", weight: 0.95}]->
+
+**Pattern:** `(Entity)-[:RELATED_TO]->(Entity)`
 
 ---
 
