@@ -67,13 +67,16 @@ def parse_leiden_hierarchy(
 ) -> dict[int, CommunityLevel]:
     """Parse Leiden result into multi-level hierarchy.
 
-    Extracts C0, C1, C2 (and optionally more) levels from the
+    Extracts L0, L1, L2 (and optionally more) levels from the
     `intermediateCommunityIds` returned by Neo4j GDS Leiden.
 
-    The intermediate IDs array represents the hierarchy bottom-up:
-    - Index 0: Level 0 community (finest, same as `communityId`)
-    - Index 1: Level 1 community (parent of L0)
-    - Index 2: Level 2 community (parent of L1, coarsest)
+    The intermediate IDs array represents the hierarchy (matching Microsoft convention):
+    - Index 0: Level 0 community (coarsest, corpus-wide themes)
+    - Index 1: Level 1 community (medium granularity)
+    - Index 2: Level 2 community (finest, same as Leiden's `communityId`)
+
+    Note: Entities in Neo4j store their community_id from the FINEST level (L2).
+    Global queries use L0 (coarsest). Local queries use L2 (finest) for entity lookup.
 
     Args:
         leiden_result: Result from run_leiden() containing node_communities

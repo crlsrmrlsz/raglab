@@ -45,6 +45,7 @@ from src.config import (
     GRAPHRAG_TOP_COMMUNITIES,
     GRAPHRAG_TRAVERSE_DEPTH,
     GRAPHRAG_RRF_K,
+    GRAPHRAG_MAX_HIERARCHY_LEVELS,
     get_community_collection_name,
     get_collection_name,
 )
@@ -284,13 +285,17 @@ def retrieve_community_context_by_membership(
     # Build lookup by community_id (need to parse the key format)
     from .hierarchy import parse_community_key, build_community_key
 
+    # Finest level = GRAPHRAG_MAX_HIERARCHY_LEVELS - 1 (e.g., L2 for 3 levels)
+    # Entities in Neo4j store community_id from Leiden's finest level
+    finest_level = GRAPHRAG_MAX_HIERARCHY_LEVELS - 1
+
     community_lookup = {}
     for c in communities:
-        # community_id format: "community_L0_42" → extract (level, id)
+        # community_id format: "community_L2_42" → extract (level, id)
         try:
             level, cid = parse_community_key(c.community_id)
-            # Only include L0 (finest level where entities have community_id)
-            if level == 0:
+            # Only include finest level (where entities have community_id)
+            if level == finest_level:
                 community_lookup[cid] = c
         except ValueError:
             continue

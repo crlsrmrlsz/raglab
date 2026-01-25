@@ -853,7 +853,7 @@ def detect_and_summarize_communities(
             except FileNotFoundError:
                 logger.info("No existing summaries found, starting fresh")
 
-    # Number of hierarchy levels to process (L0=finest, L1=medium, L2=coarsest)
+    # Number of hierarchy levels to process (L0=coarsest, L1=medium, L2=finest)
     hierarchy_levels = GRAPHRAG_MAX_HIERARCHY_LEVELS
 
     # Run Leiden and parse hierarchy

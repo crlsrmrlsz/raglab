@@ -573,7 +573,7 @@ flowchart TB
     subgraph Classification["Query Classification"]
         QUERY[User Query] --> CLASSIFY[classify_query<br/>LLM: "local" or "global"]
         CLASSIFY --> |global| RETRIEVE[retrieve_communities_for_map_reduce<br/>All L0 communities]
-        CLASSIFY --> |local| LOCAL[Standard hybrid retrieval]
+        CLASSIFY --> |local| LOCAL[Pure graph retrieval<br/>combined_degree ranking]
     end
 
     subgraph MapPhase["Map Phase (Parallel)"]
@@ -729,7 +729,7 @@ GRAPHRAG_USE_EMBEDDING_EXTRACTION = True
 # Local Search
 GRAPHRAG_TOP_COMMUNITIES = 3
 GRAPHRAG_TRAVERSE_DEPTH = 2       # Max hops for entity traversal
-GRAPHRAG_RRF_K = 60               # RRF constant
+# Note: GRAPHRAG_RRF_K (60) exists but is NOT used for GraphRAG (pure graph retrieval)
 
 # Map-Reduce
 GRAPHRAG_MAP_MAX_TOKENS = 300
@@ -747,9 +747,9 @@ GRAPHRAG_REDUCE_MAX_TOKENS = 500
 | Leiden resolution | Configurable | 1.0 |
 | PageRank damping | Not specified | 0.85 |
 | Max context tokens (summary) | 8,000 | **8,000** (matches) |
-| Text unit prop | 0.5 (50%) | N/A (RRF merge) |
-| Community prop | 0.15 (15%) | N/A (separate context) |
-| RRF k | N/A | 60 |
+| Text unit prop | 0.5 (50%) | N/A (combined_degree ranking) |
+| Community prop | 0.15 (15%) | N/A (by entity membership) |
+| Retrieval method | Token budget allocation | Pure graph traversal |
 
 ---
 
@@ -878,11 +878,12 @@ def extract_chunk(chunk, model=GRAPHRAG_EXTRACTION_MODEL, max_gleanings=1):
         filtered, discarded = filter_entities_strict(result.entities, allowed_types)
 ```
 
-### Hybrid Graph Retrieval with RRF
+### Pure Graph Retrieval (Microsoft Design)
 
 ```python
-# src/graph/query.py:602-752
-def hybrid_graph_retrieval(query, driver, vector_results, top_k=10):
+# src/graph/query.py:907-1000
+def graph_retrieval(query, driver, top_k=10, collection_name=None):
+    """Pure graph retrieval without vector search (Microsoft GraphRAG design)."""
     # Get graph chunk IDs and metadata
     graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
 
@@ -893,20 +894,19 @@ def hybrid_graph_retrieval(query, driver, vector_results, top_k=10):
         driver=driver,
     )
 
-    # Fetch ALL graph-discovered chunks from Weaviate
-    all_graph_chunks = fetch_chunks_by_ids(graph_chunk_ids)
+    # Fetch ALL graph-discovered chunks from Weaviate (batch filter, not vector search)
+    all_graph_chunks = fetch_chunks_by_ids(graph_chunk_ids, collection_name)
 
-    # Build graph-ranked list ordered by combined_degree (Microsoft approach)
-    graph_ranked_results = _build_graph_ranked_list(graph_context, all_graph_chunks)
+    # Rank by combined_degree (Microsoft approach: hub entities = more informative)
+    graph_context = graph_meta.get("graph_context", [])
+    ranked_results = _build_graph_ranked_list(graph_context, all_graph_chunks)
 
-    # RRF merge: chunks in BOTH lists get boosted
-    rrf_result = reciprocal_rank_fusion(
-        result_lists=[vector_search_results, graph_ranked_results],
-        query_types=["vector", "graph"],
-        k=GRAPHRAG_RRF_K,  # 60
-        top_k=top_k,
-    )
+    # Return top-k ranked by combined_degree (no vector search, no RRF merge)
+    return ranked_results[:top_k], metadata
 ```
+
+> **Note**: Previous versions used hybrid graph+vector retrieval with RRF merge.
+> This was refactored to match Microsoft's pure graph approach in January 2026.
 
 ### Deterministic Leiden
 
@@ -965,10 +965,10 @@ def run_leiden(gds, graph, resolution=1.0, max_levels=10, seed=42, concurrency=1
 **Microsoft**: 1-10 (LLM assigns strength)
 **RAGLab**: 0.0-1.0 (confidence score)
 
-### 4. Token Budget vs RRF
+### 4. Token Budget vs Combined Degree Ranking
 
 **Microsoft**: Explicit token budget allocation (50% text, 15% community, 35% entities/relationships)
-**RAGLab**: RRF merge with separate community context
+**RAGLab**: Pure graph retrieval with combined_degree ranking (no token budget, no RRF)
 
 ### 5. Community Context Retrieval
 
@@ -1012,10 +1012,11 @@ The optional claims extraction system is **not implemented**:
 
 ### 3. Token Budget Allocation
 
-RAGLab uses RRF merge instead of explicit token budgets:
+RAGLab uses combined_degree ranking instead of explicit token budgets:
 - No `text_unit_prop` (50%)
 - No `community_prop` (15%)
 - No relationship/entity budget
+- Chunks ranked by graph centrality, not token allocation
 
 ### 4. Community Impact Rating
 
@@ -1054,7 +1055,7 @@ RAGLab implements the core GraphRAG pipeline with several enhancements:
 - Deterministic Leiden with crash recovery
 - Pydantic validation for extraction
 - Enhanced entity normalization
-- RRF-based hybrid retrieval
+- Pure graph retrieval with combined_degree ranking (matches Microsoft design)
 
 **Simplifications**:
 - Simpler community summary format
