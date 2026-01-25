@@ -202,12 +202,11 @@ flowchart LR
 ### RAGLab vs Reference: Extraction Format
 
 **Microsoft Reference** (delimited tuples):
-```text
-("entity"|CENTRAL INSTITUTION|ORGANIZATION|Description)
-##
-("relationship"|SOURCE|TARGET|Description|9)
-|COMPLETE|
-```
+
+    "entity"<|>CENTRAL INSTITUTION<|>ORGANIZATION<|>Description
+    ##
+    "relationship"<|>SOURCE<|>TARGET<|>Description<|>9
+    <|COMPLETE|>
 
 **RAGLab** (Pydantic JSON Schema):
 ```python
