@@ -4,31 +4,31 @@ This module provides a declarative configuration system where each preprocessing
 strategy declares its requirements as data, not code. This is the SINGLE SOURCE
 OF TRUTH for strategy constraints, used by:
 
-- UI (app.py): Renders constraint-aware controls
+- UI (app.py): Renders constraint-aware controls (disables invalid options)
 - Evaluation (run_stage_7_evaluation.py): Filters invalid combinations
 - Retrieval (ragas_evaluator.py): Validates at runtime
 
 ## Design Principles
 
-1. **Invalid states unrepresentable**: UI can't create invalid combinations
+1. **Invalid states unrepresentable**: UI/evaluation can't create invalid combinations
 2. **Single source of truth**: All constraints in StrategyConfig
 3. **Self-documenting**: Config dataclass IS the documentation
 4. **Extensible**: Add new strategies by creating StrategyConfig entry
 
-## Alpha Semantics
+## Constraint Dimensions
 
-Alpha controls the search balance (replaces search_type dimension):
-- alpha=0.0: Pure keyword (BM25 only)
-- 0 < alpha < 1: Hybrid (vector + BM25)
-- alpha=1.0: Pure semantic (vector only, dense retrieval)
+Each strategy declares constraints for:
+- **Alpha**: Search balance (0.0=BM25, 0.5=hybrid, 1.0=semantic)
+- **Reranking**: Whether cross-encoder reranking is used
+- **Collection**: Which chunking strategies are compatible
 
 ## Example
 
     >>> config = get_strategy_config("hyde")
     >>> config.alpha_constraint.mode
     'fixed'
-    >>> config.alpha_constraint.fixed_value
-    1.0
+    >>> config.reranking_constraint.mode
+    'forbidden'
     >>> config.is_valid_alpha(0.5)
     False
 """
@@ -39,18 +39,47 @@ from typing import Optional, Literal
 from src.config import get_graphrag_chunk_collection_name
 
 
+# =============================================================================
+# EVALUATION CONSTANTS
+# =============================================================================
+# Fixed parameters for comprehensive evaluation (not grid dimensions)
+
+EVAL_TOP_K = 15  # Fixed top_k for all evaluation runs
+
+
+# =============================================================================
+# COLLECTION TYPES
+# =============================================================================
+# All available chunking strategies that produce collections
+
+ALL_COLLECTIONS = frozenset({
+    "section",
+    "semantic_std2",
+    "semantic_std3",
+    "contextual",
+    "raptor",
+})
+
+
+# =============================================================================
+# CONSTRAINT CLASSES
+# =============================================================================
+
+
 @dataclass
 class CollectionConstraint:
     """Defines collection requirements for a strategy.
 
     Attributes:
         mode: How collection is constrained:
-            - "any": Strategy works with any compatible collection
+            - "any": Strategy works with any collection in allowed_collections
             - "dedicated": Strategy uses its own dedicated index (ignores selection)
+        allowed_collections: Set of compatible collection types (when mode="any")
         dedicated_collection: Collection name when mode="dedicated"
     """
 
     mode: Literal["any", "dedicated"]
+    allowed_collections: frozenset[str] = field(default_factory=lambda: ALL_COLLECTIONS)
     dedicated_collection: Optional[str] = None
 
     def __post_init__(self):
@@ -61,6 +90,29 @@ class CollectionConstraint:
     def uses_dedicated_index(self) -> bool:
         """Check if strategy uses dedicated index (ignores collection selection)."""
         return self.mode == "dedicated"
+
+    def is_compatible(self, collection_type: str) -> bool:
+        """Check if strategy works with a collection type.
+
+        Args:
+            collection_type: Base collection type (e.g., "section", "semantic_std2").
+
+        Returns:
+            True if compatible.
+        """
+        if self.mode == "dedicated":
+            return False  # Dedicated strategies ignore collection selection
+        return collection_type in self.allowed_collections
+
+    def get_allowed_collections(self) -> list[str]:
+        """Get list of allowed collections for evaluation grid.
+
+        Returns:
+            List of collection type strings.
+        """
+        if self.mode == "dedicated":
+            return []  # Dedicated strategies don't participate in grid
+        return sorted(self.allowed_collections)
 
 
 @dataclass
@@ -162,6 +214,60 @@ class AlphaConstraint:
 
 
 @dataclass
+class RerankingConstraint:
+    """Defines reranking requirements for a strategy.
+
+    Reranking uses a cross-encoder model to re-score retrieved chunks
+    for higher precision. Some strategies require it (decomposition),
+    others forbid it (hyde, graphrag), and some allow testing both.
+
+    Attributes:
+        mode: How reranking is constrained:
+            - "required": Must use reranking (always ON)
+            - "forbidden": Cannot use reranking (always OFF)
+            - "optional": Can test both ON and OFF
+    """
+
+    mode: Literal["required", "forbidden", "optional"]
+
+    def is_valid(self, use_reranking: bool) -> bool:
+        """Check if reranking setting is valid for this constraint.
+
+        Args:
+            use_reranking: Whether reranking is enabled.
+
+        Returns:
+            True if setting satisfies this constraint.
+        """
+        if self.mode == "required":
+            return use_reranking is True
+        elif self.mode == "forbidden":
+            return use_reranking is False
+        return True  # mode="optional"
+
+    def get_default(self) -> bool:
+        """Return default reranking setting for this constraint."""
+        if self.mode == "required":
+            return True
+        elif self.mode == "forbidden":
+            return False
+        return False  # Default to OFF for optional
+
+    def get_allowed_values(self) -> list[bool]:
+        """Return list of allowed reranking values for evaluation grid."""
+        if self.mode == "required":
+            return [True]
+        elif self.mode == "forbidden":
+            return [False]
+        return [False, True]  # Test both for optional
+
+
+# =============================================================================
+# STRATEGY CONFIG
+# =============================================================================
+
+
+@dataclass
 class StrategyConfig:
     """Declarative configuration for a preprocessing strategy.
 
@@ -174,20 +280,18 @@ class StrategyConfig:
         display_name: Human-readable name for UI.
         description: Short description for UI help text.
         alpha_constraint: How alpha (search balance) is constrained.
+        reranking_constraint: How reranking is constrained.
         collection_constraint: How collection selection is constrained.
         search_type_constraint: How search type is constrained.
-        compatible_collections: DEPRECATED - use collection_constraint instead.
-            If set, restrict to these collection types.
         includes_original_in_embedding: Whether original query should be
             included when averaging embeddings (HyDE paper requirement).
-        requires_reranking: If True, cross-encoder reranking is mandatory.
 
     Example:
         >>> hyde_config = get_strategy_config("hyde")
         >>> hyde_config.is_valid_alpha(1.0)
         True
-        >>> hyde_config.is_valid_alpha(0.5)
-        False
+        >>> hyde_config.reranking_constraint.mode
+        'forbidden'
         >>> graphrag_config = get_strategy_config("graphrag")
         >>> graphrag_config.uses_dedicated_index()
         True
@@ -199,15 +303,20 @@ class StrategyConfig:
     alpha_constraint: AlphaConstraint = field(
         default_factory=lambda: AlphaConstraint(mode="any")
     )
+    reranking_constraint: RerankingConstraint = field(
+        default_factory=lambda: RerankingConstraint(mode="optional")
+    )
     collection_constraint: CollectionConstraint = field(
         default_factory=lambda: CollectionConstraint(mode="any")
     )
     search_type_constraint: SearchTypeConstraint = field(
         default_factory=lambda: SearchTypeConstraint(mode="any")
     )
-    compatible_collections: Optional[set[str]] = None  # DEPRECATED
     includes_original_in_embedding: bool = False
-    requires_reranking: bool = False
+
+    # ==========================================================================
+    # Convenience methods
+    # ==========================================================================
 
     def uses_dedicated_index(self) -> bool:
         """Check if strategy uses dedicated index (ignores collection selection)."""
@@ -218,54 +327,62 @@ class StrategyConfig:
         return self.search_type_constraint.is_internal()
 
     def is_valid_alpha(self, alpha: float) -> bool:
-        """Check if alpha is valid for this strategy.
-
-        Args:
-            alpha: Alpha value (0.0-1.0).
-
-        Returns:
-            True if alpha is valid.
-        """
+        """Check if alpha is valid for this strategy."""
         return self.alpha_constraint.is_valid(alpha)
+
+    def is_valid_reranking(self, use_reranking: bool) -> bool:
+        """Check if reranking setting is valid for this strategy."""
+        return self.reranking_constraint.is_valid(use_reranking)
+
+    def is_compatible_with_collection(self, collection_type: str) -> bool:
+        """Check if strategy works with a collection type."""
+        return self.collection_constraint.is_compatible(collection_type)
 
     def get_default_alpha(self) -> float:
         """Get default alpha for this strategy."""
         return self.alpha_constraint.get_default()
 
+    def get_default_reranking(self) -> bool:
+        """Get default reranking for this strategy."""
+        return self.reranking_constraint.get_default()
+
     def get_allowed_alphas(self) -> list[float]:
         """Get list of allowed alpha values for evaluation."""
         return self.alpha_constraint.get_allowed_values()
 
-    def is_compatible_with_collection(self, collection_type: str) -> bool:
-        """Check if strategy works with a collection type.
+    def get_allowed_rerankings(self) -> list[bool]:
+        """Get list of allowed reranking values for evaluation."""
+        return self.reranking_constraint.get_allowed_values()
 
-        Args:
-            collection_type: Base collection type (e.g., "section", "semantic").
+    def get_allowed_collections(self) -> list[str]:
+        """Get list of allowed collections for evaluation."""
+        return self.collection_constraint.get_allowed_collections()
 
-        Returns:
-            True if compatible.
-        """
-        if self.compatible_collections is None:
-            return True
-        return collection_type in self.compatible_collections
+    # ==========================================================================
+    # Validation
+    # ==========================================================================
 
     def validate(
-        self, collection_type: str, alpha: float
+        self, collection_type: str, alpha: float, use_reranking: bool
     ) -> tuple[bool, Optional[str]]:
         """Validate if this strategy works with given parameters.
 
         Args:
             collection_type: Base collection type (e.g., "section").
             alpha: Alpha value (0.0-1.0).
+            use_reranking: Whether reranking is enabled.
 
         Returns:
             (is_valid, error_message) tuple.
         """
+        # Check collection compatibility
         if not self.is_compatible_with_collection(collection_type):
             return (
                 False,
-                f"{self.strategy_id} requires collection in {self.compatible_collections}",
+                f"{self.strategy_id} not compatible with {collection_type}",
             )
+
+        # Check alpha constraint
         if not self.is_valid_alpha(alpha):
             if self.alpha_constraint.mode == "fixed":
                 return (
@@ -275,11 +392,17 @@ class StrategyConfig:
             elif self.alpha_constraint.mode == "range":
                 return (
                     False,
-                    f"{self.strategy_id} requires alpha in [{self.alpha_constraint.min_value}, {self.alpha_constraint.max_value}]",
+                    f"{self.strategy_id} requires alpha in "
+                    f"[{self.alpha_constraint.min_value}, {self.alpha_constraint.max_value}]",
                 )
-            else:
-                # Should not reach here for mode="any" since is_valid() returns True
-                return (False, f"{self.strategy_id} has invalid alpha configuration")
+
+        # Check reranking constraint
+        if not self.is_valid_reranking(use_reranking):
+            if self.reranking_constraint.mode == "required":
+                return (False, f"{self.strategy_id} requires reranking=ON")
+            elif self.reranking_constraint.mode == "forbidden":
+                return (False, f"{self.strategy_id} requires reranking=OFF")
+
         return True, None
 
 
@@ -292,7 +415,12 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
         strategy_id="none",
         display_name="None",
         description="No preprocessing, use original query",
+        # Alpha: any (test all values)
         alpha_constraint=AlphaConstraint(mode="any"),
+        # Reranking: optional (test both ON and OFF)
+        reranking_constraint=RerankingConstraint(mode="optional"),
+        # Collection: any standard collection
+        collection_constraint=CollectionConstraint(mode="any"),
     ),
     "hyde": StrategyConfig(
         strategy_id="hyde",
@@ -300,6 +428,10 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
         description="Hypothetical Document Embeddings (arXiv:2212.10496)",
         # Paper requirement: pure semantic search (dense retrieval)
         alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
+        # HyDE relies on embedding similarity; reranking would defeat the purpose
+        reranking_constraint=RerankingConstraint(mode="forbidden"),
+        # Collection: any standard collection
+        collection_constraint=CollectionConstraint(mode="any"),
         # Paper requirement: average original query + hypotheticals
         includes_original_in_embedding=True,
     ),
@@ -309,23 +441,33 @@ STRATEGY_CONFIGS: dict[str, StrategyConfig] = {
         description="Break into sub-questions + rerank (arXiv:2507.00355)",
         # Paper uses dense retrieval (bge-large-en-v1.5), no BM25
         alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
-        requires_reranking=True,  # Paper requires cross-encoder reranking
+        # Paper requires cross-encoder reranking for sub-question results
+        reranking_constraint=RerankingConstraint(mode="required"),
+        # Collection: any standard collection
+        collection_constraint=CollectionConstraint(mode="any"),
     ),
     "graphrag": StrategyConfig(
         strategy_id="graphrag",
         display_name="GraphRAG",
         description="Knowledge graph + community retrieval (arXiv:2404.16130)",
-        # GraphRAG uses dedicated semantic_std2 collection (dynamically generated)
+        # Alpha is fixed for internal search consistency
+        alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
+        # GraphRAG performs its own ranking via combined_degree; reranking not applicable
+        reranking_constraint=RerankingConstraint(mode="forbidden"),
+        # GraphRAG uses dedicated semantic_std2 collection (entity-chunk ID matching)
         collection_constraint=CollectionConstraint(
             mode="dedicated",
             dedicated_collection=get_graphrag_chunk_collection_name(),
         ),
         # GraphRAG performs its own hybrid retrieval (graph + vector)
         search_type_constraint=SearchTypeConstraint(mode="internal"),
-        # Alpha is fixed for internal search consistency
-        alpha_constraint=AlphaConstraint(mode="fixed", fixed_value=1.0),
     ),
 }
+
+
+# =============================================================================
+# PUBLIC API
+# =============================================================================
 
 
 def get_strategy_config(strategy_id: str) -> StrategyConfig:
@@ -346,11 +488,53 @@ def get_strategy_config(strategy_id: str) -> StrategyConfig:
     return STRATEGY_CONFIGS[strategy_id]
 
 
+def list_strategy_configs() -> list[StrategyConfig]:
+    """List all strategy configurations.
+
+    Returns:
+        List of StrategyConfig objects.
+    """
+    return list(STRATEGY_CONFIGS.values())
+
+
+def list_strategy_ids() -> list[str]:
+    """List all strategy IDs.
+
+    Returns:
+        List of strategy ID strings.
+    """
+    return list(STRATEGY_CONFIGS.keys())
+
+
+def is_valid_combination(
+    strategy_id: str,
+    collection_type: str,
+    alpha: float,
+    use_reranking: bool,
+) -> tuple[bool, Optional[str]]:
+    """Check if (strategy, collection, alpha, reranking) combination is valid.
+
+    Args:
+        strategy_id: Strategy identifier.
+        collection_type: Base collection type.
+        alpha: Alpha value (0.0-1.0).
+        use_reranking: Whether reranking is enabled.
+
+    Returns:
+        (is_valid, error_message) tuple.
+    """
+    try:
+        config = get_strategy_config(strategy_id)
+    except ValueError as e:
+        return False, str(e)
+    return config.validate(collection_type, alpha, use_reranking)
+
+
 def get_valid_strategies_for_collection(collection_type: str) -> list[str]:
     """Get list of valid strategy IDs for a collection type.
 
     Args:
-        collection_type: Base collection type (e.g., "section", "semantic").
+        collection_type: Base collection type (e.g., "section", "semantic_std2").
 
     Returns:
         List of valid strategy IDs.
@@ -362,30 +546,10 @@ def get_valid_strategies_for_collection(collection_type: str) -> list[str]:
     return valid
 
 
-def is_valid_combination(
-    strategy_id: str, collection_type: str, alpha: float
-) -> tuple[bool, Optional[str]]:
-    """Check if (strategy, collection, alpha) combination is valid.
-
-    Args:
-        strategy_id: Strategy identifier.
-        collection_type: Base collection type.
-        alpha: Alpha value (0.0-1.0).
+def get_all_collections() -> list[str]:
+    """Get list of all available collection types.
 
     Returns:
-        (is_valid, error_message) tuple.
+        Sorted list of collection type strings.
     """
-    try:
-        config = get_strategy_config(strategy_id)
-    except ValueError as e:
-        return False, str(e)
-    return config.validate(collection_type, alpha)
-
-
-def list_strategy_configs() -> list[StrategyConfig]:
-    """List all strategy configurations.
-
-    Returns:
-        List of StrategyConfig objects.
-    """
-    return list(STRATEGY_CONFIGS.values())
+    return sorted(ALL_COLLECTIONS)
