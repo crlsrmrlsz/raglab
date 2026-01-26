@@ -34,7 +34,8 @@ flowchart LR
     KG --> LEIDEN["Leiden\nCommunities"]
     LEIDEN --> SUMM["LLM Community\nSummaries"]
 
-    KG --> EMB["Vector Store\n(Weaviate)"]
+    CHUNK --> EMB["Vector Store\n(Weaviate)"]
+    EXT --> EMB
     SUMM --> EMB
 ```
 
