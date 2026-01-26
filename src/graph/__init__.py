@@ -74,7 +74,6 @@ from .map_reduce import (
 from .query_entities import (
     extract_query_entities,
     extract_query_entities_embedding,
-    extract_query_entities_llm,
 )
 from .query import (
     get_graph_chunk_ids,
@@ -124,7 +123,6 @@ __all__ = [
     # Query entities
     "extract_query_entities",
     "extract_query_entities_embedding",
-    "extract_query_entities_llm",
     # Query
     "get_graph_chunk_ids",
     "retrieve_graph_context",

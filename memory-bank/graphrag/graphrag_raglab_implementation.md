@@ -338,13 +338,15 @@ RAGLab follows Microsoft's convention:
 RAGLab implements deterministic Leiden for crash-proof design:
 
 ```python
-# src/graph/community.py:117-119
-leiden_result = run_leiden(
-    gds, graph,
-    seed=GRAPHRAG_LEIDEN_SEED,       # 42
-    concurrency=GRAPHRAG_LEIDEN_CONCURRENCY,  # 1
+# src/graph/community.py:156-163 (actual gds.leiden.stream call)
+result = gds.leiden.stream(
+    graph,
+    gamma=resolution,  # 1.0
+    maxLevels=max_levels,  # 10
+    includeIntermediateCommunities=True,
+    randomSeed=seed,  # 42
+    concurrency=concurrency,  # 1
 )
-save_leiden_checkpoint(leiden_result)  # Immediate checkpoint
 ```
 
 Resume from checkpoint:
@@ -407,7 +409,7 @@ flowchart TB
 Members are sorted by **PageRank** (not degree) for context building:
 
 ```python
-# src/graph/community.py:508-551
+# src/graph/community.py:476-519
 def build_community_context(members, relationships, max_tokens=8000):
     lines = ["## Entities"]
     for member in members:  # Already sorted by PageRank
@@ -501,9 +503,9 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph EntityExtraction["Entity Extraction"]
+    subgraph EntityExtraction["Entity Extraction (matches Microsoft map_query_to_entities)"]
         QUERY[User Query] --> EMBED[embed_texts]
-        EMBED --> SEARCH["Weaviate Vector Search<br/>Entities collection"]
+        EMBED --> SEARCH["Weaviate Vector Search<br/>Entity collection"]
         SEARCH --> ENTITIES[Matched Entities]
     end
 
@@ -562,7 +564,7 @@ This aligns with Microsoft's relationship prioritization strategy.
 flowchart TB
     subgraph Classification["Query Classification"]
         QUERY[User Query] --> CLASSIFY["classify_query<br/>local or global"]
-        CLASSIFY --> |global| RETRIEVE["Retrieve L0 communities"]
+        CLASSIFY --> |global| RETRIEVE["Retrieve ALL L0 communities<br/>(matches Microsoft)"]
         CLASSIFY --> |local| LOCAL[Pure graph retrieval<br/>combined_degree ranking]
     end
 
@@ -600,6 +602,7 @@ flowchart TB
 
 | Parameter | Microsoft Reference | RAGLab |
 |-----------|--------------------|----|
+| Community selection | ALL at selected level | **ALL L0** (matches Microsoft) |
 | Community level | Configurable (C0-C3) | **L0 only** (coarsest) |
 | Map concurrency | asyncio.Semaphore(32) | `asyncio.gather` (no limit) |
 | Map max tokens | Configurable | 300 |
@@ -876,7 +879,7 @@ def extract_chunk(chunk, model=GRAPHRAG_EXTRACTION_MODEL, max_gleanings=1):
 ### Pure Graph Retrieval (Microsoft Design)
 
 ```python
-# src/graph/query.py:907-1000
+# src/graph/query.py:912-...
 def graph_retrieval(query, driver, top_k=10, collection_name=None):
     """Pure graph retrieval without vector search (Microsoft GraphRAG design)."""
     # Get graph chunk IDs and metadata
@@ -906,7 +909,7 @@ def graph_retrieval(query, driver, top_k=10, collection_name=None):
 ### Deterministic Leiden
 
 ```python
-# src/graph/community.py:112-184
+# src/graph/community.py:116-187
 def run_leiden(gds, graph, resolution=1.0, max_levels=10, seed=42, concurrency=1):
     """Deterministic Leiden with fixed seed and single-threaded execution."""
     result = gds.leiden.stream(

@@ -61,7 +61,7 @@ from .neo4j_client import find_entity_neighbors, find_entities_by_names, get_ent
 from .community import load_communities
 from .schemas import Community
 # Entity extraction logic moved to query_entities.py
-from .query_entities import extract_query_entities, extract_query_entities_llm
+from .query_entities import extract_query_entities
 
 logger = setup_logging(__name__)
 
@@ -529,10 +529,11 @@ def get_graph_chunk_ids(
         "graph_context": [],
     }
 
-    # Step 1: Extract entities from query using LLM
-    extracted = extract_query_entities_llm(query)
+    # Step 1: Extract entities from query using embedding similarity
+    # (Matches Microsoft GraphRAG: map_query_to_entities via vector search)
+    extracted = extract_query_entities(query)
     metadata["extracted_entities"] = extracted
-    logger.info(f"LLM extracted from query: {extracted}")
+    logger.info(f"Embedding extraction from query: {extracted}")
 
     # Step 2: Validate against Neo4j
     if extracted and driver:

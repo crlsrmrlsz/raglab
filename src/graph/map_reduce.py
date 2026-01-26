@@ -21,7 +21,7 @@ Benefits:
 ## Data Flow
 
 1. Query classification: local vs global
-2. For global: Retrieve top-k L0 (coarsest) communities
+2. For global: Retrieve ALL L0 (coarsest) communities (matches Microsoft)
 3. Map: Parallel LLM calls → partial answers
 4. Reduce: Single LLM call → final synthesis
 """
