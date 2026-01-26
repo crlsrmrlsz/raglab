@@ -46,29 +46,9 @@ Indexing runs once per corpus, building the graph and community structures neede
 
 Queries are classified as **local** or **global** and routed to different retrieval paths.
 
-```mermaid
-flowchart TB
-    Q[User Query] --> CLS{Local or Global?}
-
-    CLS -->|"What is dopamine?"| LOCAL
-    CLS -->|"What are the main themes?"| GLOBAL
-
-    subgraph LOCAL[Local Search]
-        direction TB
-        L1[Embed query] --> L2[Match entities in Vector Store]
-        L2 --> L3[Traverse Graph DB]
-        L3 --> L4[Retrieve source chunks]
-    end
-
-    subgraph GLOBAL[Global Search]
-        direction TB
-        G1[Get ALL L0 communities] --> G2[Map: partial answers]
-        G2 --> G3[Reduce: synthesize]
-    end
-
-    LOCAL --> ANS[Answer]
-    GLOBAL --> ANS
-```
+<div align="center">
+    <img src="../../assets/graphrag_query.png" alt="GraphRAG index pipeline">
+</div>
 
 **Local queries** ask about specific entities or concepts (e.g., "What is dopamine?"):
 
