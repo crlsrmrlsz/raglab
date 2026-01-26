@@ -155,8 +155,8 @@ GRAPHRAG_LEIDEN_SEED = 42          # Deterministic (crash recovery)
 ```
 
 **Output collections:**
-- `Entity_section800_v1` — Entity descriptions (for query extraction)
-- `Community_section800_v1` — Community summaries (for thematic context)
+- `Entity_semantic_std2_v1` — Entity descriptions (for query extraction)
+- `Community_semantic_std2_v1` — Community summaries (for thematic context)
 
 
 

@@ -237,28 +237,21 @@ def get_collection_name(chunking_strategy: str = None) -> str:
     return f"RAG_{strategy_safe}_{EMBEDDING_MODEL_SHORT}_{COLLECTION_VERSION}"
 
 
-def get_community_collection_name(chunking_strategy: str = None) -> str:
+def get_community_collection_name() -> str:
     """
     Generate community collection name for GraphRAG.
 
     Community embeddings are stored in Weaviate for efficient vector search.
-    Collection name includes strategy to match the chunks they were derived from.
-
-    Args:
-        chunking_strategy: Chunking strategy name (e.g., "section").
-            If None, uses CHUNKING_STRATEGY_NAME from config.
+    Uses GRAPHRAG_CHUNKING_STRATEGY since communities are GraphRAG-only.
 
     Returns:
         Collection name in format: Community_{strategy}_{version}
 
     Example:
         >>> get_community_collection_name()
-        "Community_section800_v1"
-        >>> get_community_collection_name("semantic")
-        "Community_semantic_v1"
+        "Community_semantic_std2_v1"
     """
-    strategy = chunking_strategy if chunking_strategy else CHUNKING_STRATEGY_NAME
-    strategy_safe = strategy.replace(".", "_")
+    strategy_safe = GRAPHRAG_CHUNKING_STRATEGY.replace(".", "_")
     return f"Community_{strategy_safe}_{COLLECTION_VERSION}"
 
 

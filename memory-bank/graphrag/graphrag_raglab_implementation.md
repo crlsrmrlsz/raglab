@@ -444,7 +444,7 @@ def build_community_context(members, relationships, max_tokens=8000):
 |----------|-----------|--------|-----------------|
 | Entity descriptions | Yes | Yes | `Entity_semantic_std2_v1` |
 | Text units (chunks) | Yes | Yes | `RAG_semantic_std2_embed3large_v1` |
-| Community summaries | Yes | Yes | `Community_section800_v1` |
+| Community summaries | Yes | Yes | `Community_semantic_std2_v1` |
 
 > **Note**: GraphRAG uses semantic_std2 chunks exclusively (configured via `GRAPHRAG_CHUNKING_STRATEGY`). Community collection uses a different naming convention as it's derived from the summarization process, not the chunking strategy.
 
