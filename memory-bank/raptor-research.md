@@ -301,7 +301,7 @@ RAPTOR additions needed:
 RAPTOR Pipeline Flow:
 =====================
 
-Stage 4.5: RAPTOR Tree Building
+Stage 4b/4c: RAPTOR Tree Building
   Input:  data/processed/05_final_chunks/section/{book}.json
   Process:
     1. Load section chunks as leaves
@@ -449,9 +449,9 @@ src/rag_pipeline/chunking/
   - Include tree_metadata in output file
 - [ ] Ensure tree fields (tree_level, parent_ids, etc.) are preserved
 
-**Task 7B.2: Create run_stage_4_5_raptor.py**
+**Task 7B.2: Create run_stage_4b_raptor.py**
 - [ ] New stage runner for RAPTOR tree building (between Stage 4 and 5)
-- [ ] CLI: `python -m src.stages.run_stage_4_5_raptor`
+- [ ] CLI: `python -m src.stages.run_stage_4b_raptor`
 - [ ] Options: `--overwrite`, `--max-levels`, `--min-cluster-size`
 
 ### Phase 7C: Weaviate Schema & Upload
@@ -625,7 +625,7 @@ RAPTOR implementation is successful when:
    - Faithfulness maintained (no hallucination from summaries)
 
 6. **Integration Complete:**
-   - `python -m src.stages.run_stage_4_5_raptor` works
+   - `python -m src.stages.run_stage_4b_raptor` works
    - `--strategy raptor` works in Stage 5 and Stage 6
    - RAPTOR appears in evaluation grid
 

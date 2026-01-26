@@ -40,7 +40,7 @@ from src.config import (
 )
 from src.shared.files import setup_logging
 from src.shared.openrouter_client import call_chat_completion, call_structured_completion
-from src.rag_pipeline.retrieval.preprocessing.schemas import (
+from src.rag_pipeline.retrieval.query_schemas import (
     DecompositionResult,
 )
 
@@ -251,7 +251,7 @@ def preprocess_query(
     """
     # Import here to avoid circular imports
     from src.config import DEFAULT_PREPROCESSING_STRATEGY
-    from src.rag_pipeline.retrieval.preprocessing.strategies import get_strategy
+    from src.rag_pipeline.retrieval.query_strategies import get_strategy
 
     # Use default strategy if none specified
     if strategy is None:

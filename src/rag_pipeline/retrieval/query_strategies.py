@@ -35,7 +35,7 @@ import time
 from typing import Callable, Optional
 
 from src.config import PREPROCESSING_MODEL, HYDE_K
-from src.rag_pipeline.retrieval.preprocessing.query_preprocessing import (
+from src.rag_pipeline.retrieval.query_preprocessing import (
     PreprocessedQuery,
     hyde_prompt as _hyde_prompt_fn,
     decompose_query,

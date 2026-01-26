@@ -89,7 +89,7 @@ from src.config import (
 )
 from src.evaluation import run_evaluation
 from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_arg
-from src.rag_pipeline.retrieval.preprocessing.strategy_config import (
+from src.rag_pipeline.retrieval.query_strategy_config import (
     get_strategy_config,
     is_valid_combination,
     list_strategy_configs,
@@ -460,7 +460,7 @@ def _build_valid_combinations(
         - all_strategy_ids: List of all strategy IDs for reporting.
     """
     from src.ui.services.search import extract_strategy_from_collection
-    from src.rag_pipeline.retrieval.preprocessing.strategies import list_strategies
+    from src.rag_pipeline.retrieval.query_strategies import list_strategies
 
     # Separate strategies into standard (grid) and dedicated (single run)
     standard_strategies = []

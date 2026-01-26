@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     import weaviate
     from neo4j import Driver
     from src.rag_pipeline.indexing.weaviate_query import SearchResult
-    from src.rag_pipeline.retrieval.preprocessing.query_preprocessing import PreprocessedQuery
+    from src.rag_pipeline.retrieval.query_preprocessing import PreprocessedQuery
 
 
 @dataclass

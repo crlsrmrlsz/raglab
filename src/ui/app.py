@@ -37,11 +37,11 @@ from src.config import (
     PREPROCESSING_MODEL,
     get_valid_preprocessing_strategies,
 )
-from src.rag_pipeline.retrieval.preprocessing.strategy_config import (
+from src.rag_pipeline.retrieval.query_strategy_config import (
     get_strategy_config,
 )
 from src.ui.services.search import search_chunks, get_available_collections, CollectionInfo
-from src.rag_pipeline.retrieval.preprocessing import preprocess_query
+from src.rag_pipeline.retrieval.query_preprocessing import preprocess_query
 from src.rag_pipeline.generation.answer_generator import generate_answer
 from src.graph.query import format_graph_context_for_generation
 

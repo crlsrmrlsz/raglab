@@ -300,9 +300,9 @@ def query_raptor(query: str, collection: str, top_k: int = 10):
 
 ### 2.5 New Stage 4 Variant
 
-**Stage runner**: `python -m src.stages.run_stage_4_5_raptor` (IMPLEMENTED)
+**Stage runner**: `python -m src.stages.run_stage_4b_raptor` (IMPLEMENTED)
 
-Run via: `python -m src.stages.run_stage_4_5_raptor`
+Run via: `python -m src.stages.run_stage_4b_raptor`
 
 ### 2.6 Test from UI
 
@@ -557,14 +557,14 @@ python -m src.stages.run_stage_7_evaluation --comprehensive
 **Execution order:**
 ```bash
 # Extract entities + relationships
-python -m src.stages.run_stage_4_5_graph_extract
+python -m src.stages.run_stage_4c_graph_extract
 
 # Upload to Neo4j + run Leiden
 docker compose up -d neo4j
 python -m src.stages.run_stage_6b_neo4j
 ```
 
-**Note:** Stage 4.5 RAPTOR (`run_stage_4_5_raptor.py`) is completely separate from GraphRAG - it creates hierarchical document summaries, not entity extraction.
+**Note:** Stage 4b/4c RAPTOR (`run_stage_4b_raptor.py`) is completely separate from GraphRAG - it creates hierarchical document summaries, not entity extraction.
 
 ### GraphRAG Chunk ID Compatibility (Dec 28, 2024)
 
@@ -635,7 +635,7 @@ For each improvement:
 
 ### Stage Runners
 - `src/stages/run_stage_4_chunking.py` - All chunking strategies via `--strategy` arg
-- `src/stages/run_stage_4_5_raptor.py` - RAPTOR tree building
+- `src/stages/run_stage_4b_raptor.py` - RAPTOR tree building
 - `src/stages/run_stage_4_6_graph_extract.py` - GraphRAG entity extraction
 - `src/stages/run_stage_6b_neo4j.py` - Neo4j upload + Leiden communities
 - `src/stages/run_stage_7_evaluation.py` - Evaluation with `--preprocessing` arg

@@ -82,8 +82,8 @@ python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4
 # Contextual - Requires semantic chunks (std=2) first
 python -m src.stages.run_stage_4_chunking --strategy contextual
 
-# RAPTOR - Requires section chunks first (Stage 4.5)
-python -m src.stages.run_stage_4_5_raptor
+# RAPTOR - Requires section chunks first (Stage 4b)
+python -m src.stages.run_stage_4b_raptor
 ```
 
 This stage reads JSON files (one per book) from `data/processed/04_nlp_chunks/` and stores chunks in JSON in `data/processed/05_final_chunks/`, one folder per strategy. 

@@ -266,16 +266,16 @@ python -m src.stages.run_stage_6_weaviate
 #   - 100-1000 chunks: typically 2 levels
 #   - 5000+ chunks: typically 3-4 levels
 # Uses dynamic n_neighbors = sqrt(n-1) like original RAPTOR paper
-python -m src.stages.run_stage_4_5_raptor
+python -m src.stages.run_stage_4b_raptor
 
 # GraphRAG (Neo4j knowledge graph)
-python -m src.stages.run_stage_4_5_graph_extract  # Extract entities/relationships (resumable)
+python -m src.stages.run_stage_4c_graph_extract  # Extract entities/relationships (resumable)
 python -m src.stages.run_stage_6b_neo4j           # Upload to Neo4j + Leiden communities
 
 # Extraction resume options:
-python -m src.stages.run_stage_4_5_graph_extract --overwrite skip  # Resume from failure
-python -m src.stages.run_stage_4_5_graph_extract --overwrite all   # Force reprocess
-python -m src.stages.run_stage_4_5_graph_extract --list-books      # Preview books
+python -m src.stages.run_stage_4c_graph_extract --overwrite skip  # Resume from failure
+python -m src.stages.run_stage_4c_graph_extract --overwrite all   # Force reprocess
+python -m src.stages.run_stage_4c_graph_extract --list-books      # Preview books
 
 # UI
 streamlit run src/ui/app.py

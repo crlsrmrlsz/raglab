@@ -4,27 +4,19 @@
 
 GraphRAG uses entity extraction to identify concepts in user queries,
 then traverses the knowledge graph from matched entities to find
-related chunks. This module provides two extraction methods:
+related chunks.
 
-1. **Embedding-based** (primary): Fast semantic similarity search against
-   entity descriptions stored in Weaviate. Matches the Microsoft GraphRAG
-   reference implementation approach.
-
-2. **LLM-based** (fallback): Uses structured LLM output with curated entity
-   types from graphrag_types.yaml for complex queries where embedding
-   similarity may miss implied concepts.
+**Extraction method**: Embedding similarity search against entity descriptions
+stored in Weaviate. This matches the Microsoft GraphRAG reference implementation.
 
 ## Library Usage
 
 - Weaviate for embedding similarity search (HNSW index)
-- OpenRouter for LLM-based extraction (Claude/GPT structured output)
 - Neo4j for entity validation (optional)
 
 ## Data Flow
 
 Query → Embed → Weaviate vector search → Entity names
-                       ↓ (if empty)
-               LLM extraction (curated types)
                        ↓
                Neo4j validation (optional)
                        ↓
@@ -37,17 +29,11 @@ import re
 from neo4j import Driver
 
 from src.config import (
-    GRAPHRAG_EXTRACTION_MODEL,
-    GRAPHRAG_QUERY_EXTRACTION_PROMPT,
     GRAPHRAG_ENTITY_EXTRACTION_TOP_K,
     GRAPHRAG_ENTITY_MIN_SIMILARITY,
-    GRAPHRAG_USE_EMBEDDING_EXTRACTION,
     get_entity_collection_name,
 )
-from src.graph.graphrag_types import get_entity_types
 from src.shared.files import setup_logging
-from src.shared.openrouter_client import call_structured_completion
-from .schemas import QueryEntities
 from .neo4j_client import find_entities_by_names
 
 logger = setup_logging(__name__)
@@ -121,56 +107,6 @@ def extract_query_entities_embedding(
 
     except Exception as e:
         logger.warning(f"Embedding extraction failed: {e}")
-        return []
-
-
-# ============================================================================
-# LLM-Based Entity Extraction
-# ============================================================================
-
-
-def extract_query_entities_llm(
-    query: str,
-    model: str = GRAPHRAG_EXTRACTION_MODEL,
-) -> list[str]:
-    """Extract entities from query using LLM.
-
-    Uses structured output to identify entity mentions in the query,
-    including lowercase conceptual terms that regex would miss.
-
-    Args:
-        query: User query string.
-        model: OpenRouter model ID (default: claude-3-haiku).
-
-    Returns:
-        List of entity names extracted from query.
-
-    Example:
-        >>> extract_query_entities_llm("What creates lasting happiness?")
-        ["happiness", "pleasure", "hedonic adaptation"]
-    """
-    entity_types = get_entity_types()
-
-    prompt = GRAPHRAG_QUERY_EXTRACTION_PROMPT.format(
-        entity_types=", ".join(entity_types),
-        query=query,
-    )
-
-    try:
-        result = call_structured_completion(
-            messages=[{"role": "user", "content": prompt}],
-            model=model,
-            response_model=QueryEntities,
-            temperature=0.0,
-            max_tokens=500,
-        )
-        entities = [e.name for e in result.entities]
-        logger.info(f"LLM extracted entities: {entities}")
-        return entities
-    except Exception as e:
-        logger.warning(f"LLM query extraction failed: {e}")
-        logger.debug(f"  Query: {query[:100]}")
-        logger.debug(f"  Model: {model}")
         return []
 
 

@@ -1,4 +1,4 @@
-"""Stage 4.5: Entity Extraction for GraphRAG.
+"""Stage 4c: Entity Extraction for GraphRAG.
 
 Extracts entities and relationships from chunked documents using curated
 entity types from graphrag_types.yaml. Results are saved to extraction_results.json
@@ -8,16 +8,16 @@ for Neo4j upload in Stage 6b.
 
 ```bash
 # Full extraction (default: semantic_std2 chunks)
-python -m src.stages.run_stage_4_5_graph_extract
+python -m src.stages.run_stage_4c_graph_extract
 
 # Use different chunking strategy
-python -m src.stages.run_stage_4_5_graph_extract --strategy section
+python -m src.stages.run_stage_4c_graph_extract --strategy section
 
 # Resume after interruption (skip processed books)
-python -m src.stages.run_stage_4_5_graph_extract --overwrite skip
+python -m src.stages.run_stage_4c_graph_extract --overwrite skip
 
 # List books to be processed
-python -m src.stages.run_stage_4_5_graph_extract --list-books
+python -m src.stages.run_stage_4c_graph_extract --list-books
 ```
 
 ## Next Step
@@ -34,7 +34,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from src.graph.extraction import run_extraction, load_book_files
+from src.graph.extraction_utils import run_extraction, load_book_files
 from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_arg
 from src.config import GRAPHRAG_EXTRACTION_MODEL, DIR_CLEANING_LOGS, GRAPHRAG_CHUNKING_STRATEGY
 

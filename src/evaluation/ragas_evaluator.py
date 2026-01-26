@@ -14,7 +14,7 @@ from typing import Any, Optional
 from pathlib import Path
 from datetime import datetime
 
-from src.rag_pipeline.retrieval.preprocessing.query_preprocessing import PreprocessedQuery
+from src.rag_pipeline.retrieval.query_preprocessing import PreprocessedQuery
 
 from ragas import evaluate, EvaluationDataset
 from ragas.metrics import (
@@ -535,7 +535,7 @@ def process_single_question(
             generated_queries = None
 
             if preprocessing_strategy != "none":
-                from src.rag_pipeline.retrieval.preprocessing import preprocess_query
+                from src.rag_pipeline.retrieval.query_preprocessing import preprocess_query
 
                 try:
                     preprocessed = preprocess_query(

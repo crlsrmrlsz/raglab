@@ -90,7 +90,7 @@ def load_extraction_results(
     if not input_path.exists():
         raise FileNotFoundError(
             f"Extraction results not found: {input_path}\n"
-            "Run Stage 4.5 first: python -m src.stages.run_stage_4_5_graph_extract"
+            "Run Stage 4c first: python -m src.stages.run_stage_4c_graph_extract"
         )
 
     with open(input_path, "r", encoding="utf-8") as f:

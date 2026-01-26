@@ -1,5 +1,5 @@
 """
-Stage 4.5: Build RAPTOR hierarchical summary trees.
+Stage 4b: Build RAPTOR hierarchical summary trees.
 
 This stage runs between Stage 4 (chunking) and Stage 5 (embedding).
 It takes semantic chunks (std=2) as input and builds a tree of summaries.
@@ -8,9 +8,9 @@ RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval
 Paper: arXiv:2401.18059 (ICLR 2024)
 
 Usage:
-    python -m src.stages.run_stage_4_5_raptor
-    python -m src.stages.run_stage_4_5_raptor --max-levels 3
-    python -m src.stages.run_stage_4_5_raptor --overwrite all
+    python -m src.stages.run_stage_4b_raptor
+    python -m src.stages.run_stage_4b_raptor --max-levels 3
+    python -m src.stages.run_stage_4b_raptor --overwrite all
 
 Input:  data/processed/05_final_chunks/semantic_std2/{book}.json
 Output: data/processed/05_final_chunks/raptor/{book}.json
@@ -27,12 +27,12 @@ from src.config import (
 from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_arg
 from src.rag_pipeline.chunking.raptor.raptor_chunker import run_raptor_chunking
 
-logger = setup_logging("Stage4_5_RAPTOR")
+logger = setup_logging("Stage4b_RAPTOR")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Stage 4.5: Build RAPTOR hierarchical summary trees"
+        description="Stage 4b: Build RAPTOR hierarchical summary trees"
     )
     parser.add_argument(
         "--max-levels",

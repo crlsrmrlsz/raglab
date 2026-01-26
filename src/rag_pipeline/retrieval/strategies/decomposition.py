@@ -22,8 +22,8 @@ from src.rag_pipeline.retrieval.strategy_protocol import (
     RetrievalContext,
     RetrievalResult,
 )
-from src.rag_pipeline.retrieval.preprocessing import preprocess_query
-from src.rag_pipeline.retrieval.preprocessing.retrieval_helpers import execute_search
+from src.rag_pipeline.retrieval.query_preprocessing import preprocess_query
+from src.rag_pipeline.retrieval.query_helpers import execute_search
 from src.rag_pipeline.retrieval.reranking import rerank
 from src.shared.files import setup_logging
 

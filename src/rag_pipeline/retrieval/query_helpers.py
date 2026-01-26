@@ -31,7 +31,7 @@ import weaviate
 
 from src.rag_pipeline.embedding.embedder import embed_texts
 from src.rag_pipeline.indexing.weaviate_query import query_hybrid, query_similar, SearchResult
-from src.rag_pipeline.retrieval.preprocessing.strategy_config import get_strategy_config
+from src.rag_pipeline.retrieval.query_strategy_config import get_strategy_config
 from src.rag_pipeline.retrieval.reranking_utils import (
     apply_reranking_if_enabled,
     apply_reranking_with_metadata,

@@ -17,7 +17,7 @@ Usage:
     >>> print(stats)  # {"book_name": node_count, ...}
 
 Pipeline Integration:
-    Stage 4.5: python -m src.stages.run_stage_4_5_raptor
+    Stage 4b: python -m src.stages.run_stage_4b_raptor
     Input:  data/processed/05_final_chunks/section/{book}.json
     Output: data/processed/05_final_chunks/raptor/{book}.json
 """
