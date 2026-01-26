@@ -5,7 +5,6 @@ sentence-level granularity and context tracking.
 """
 
 import re
-from typing import Optional
 
 import spacy
 

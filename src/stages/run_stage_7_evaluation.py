@@ -438,57 +438,29 @@ def generate_report(
 
 
 # ============================================================================
-# COMPREHENSIVE EVALUATION
+# COMPREHENSIVE EVALUATION - HELPER FUNCTIONS
 # ============================================================================
 
 
-def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
-    """Run comprehensive evaluation across all VALID combinations with failure tracking.
+def _build_valid_combinations(
+    available_collections: list[str],
+) -> tuple[list[tuple], list[tuple], list[str]]:
+    """Build valid grid combinations using StrategyConfig constraints.
 
-    Tests: collections × alphas × reranking × preprocessing_strategies
-    - Uses StrategyConfig constraints to filter invalid combinations
-    - Reranking is a grid dimension (optional for 'none', required/forbidden for others)
-    - top_k is fixed at EVAL_TOP_K (not a grid dimension)
-    - Uses curated question subset
-    - Generates enhanced leaderboard report with statistical analysis
-    - Outputs article-ready summary with key findings
-    - Saves failed_combinations.json for later retry
-    - No individual run logging to evaluation-history.md
+    Separates strategies into standard (grid search) and dedicated (single run),
+    then builds valid combinations for each.
 
     Args:
-        args: Command-line arguments (uses generation_model, evaluation_model, output).
+        available_collections: Collections available in Weaviate.
+
+    Returns:
+        Tuple of (valid_combinations, skipped_combinations, all_strategy_ids).
+        - valid_combinations: List of (collection, alpha, reranking, strategy) tuples.
+        - skipped_combinations: List of (collection, alpha, reranking, strategy, reason) tuples.
+        - all_strategy_ids: List of all strategy IDs for reporting.
     """
-    import time
-    from src.ui.services.search import list_collections, extract_strategy_from_collection
+    from src.ui.services.search import extract_strategy_from_collection
     from src.rag_pipeline.retrieval.preprocessing.strategies import list_strategies
-    from src.evaluation.schemas import FailedCombinationsReport
-
-    # Generate timestamp early for consistent naming across log, checkpoint, and results
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # Set up file logging (captures all output to log file)
-    log_path = setup_file_logging(timestamp)
-
-    logger.info("Starting comprehensive evaluation mode...")
-    start_time = time.time()
-
-    # Load questions (respect --questions-file if provided)
-    questions_filepath = resolve_questions_file(args.questions_file)
-    questions = load_test_questions(filepath=questions_filepath)
-    if not questions:
-        logger.error(f"No questions found in {questions_filepath}")
-        return
-    logger.info(f"Loaded {len(questions)} questions from {questions_filepath.name}")
-
-    # Get available collections from Weaviate
-    available_collections = list_collections()
-    if not available_collections:
-        logger.error("No RAG collections found in Weaviate. Run stage 6 first.")
-        return
-
-    # Fixed parameters (not grid dimensions)
-    top_k = EVAL_TOP_K  # Fixed at 15
-    logger.info(f"Fixed parameters: top_k={top_k}")
 
     # Separate strategies into standard (grid) and dedicated (single run)
     standard_strategies = []
@@ -502,8 +474,6 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
     logger.info(f"Standard strategies (grid): {[s.strategy_id for s in standard_strategies]}")
     logger.info(f"Dedicated strategies (single run): {[s.strategy_id for s in dedicated_strategies]}")
 
-    # Build valid combinations using StrategyConfig constraints
-    # Tuple: (collection, alpha, reranking, strategy)
     combinations = []
     skipped_combinations = []
 
@@ -531,7 +501,6 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
 
             for alpha in allowed_alphas:
                 for rerank in allowed_rerankings:
-                    # Validate via StrategyConfig
                     is_valid, error_msg = is_valid_combination(
                         strategy, collection_type, alpha, rerank
                     )
@@ -548,7 +517,6 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         alpha = config.get_default_alpha()
         rerank = config.get_default_reranking()
 
-        # Check if dedicated collection exists in available collections
         if dedicated_collection in available_collections:
             combinations.append((dedicated_collection, alpha, rerank, config.strategy_id))
             logger.info(
@@ -561,16 +529,32 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
                 f"'{dedicated_collection}' not found in Weaviate"
             )
 
-    total_combinations = len(combinations)
-    all_strategies = list_strategies()
+    return combinations, skipped_combinations, list_strategies()
 
-    # Log what we're testing
-    logger.info(f"Testing {total_combinations} valid combinations:")
+
+def _log_grid_summary(
+    combinations: list[tuple],
+    skipped_combinations: list[tuple],
+    available_collections: list[str],
+    all_strategies: list[str],
+    top_k: int,
+) -> None:
+    """Log summary of grid parameters and skipped combinations.
+
+    Args:
+        combinations: Valid combinations to test.
+        skipped_combinations: Combinations skipped with reasons.
+        available_collections: Collections available in Weaviate.
+        all_strategies: All strategy IDs.
+        top_k: Fixed top_k value.
+    """
+    logger.info(f"Testing {len(combinations)} valid combinations:")
     logger.info(f"  Available collections: {available_collections}")
     logger.info(f"  Defined collection types: {get_all_collections()}")
     logger.info(f"  Top-K: {top_k} (fixed)")
     logger.info(f"  Preprocessing strategies: {all_strategies}")
     logger.info(f"  Skipped invalid: {len(skipped_combinations)}")
+
     if skipped_combinations:
         for item in skipped_combinations[:5]:
             coll, alpha, rerank, strat, reason = item
@@ -578,22 +562,196 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         if len(skipped_combinations) > 5:
             logger.info(f"    ... and {len(skipped_combinations) - 5} more")
 
-    # Run all valid combinations
-    all_results = []
-    count = 0
 
-    # Define checkpoint and failure tracking paths
+def _save_checkpoint(
+    checkpoint_path: Path,
+    count: int,
+    total: int,
+    all_results: list[dict],
+    available_collections: list[str],
+    top_k: int,
+    all_strategies: list[str],
+) -> None:
+    """Save checkpoint after each combination for crash resilience.
+
+    Args:
+        checkpoint_path: Path to checkpoint file.
+        count: Number of completed combinations.
+        total: Total combinations to process.
+        all_results: Results collected so far.
+        available_collections: Collections in the grid.
+        top_k: Fixed top_k value.
+        all_strategies: All strategy IDs.
+    """
+    progress_pct = round(count / total * 100, 1)
+    checkpoint_data = {
+        "timestamp": datetime.now().isoformat(),
+        "completed": count,
+        "total": total,
+        "progress_pct": progress_pct,
+        "results": all_results,
+        "grid_params": {
+            "collections": available_collections,
+            "top_k": top_k,
+            "strategies": all_strategies,
+        },
+    }
+    with open(checkpoint_path, "w") as f:
+        json.dump(checkpoint_data, f, indent=2)
+    logger.info(f"  Checkpoint saved: {count}/{total} ({progress_pct}%)")
+
+
+def _run_single_combination(
+    collection: str,
+    alpha: float,
+    use_reranking: bool,
+    strategy: str,
+    questions: list[dict],
+    top_k: int,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    """Run evaluation for a single combination and return result dict.
+
+    Args:
+        collection: Weaviate collection name.
+        alpha: Hybrid search alpha value.
+        use_reranking: Whether to use reranking.
+        strategy: Preprocessing strategy ID.
+        questions: Test questions.
+        top_k: Number of chunks to retrieve.
+        args: CLI arguments with model settings.
+
+    Returns:
+        Result dict with scores, or error information if failed.
+    """
+    results = run_evaluation(
+        test_questions=questions,
+        metrics=EVAL_DEFAULT_METRICS,
+        top_k=top_k,
+        generation_model=args.generation_model,
+        evaluation_model=args.evaluation_model,
+        collection_name=collection,
+        use_reranking=use_reranking,
+        alpha=alpha,
+        preprocessing_strategy=strategy,
+        preprocessing_model=None,
+        save_trace=True,
+        search_type="hybrid",
+    )
+
+    trace_path = results.get("trace_path")
+    questions_processed = results.get("questions_processed", len(questions))
+    questions_failed = results.get("questions_failed", 0)
+    failed_questions = results.get("failed_questions", [])
+
+    return {
+        "collection": collection,
+        "alpha": alpha,
+        "reranking": use_reranking,
+        "top_k": top_k,
+        "strategy": strategy,
+        "scores": results["scores"],
+        "difficulty_breakdown": results.get("difficulty_breakdown", {}),
+        "num_questions": len(questions),
+        "questions_processed": questions_processed,
+        "questions_failed": questions_failed,
+        "failed_questions": failed_questions,
+        "trace_path": str(trace_path) if trace_path else None,
+    }
+
+
+def _determine_failure_stage(error: Exception) -> str:
+    """Determine which stage failed based on error message.
+
+    Args:
+        error: The exception that was raised.
+
+    Returns:
+        Stage name: "preprocessing", "retrieval", "generation", or "ragas_evaluation".
+    """
+    error_str = str(error).lower()
+    if "preprocessing" in error_str:
+        return "preprocessing"
+    elif "retrieval" in error_str or "weaviate" in error_str:
+        return "retrieval"
+    elif "generation" in error_str:
+        return "generation"
+    return "ragas_evaluation"
+
+
+# ============================================================================
+# COMPREHENSIVE EVALUATION - MAIN FUNCTION
+# ============================================================================
+
+
+def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
+    """Run comprehensive evaluation across all VALID combinations with failure tracking.
+
+    Tests: collections × alphas × reranking × preprocessing_strategies
+    - Uses StrategyConfig constraints to filter invalid combinations
+    - Reranking is a grid dimension (optional for 'none', required/forbidden for others)
+    - top_k is fixed at EVAL_TOP_K (not a grid dimension)
+    - Uses curated question subset
+    - Generates enhanced leaderboard report with statistical analysis
+    - Outputs article-ready summary with key findings
+    - Saves failed_combinations.json for later retry
+    - No individual run logging to evaluation-history.md
+
+    Args:
+        args: Command-line arguments (uses generation_model, evaluation_model, output).
+    """
+    import time
+    from src.ui.services.search import list_collections
+    from src.evaluation.schemas import FailedCombinationsReport
+
+    # Generate timestamp early for consistent naming
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = setup_file_logging(timestamp)
+
+    logger.info("Starting comprehensive evaluation mode...")
+    start_time = time.time()
+
+    # Load questions
+    questions_filepath = resolve_questions_file(args.questions_file)
+    questions = load_test_questions(filepath=questions_filepath)
+    if not questions:
+        logger.error(f"No questions found in {questions_filepath}")
+        return
+    logger.info(f"Loaded {len(questions)} questions from {questions_filepath.name}")
+
+    # Get available collections from Weaviate
+    available_collections = list_collections()
+    if not available_collections:
+        logger.error("No RAG collections found in Weaviate. Run stage 6 first.")
+        return
+
+    # Fixed parameters (not grid dimensions)
+    top_k = EVAL_TOP_K
+    logger.info(f"Fixed parameters: top_k={top_k}")
+
+    # Build valid combinations
+    combinations, skipped_combinations, all_strategies = _build_valid_combinations(
+        available_collections
+    )
+
+    # Log grid summary
+    _log_grid_summary(
+        combinations, skipped_combinations, available_collections, all_strategies, top_k
+    )
+
+    # Initialize tracking
+    total_combinations = len(combinations)
+    all_results = []
     comprehensive_run_id = f"comprehensive_{timestamp}"
     checkpoint_path = RESULTS_DIR / f"comprehensive_checkpoint_{timestamp}.json"
 
-    # Initialize failed combinations report
     failed_report = FailedCombinationsReport(
         comprehensive_run_id=comprehensive_run_id,
         timestamp=datetime.now().isoformat(),
     )
 
-    for collection, alpha, use_reranking, strategy in combinations:
-        count += 1
+    # Run all combinations
+    for count, (collection, alpha, use_reranking, strategy) in enumerate(combinations, 1):
         rerank_str = "ON" if use_reranking else "off"
         logger.info(
             f"\n[{count}/{total_combinations}] "
@@ -601,43 +759,13 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         )
 
         try:
-            results = run_evaluation(
-                test_questions=questions,
-                metrics=EVAL_DEFAULT_METRICS,
-                top_k=top_k,
-                generation_model=args.generation_model,
-                evaluation_model=args.evaluation_model,
-                collection_name=collection,
-                use_reranking=use_reranking,
-                alpha=alpha,
-                preprocessing_strategy=strategy,
-                preprocessing_model=None,
-                save_trace=True,
-                search_type="hybrid",  # Alpha controls balance
+            result = _run_single_combination(
+                collection, alpha, use_reranking, strategy, questions, top_k, args
             )
+            all_results.append(result)
 
-            # Store configuration + scores + difficulty breakdown + trace path
-            trace_path = results.get("trace_path")
-            questions_processed = results.get("questions_processed", len(questions))
-            questions_failed = results.get("questions_failed", 0)
-            failed_questions = results.get("failed_questions", [])
-
-            all_results.append({
-                "collection": collection,
-                "alpha": alpha,
-                "reranking": use_reranking,
-                "top_k": top_k,
-                "strategy": strategy,
-                "scores": results["scores"],
-                "difficulty_breakdown": results.get("difficulty_breakdown", {}),
-                "num_questions": len(questions),
-                "questions_processed": questions_processed,
-                "questions_failed": questions_failed,
-                "failed_questions": failed_questions,
-                "trace_path": str(trace_path) if trace_path else None,
-            })
-
-            scores = results["scores"]
+            scores = result["scores"]
+            questions_failed = result.get("questions_failed", 0)
             status_suffix = f" ({questions_failed} questions failed)" if questions_failed > 0 else ""
             logger.info(
                 f"  -> faith={scores.get('faithfulness', 0):.3f} "
@@ -650,18 +778,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         except Exception as e:
             logger.error(f"  -> FAILED: {e}")
 
-            # Determine failure stage from error type
-            error_type = type(e).__name__
-            if "preprocessing" in str(e).lower():
-                failed_at_stage = "preprocessing"
-            elif "retrieval" in str(e).lower() or "weaviate" in str(e).lower():
-                failed_at_stage = "retrieval"
-            elif "generation" in str(e).lower():
-                failed_at_stage = "generation"
-            else:
-                failed_at_stage = "ragas_evaluation"
-
-            # Add to failed report
+            failed_at_stage = _determine_failure_stage(e)
             failed_report.add_failure(
                 collection=collection,
                 alpha=alpha,
@@ -680,33 +797,19 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
                 "scores": {m: 0 for m in EVAL_DEFAULT_METRICS},
                 "num_questions": len(questions),
                 "error": str(e),
-                "error_type": error_type,
+                "error_type": type(e).__name__,
             })
 
-        # Save checkpoint after every combination for crash resilience
-        checkpoint_data = {
-            "timestamp": datetime.now().isoformat(),
-            "completed": count,
-            "total": total_combinations,
-            "progress_pct": round(count / total_combinations * 100, 1),
-            "results": all_results,
-            "grid_params": {
-                "collections": available_collections,
-                "top_k": top_k,
-                "strategies": all_strategies,
-            },
-        }
-        with open(checkpoint_path, "w") as f:
-            json.dump(checkpoint_data, f, indent=2)
-        logger.info(f"  Checkpoint saved: {count}/{total_combinations} ({checkpoint_data['progress_pct']}%)")
+        # Save checkpoint after each combination
+        _save_checkpoint(
+            checkpoint_path, count, total_combinations, all_results,
+            available_collections, top_k, all_strategies
+        )
 
-    # Calculate total duration
+    # Generate report
     duration_seconds = time.time() - start_time
-
-    # Generate comprehensive report
     output_path = Path(args.output) if args.output else RESULTS_DIR / f"comprehensive_{timestamp}.json"
 
-    # Build grid parameters for report
     grid_params = {
         "collections": available_collections,
         "top_k": top_k,
@@ -718,7 +821,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         all_results, questions, output_path, duration_seconds, grid_params, log_path
     )
 
-    # Save failed combinations report if there were any failures
+    # Save failed combinations if any
     if failed_report.total_failed > 0:
         failed_path = RESULTS_DIR / f"failed_combinations_{timestamp}.json"
         failed_report.save(failed_path)

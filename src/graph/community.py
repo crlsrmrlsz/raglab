@@ -66,6 +66,10 @@ from .hierarchy import (
 
 logger = setup_logging(__name__)
 
+# Maximum cross-community relationships to include in hierarchical context
+# Keeps context manageable without truncating important intra-community data
+MAX_CROSS_COMMUNITY_RELS = 20
+
 
 def project_graph(gds: GraphDataScience, graph_name: str = "graphrag") -> Any:
     """Create GDS graph projection for community detection.
@@ -261,42 +265,6 @@ def load_leiden_checkpoint(
         f"{checkpoint['node_count']} nodes"
     )
     return checkpoint
-
-
-def verify_leiden_checkpoint(
-    leiden_result: dict[str, Any],
-    checkpoint: dict[str, Any],
-) -> bool:
-    """Verify that Leiden result matches checkpoint.
-
-    Checks that seed and community assignments are identical,
-    ensuring deterministic behavior.
-
-    Args:
-        leiden_result: Result from run_leiden().
-        checkpoint: Loaded checkpoint from load_leiden_checkpoint().
-
-    Returns:
-        True if results match, False otherwise.
-
-    Raises:
-        ValueError: If seed or assignments don't match.
-    """
-    if leiden_result["seed"] != checkpoint["seed"]:
-        raise ValueError(
-            f"Seed mismatch: got {leiden_result['seed']}, "
-            f"expected {checkpoint['seed']}"
-        )
-
-    if leiden_result["community_count"] != checkpoint["community_count"]:
-        logger.warning(
-            f"Community count changed: {leiden_result['community_count']} vs "
-            f"{checkpoint['community_count']} (this may indicate graph changes)"
-        )
-        return False
-
-    logger.info("Leiden checkpoint verification passed")
-    return True
 
 
 def write_communities_to_neo4j(
@@ -680,7 +648,7 @@ def build_hierarchical_context(
         cross_rels = get_community_relationships_by_node_ids(driver, all_child_node_ids)
         if cross_rels:
             context_parts.append("\n## Cross-Community Relationships")
-            for rel in cross_rels[:20]:  # Limit cross-community rels
+            for rel in cross_rels[:MAX_CROSS_COMMUNITY_RELS]:
                 desc = f": {rel.description}" if rel.description else ""
                 context_parts.append(
                     f"- {rel.source} --[{rel.relationship_type}]--> {rel.target}{desc}"
@@ -787,6 +755,257 @@ def get_community_ids_from_neo4j(driver: Driver) -> set:
         return {record["community_id"] for record in result}
 
 
+# ============================================================================
+# COMMUNITY PROCESSING - HELPER FUNCTIONS
+# ============================================================================
+
+
+def _init_weaviate_storage(
+    collection_name: str,
+) -> tuple[Any, bool]:
+    """Initialize Weaviate client for community storage.
+
+    Args:
+        collection_name: Name of the Weaviate collection.
+
+    Returns:
+        Tuple of (weaviate_client, use_weaviate_flag).
+        weaviate_client may be None if Weaviate is unavailable.
+    """
+    try:
+        weaviate_client = get_weaviate_client()
+        use_weaviate = True
+
+        if not weaviate_client.collections.exists(collection_name):
+            create_community_collection(weaviate_client, collection_name)
+            logger.info(f"Created Weaviate collection: {collection_name}")
+    except Exception as e:
+        logger.warning(f"Weaviate not available, using file-only storage: {e}")
+        weaviate_client = None
+        use_weaviate = False
+
+    return weaviate_client, use_weaviate
+
+
+def _get_existing_ids_for_resume(
+    resume: bool,
+    use_weaviate: bool,
+    weaviate_client: Any,
+    collection_name: str,
+) -> set:
+    """Get existing community IDs for resume mode.
+
+    Args:
+        resume: Whether resume mode is enabled.
+        use_weaviate: Whether Weaviate is available.
+        weaviate_client: Weaviate client instance.
+        collection_name: Name of the Weaviate collection.
+
+    Returns:
+        Set of existing community IDs to skip.
+    """
+    if not resume:
+        return set()
+
+    if use_weaviate:
+        existing_ids = weaviate_get_existing_ids(weaviate_client, collection_name)
+        logger.info(f"Found {len(existing_ids)} existing communities in Weaviate")
+        return existing_ids
+
+    # Fallback: load from JSON file
+    try:
+        existing = load_communities()
+        existing_ids = {c.community_id for c in existing}
+        logger.info(f"Loaded {len(existing_ids)} existing summaries from file")
+        return existing_ids
+    except FileNotFoundError:
+        logger.info("No existing summaries found, starting fresh")
+        return set()
+
+
+def _run_leiden_phase(
+    driver: Driver,
+    gds: GraphDataScience,
+    skip_leiden: bool,
+    hierarchy_levels: int,
+) -> tuple[Any, Optional[dict[int, "CommunityLevel"]], Optional[set]]:
+    """Run Leiden algorithm and parse hierarchy.
+
+    Args:
+        driver: Neo4j driver instance.
+        gds: GraphDataScience client.
+        skip_leiden: If True, load from checkpoint instead of running Leiden.
+        hierarchy_levels: Number of hierarchy levels to process.
+
+    Returns:
+        Tuple of (graph, levels, unique_ids).
+        - graph: GDS graph projection (None if skip_leiden).
+        - levels: Dict of level index to CommunityLevel (None if skip_leiden fallback).
+        - unique_ids: Set of community IDs (only used if levels is None).
+    """
+    if skip_leiden:
+        checkpoint = load_leiden_checkpoint()
+        graph = None
+
+        if checkpoint and checkpoint.get("assignments"):
+            logger.info(f"Loaded checkpoint with {len(checkpoint['assignments'])} assignments")
+
+            node_communities = [
+                {
+                    "node_id": a["node_id"],
+                    "community_id": a["community_id"],
+                    "intermediate_ids": a.get("intermediate_ids", []),
+                }
+                for a in checkpoint["assignments"]
+            ]
+
+            leiden_result = {
+                "node_communities": node_communities,
+                "seed": checkpoint.get("seed", 42),
+            }
+
+            levels = parse_leiden_hierarchy(leiden_result, max_levels=hierarchy_levels)
+            logger.info(f"Parsed hierarchy from checkpoint into {hierarchy_levels} levels")
+            return graph, levels, None
+        else:
+            unique_ids = get_community_ids_from_neo4j(driver)
+            logger.info(f"Loaded {len(unique_ids)} community IDs from Neo4j (skipping Leiden)")
+            logger.warning("No checkpoint found - processing L0 only (no hierarchy)")
+            return graph, None, unique_ids
+    else:
+        # Run full Leiden pipeline
+        graph = project_graph(gds)
+        leiden_result = run_leiden(gds, graph)
+        save_leiden_checkpoint(leiden_result)
+        write_communities_to_neo4j(driver, leiden_result["node_communities"])
+
+        # Compute PageRank for entity importance ranking
+        try:
+            from .centrality import compute_pagerank, write_pagerank_to_neo4j, compute_and_store_degree
+            pagerank_scores = compute_pagerank(gds, graph)
+            write_pagerank_to_neo4j(driver, pagerank_scores)
+            compute_and_store_degree(driver)
+        except Exception as e:
+            logger.warning(f"PageRank/degree computation failed: {e}")
+
+        levels = parse_leiden_hierarchy(leiden_result, max_levels=hierarchy_levels)
+        logger.info(f"Parsed hierarchy into {hierarchy_levels} levels")
+        return graph, levels, None
+
+
+def _process_single_community(
+    driver: Driver,
+    community_id: int,
+    level_idx: int,
+    max_level: int,
+    level_data: "CommunityLevel",
+    levels: dict[int, "CommunityLevel"],
+    child_summaries: dict[str, str],
+    min_size: int,
+    model: str,
+) -> Optional[tuple[Community, str]]:
+    """Process a single community: get members, generate summary.
+
+    Args:
+        driver: Neo4j driver instance.
+        community_id: Leiden community ID.
+        level_idx: Current hierarchy level.
+        max_level: Maximum (finest) level index.
+        level_data: CommunityLevel for current level.
+        levels: Dict of all levels.
+        child_summaries: Dict of child community summaries for substitution.
+        min_size: Minimum community size.
+        model: LLM model for summarization.
+
+    Returns:
+        Tuple of (Community, summary) if successful, None if skipped.
+    """
+    node_ids = level_data.communities.get(community_id, set())
+
+    # GDS Leiden writes community_id property for the FINEST level only
+    if level_idx == max_level:
+        members = get_community_members(driver, community_id)
+        relationships = get_community_relationships(driver, community_id)
+        prebuilt_context = None
+        used_substitution = False
+    else:
+        members = get_community_members_by_node_ids(driver, node_ids)
+        relationships = get_community_relationships_by_node_ids(driver, node_ids)
+        prebuilt_context, used_substitution = build_hierarchical_context(
+            community_id=community_id,
+            level=level_idx,
+            levels=levels,
+            driver=driver,
+            child_summaries=child_summaries,
+        )
+
+    if len(members) < min_size:
+        return None
+
+    # Generate summary
+    sub_note = " (using child summaries)" if used_substitution else ""
+    logger.info(
+        f"[L{level_idx}] Community {community_id} "
+        f"({len(members)} members, {len(relationships)} relationships){sub_note}"
+    )
+    summary, embedding = summarize_community(
+        members,
+        relationships,
+        model=model,
+        prebuilt_context=prebuilt_context,
+        used_substitution=used_substitution,
+    )
+
+    community = Community(
+        community_id=build_community_key(level_idx, community_id),
+        level=level_idx,
+        members=members,
+        member_count=len(members),
+        relationships=relationships,
+        relationship_count=len(relationships),
+        summary=summary,
+        embedding=embedding,
+    )
+
+    return community, summary
+
+
+def _upload_community_to_weaviate(
+    weaviate_client: Any,
+    collection_name: str,
+    community: Community,
+) -> None:
+    """Upload a community to Weaviate with error handling.
+
+    Args:
+        weaviate_client: Weaviate client instance.
+        collection_name: Name of the collection.
+        community: Community to upload.
+    """
+    if not community.embedding:
+        logger.warning(f"Skipping Weaviate upload for {community.community_id}: no embedding")
+        return
+
+    try:
+        weaviate_upload_community(
+            client=weaviate_client,
+            collection_name=collection_name,
+            community_id=community.community_id,
+            summary=community.summary,
+            embedding=community.embedding,
+            member_count=community.member_count,
+            relationship_count=community.relationship_count,
+            level=community.level,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to upload {community.community_id} to Weaviate: {e}")
+
+
+# ============================================================================
+# COMMUNITY PROCESSING - MAIN FUNCTION
+# ============================================================================
+
+
 def detect_and_summarize_communities(
     driver: Driver,
     gds: GraphDataScience,
@@ -823,131 +1042,43 @@ def detect_and_summarize_communities(
         >>> for c in communities:
         ...     print(c.community_id, c.member_count, c.summary[:50])
     """
-    # Initialize Weaviate client for crash-proof storage
+    # Phase 1: Initialize storage
     collection_name = get_community_collection_name()
-    try:
-        weaviate_client = get_weaviate_client()
-        use_weaviate = True
+    weaviate_client, use_weaviate = _init_weaviate_storage(collection_name)
+    existing_ids = _get_existing_ids_for_resume(
+        resume, use_weaviate, weaviate_client, collection_name
+    )
 
-        # Create collection if it doesn't exist
-        if not weaviate_client.collections.exists(collection_name):
-            create_community_collection(weaviate_client, collection_name)
-            logger.info(f"Created Weaviate collection: {collection_name}")
-    except Exception as e:
-        logger.warning(f"Weaviate not available, using file-only storage: {e}")
-        weaviate_client = None
-        use_weaviate = False
-
-    # Get existing community IDs for resume (from Weaviate if available)
-    existing_ids = set()
-    if resume:
-        if use_weaviate:
-            existing_ids = weaviate_get_existing_ids(weaviate_client, collection_name)
-            logger.info(f"Found {len(existing_ids)} existing communities in Weaviate")
-        else:
-            # Fallback: load from JSON file
-            try:
-                existing = load_communities()
-                existing_ids = {c.community_id for c in existing}
-                logger.info(f"Loaded {len(existing_ids)} existing summaries from file")
-            except FileNotFoundError:
-                logger.info("No existing summaries found, starting fresh")
-
-    # Number of hierarchy levels to process (L0=coarsest, L1=medium, L2=finest)
+    # Phase 2: Run Leiden (or load from checkpoint)
     hierarchy_levels = GRAPHRAG_MAX_HIERARCHY_LEVELS
+    graph, levels, unique_ids = _run_leiden_phase(
+        driver, gds, skip_leiden, hierarchy_levels
+    )
 
-    # Run Leiden and parse hierarchy
-    if skip_leiden:
-        # Try to load hierarchy from checkpoint first
-        checkpoint = load_leiden_checkpoint()
-        graph = None
-
-        if checkpoint and checkpoint.get("assignments"):
-            # Reconstruct leiden_result format from checkpoint for hierarchy parsing
-            logger.info(f"Loaded checkpoint with {len(checkpoint['assignments'])} assignments")
-
-            # Build node_communities as list of dicts (same format as run_leiden output)
-            node_communities = [
-                {
-                    "node_id": a["node_id"],
-                    "community_id": a["community_id"],
-                    "intermediate_ids": a.get("intermediate_ids", []),
-                }
-                for a in checkpoint["assignments"]
-            ]
-
-            leiden_result = {
-                "node_communities": node_communities,
-                "seed": checkpoint.get("seed", 42),
-            }
-
-            # Parse hierarchy from checkpoint data
-            levels = parse_leiden_hierarchy(leiden_result, max_levels=hierarchy_levels)
-            logger.info(f"Parsed hierarchy from checkpoint into {hierarchy_levels} levels")
-        else:
-            # Fallback: no checkpoint, use Neo4j community IDs (L0 only)
-            unique_ids = get_community_ids_from_neo4j(driver)
-            logger.info(f"Loaded {len(unique_ids)} community IDs from Neo4j (skipping Leiden)")
-            logger.warning("No checkpoint found - processing L0 only (no hierarchy)")
-            levels = None
-    else:
-        # Step 1: Project graph
-        graph = project_graph(gds)
-
-        # Step 2: Run Leiden (deterministic with seed)
-        leiden_result = run_leiden(gds, graph)
-
-        # Step 3: Save Leiden checkpoint for crash recovery
-        save_leiden_checkpoint(leiden_result)
-
-        # Step 4: Write community IDs to Neo4j
-        write_communities_to_neo4j(driver, leiden_result["node_communities"])
-
-        # Step 4.5: Compute PageRank for entity importance ranking
-        try:
-            from .centrality import compute_pagerank, write_pagerank_to_neo4j, compute_and_store_degree
-            pagerank_scores = compute_pagerank(gds, graph)
-            write_pagerank_to_neo4j(driver, pagerank_scores)
-            # Compute degree for combined_degree ranking (Microsoft GraphRAG approach)
-            compute_and_store_degree(driver)
-        except Exception as e:
-            logger.warning(f"PageRank/degree computation failed: {e}")
-
-        # Step 5: Parse hierarchy into levels
-        levels = parse_leiden_hierarchy(leiden_result, max_levels=hierarchy_levels)
-        logger.info(f"Parsed hierarchy into {hierarchy_levels} levels")
-
-    # Step 6: Process communities at each level
+    # Phase 3: Process communities
     communities = []
     new_summaries = 0
-    processed_idx = 0
 
     if levels is None:
-        # Fallback: skip_leiden mode - process L0 only using community_id
-        total_to_process = len(unique_ids)
+        # Fallback: skip_leiden mode - process L0 only
         for community_id in sorted(unique_ids):
             community_key = build_community_key(0, community_id)
-            processed_idx += 1
 
-            # Skip if already in Weaviate (resume mode)
             if community_key in existing_ids:
                 continue
 
-            # Get members and relationships using community_id
             members = get_community_members(driver, community_id)
             if len(members) < min_size:
                 continue
 
             relationships = get_community_relationships(driver, community_id)
 
-            # Generate summary
             logger.info(
-                f"[{processed_idx}/{total_to_process}] L0 community {community_id} "
+                f"[L0] Community {community_id} "
                 f"({len(members)} members, {len(relationships)} relationships)"
             )
             summary, embedding = summarize_community(members, relationships, model=model)
 
-            # Create and store community
             community = Community(
                 community_id=community_key,
                 level=0,
@@ -961,134 +1092,52 @@ def detect_and_summarize_communities(
             communities.append(community)
             new_summaries += 1
 
-            # Upload to Weaviate
-            if use_weaviate and embedding:
-                try:
-                    weaviate_upload_community(
-                        client=weaviate_client,
-                        collection_name=collection_name,
-                        community_id=community_key,
-                        summary=summary,
-                        embedding=embedding,
-                        member_count=len(members),
-                        relationship_count=len(relationships),
-                        level=0,
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to upload {community_key} to Weaviate: {e}")
+            if use_weaviate:
+                _upload_community_to_weaviate(weaviate_client, collection_name, community)
 
             save_communities(communities)
     else:
-        # Full hierarchy mode - process all levels
-        # Microsoft GraphRAG bottom-up approach: process finest-to-coarsest
-        # so child summaries exist when processing parent communities
-        max_level = hierarchy_levels - 1  # e.g., 2 for 3 levels (L0, L1, L2)
-
-        # Track child summaries for parent context building
+        # Full hierarchy mode - process finest-to-coarsest (Microsoft GraphRAG approach)
+        max_level = hierarchy_levels - 1
         child_summaries: dict[str, str] = {}
 
-        # Process levels in reverse order: finest (L2) to coarsest (L0)
         for level_idx in reversed(range(hierarchy_levels)):
             level_data = levels[level_idx]
             level_community_ids = filter_communities_by_size(level_data, min_size)
-            total_at_level = len(level_community_ids)
 
             logger.info(
                 f"Processing Level {level_idx} (bottom-up): "
-                f"{total_at_level} communities (>= {min_size} members)"
+                f"{len(level_community_ids)} communities (>= {min_size} members)"
             )
 
-            for idx, community_id in enumerate(sorted(level_community_ids)):
+            for community_id in sorted(level_community_ids):
                 community_key = build_community_key(level_idx, community_id)
-                processed_idx += 1
 
-                # Skip if already in Weaviate (resume mode)
                 if community_key in existing_ids:
-                    # Still need to load summary for child_summaries if resuming
-                    # Try to get from existing communities list or Weaviate
                     continue
 
-                # Get node IDs for this community at this level
-                node_ids = level_data.communities.get(community_id, set())
+                result = _process_single_community(
+                    driver, community_id, level_idx, max_level,
+                    level_data, levels, child_summaries, min_size, model
+                )
 
-                # GDS Leiden writes community_id property for the FINEST level only
-                if level_idx == max_level:
-                    # Finest level: use community_id-based queries (more efficient)
-                    members = get_community_members(driver, community_id)
-                    relationships = get_community_relationships(driver, community_id)
-                    # Finest level always uses raw data (no children to substitute)
-                    prebuilt_context = None
-                    used_substitution = False
-                else:
-                    # Coarser levels: use hierarchical context with potential child substitution
-                    members = get_community_members_by_node_ids(driver, node_ids)
-                    relationships = get_community_relationships_by_node_ids(driver, node_ids)
-                    # Try to build context with child summary substitution if needed
-                    prebuilt_context, used_substitution = build_hierarchical_context(
-                        community_id=community_id,
-                        level=level_idx,
-                        levels=levels,
-                        driver=driver,
-                        child_summaries=child_summaries,
-                    )
-
-                if len(members) < min_size:
+                if result is None:
                     continue
 
-                # Generate summary
-                sub_note = " (using child summaries)" if used_substitution else ""
-                logger.info(
-                    f"[L{level_idx} {idx + 1}/{total_at_level}] Community {community_id} "
-                    f"({len(members)} members, {len(relationships)} relationships){sub_note}"
-                )
-                summary, embedding = summarize_community(
-                    members,
-                    relationships,
-                    model=model,
-                    prebuilt_context=prebuilt_context,
-                    used_substitution=used_substitution,
-                )
-
-                # Track summary for parent communities
+                community, summary = result
                 child_summaries[community_key] = summary
-
-                # Create and store community
-                community = Community(
-                    community_id=community_key,
-                    level=level_idx,
-                    members=members,
-                    member_count=len(members),
-                    relationships=relationships,
-                    relationship_count=len(relationships),
-                    summary=summary,
-                    embedding=embedding,
-                )
                 communities.append(community)
                 new_summaries += 1
 
-                # Upload to Weaviate
-                if use_weaviate and embedding:
-                    try:
-                        weaviate_upload_community(
-                            client=weaviate_client,
-                            collection_name=collection_name,
-                            community_id=community_key,
-                            summary=summary,
-                            embedding=embedding,
-                            member_count=len(members),
-                            relationship_count=len(relationships),
-                            level=level_idx,
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to upload {community_key} to Weaviate: {e}")
+                if use_weaviate:
+                    _upload_community_to_weaviate(weaviate_client, collection_name, community)
 
                 save_communities(communities)
 
-    # Cleanup: drop graph projection (if we created one)
+    # Cleanup
     if graph is not None:
         gds.graph.drop(graph.name())
 
-    # Close Weaviate client
     if weaviate_client:
         weaviate_client.close()
 

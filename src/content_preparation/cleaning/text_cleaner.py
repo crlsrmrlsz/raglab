@@ -3,21 +3,21 @@ Text cleaning module for markdown documents.
 Removes artifacts, consolidates paragraphs, and standardizes formatting.
 """
 import re
-import logging
 from typing import Optional
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from src.config import (
     LINE_REMOVAL_PATTERNS,
     INLINE_REMOVAL_PATTERNS,
     CHARACTER_SUBSTITUTIONS,
     LIST_MARKER_PATTERN,
-    CLEANING_LOG_FILE,
     TERMINAL_PUNCTUATION,
     SENTENCE_ENDING_PUNCTUATION,
     REPORT_WIDTH,
 )
+from src.shared.files import setup_logging
+
+logger = setup_logging(__name__)
 
 
 # ============================================================================
@@ -121,29 +121,6 @@ class CleaningLog:
 
         report.append("=" * REPORT_WIDTH)
         return "\n".join(report)
-
-
-# ============================================================================
-# LOGGER SETUP
-# ============================================================================
-
-def setup_cleaning_logger(log_file: Optional[Path] = None) -> logging.Logger:
-    """Setup file logger for cleaning operations."""
-    if log_file is None:
-        log_file = CLEANING_LOG_FILE
-
-    logger = logging.getLogger('markdown_cleaner')
-    logger.setLevel(logging.INFO)
-    logger.handlers = []
-
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-
-    fh = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-    fh.setLevel(logging.INFO)
-    fh.setFormatter(logging.Formatter('%(message)s'))
-
-    logger.addHandler(fh)
-    return logger
 
 
 # ============================================================================

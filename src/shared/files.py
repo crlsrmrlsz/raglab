@@ -111,7 +111,8 @@ class OverwriteContext:
                     logger.info(f"Skipping {output_path.name} (user chose 'none')")
                 return False
             else:
-                print("Invalid response. Enter: yes, all, no, or none")
+                if logger:
+                    logger.warning("Invalid response. Enter: yes, all, no, or none")
 
 
 def parse_overwrite_arg(value: str) -> OverwriteMode:
