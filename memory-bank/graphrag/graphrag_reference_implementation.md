@@ -305,7 +305,37 @@ The reference implementation embeds **`title:description`** (concatenated with a
 "embed_column": "title_description"
 ```
 
-The title provides disambiguation context (e.g., distinguishing "John Smith the CEO" from "John Smith the researcher"). These embeddings are used during local search to find starting entry points to the graph for traversal.
+The title provides disambiguation context (e.g., distinguishing "John Smith the CEO" from "John Smith the researcher").
+
+**Storage:**
+
+Entity embeddings are stored in a **vector store** (LanceDB by default, also supports Azure AI Search, CosmosDB):
+
+```python
+# Entity embeddings loaded into vectorstore with entity ID as key
+vectorstore.add_documents(
+    documents=[{"id": entity.id, "embedding": entity.description_embedding, ...}]
+)
+```
+
+**Query-Time Usage:**
+
+The `map_query_to_entities()` function performs vector similarity search at query time:
+
+```python
+# From entity_extraction.py
+def map_query_to_entities(query, text_embedding_vectorstore, text_embedder, ...):
+    # 1. Embed the user query
+    # 2. Search vectorstore for similar entity embeddings
+    search_results = text_embedding_vectorstore.similarity_search_by_text(
+        text=query,
+        text_embedder=lambda t: text_embedder.embed(t),
+        k=k * oversample_scaler,
+    )
+    # 3. Return matched entities as graph entry points
+```
+
+This enables fast semantic matching (~50ms) without LLM calls—the query embedding is compared against pre-computed entity embeddings to find relevant graph entry points.
 
 **Configuration:**
 - `GRAPHRAG_EMBEDDING_TARGET`: What to embed
