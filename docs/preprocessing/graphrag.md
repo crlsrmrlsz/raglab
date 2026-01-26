@@ -26,18 +26,9 @@ Standard RAG retrieves chunks similar to a query, but similarity isn't synthesis
 
 Indexing runs once per corpus, building the graph and community structures needed for query-time retrieval.
 
-```mermaid
-flowchart TB
-    DOC[Documents] --> CHUNK[Chunking]
-    CHUNK --> EXT["LLM Entity Extraction"]
-    EXT --> KG["Knowledge Graph (Neo4j)"]
-    KG --> LEIDEN["Leiden Communities"]
-    LEIDEN --> SUMM["LLM Community Summaries"]
-
-    CHUNK --> EMB["Vector Store (Weaviate)"]
-    EXT --> EMB
-    SUMM --> EMB
-```
+<div align="center">
+    <img src="../../assets/graphrag_index.png" alt="GraphRAG index pipeline">
+</div>
 
 1. **Chunking** — Split documents into text units for extraction.
 
@@ -64,8 +55,8 @@ flowchart TB
 
     subgraph LOCAL[Local Search]
         direction TB
-        L1[Embed query] --> L2[Match entities]
-        L2 --> L3[Traverse graph]
+        L1[Embed query] --> L2[Match entities in Vector Store]
+        L2 --> L3[Traverse Graph DB]
         L3 --> L4[Retrieve source chunks]
     end
 
