@@ -27,14 +27,14 @@ Standard RAG retrieves chunks similar to a query, but similarity isn't synthesis
 Indexing runs once per corpus, building the graph and community structures needed for query-time retrieval.
 
 ```mermaid
-flowchart LR
+flowchart TB
     DOC[Documents] --> CHUNK[Chunking]
-    CHUNK --> EXT["LLM Entity\nExtraction"]
-    EXT --> KG["Knowledge Graph\n(Neo4j)"]
-    KG --> LEIDEN["Leiden\nCommunities"]
-    LEIDEN --> SUMM["LLM Community\nSummaries"]
+    CHUNK --> EXT["LLM Entity Extraction"]
+    EXT --> KG["Knowledge Graph (Neo4j)"]
+    KG --> LEIDEN["Leiden Communities"]
+    LEIDEN --> SUMM["LLM Community Summaries"]
 
-    CHUNK --> EMB["Vector Store\n(Weaviate)"]
+    CHUNK --> EMB["Vector Store (Weaviate)"]
     EXT --> EMB
     SUMM --> EMB
 ```
@@ -58,14 +58,16 @@ flowchart TB
     CLS -->|"What are the main themes?"| GLOBAL
 
     subgraph LOCAL[Local Search]
-        L1["Embed query"] --> L2["Match entities\n(Vector Store)"]
-        L2 --> L3["Traverse graph\n(Graph DB)"]
-        L3 --> L4["Retrieve source chunks"]
+        direction TB
+        L1[Embed query] --> L2[Match entities]
+        L2 --> L3[Traverse graph]
+        L3 --> L4[Retrieve source chunks]
     end
 
     subgraph GLOBAL[Global Search]
-        G1["Get ALL L0\ncommunities"] --> G2["Map: partial answer\nper community"]
-        G2 --> G3["Reduce: synthesize\nfinal answer"]
+        direction TB
+        G1[Get ALL L0 communities] --> G2[Map: partial answers]
+        G2 --> G3[Reduce: synthesize]
     end
 
     LOCAL --> ANS[Answer]
