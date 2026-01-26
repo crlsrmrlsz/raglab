@@ -24,7 +24,6 @@ Query → Embed → Weaviate vector search → Entity names
 """
 
 from typing import Optional
-import re
 
 from neo4j import Driver
 
@@ -122,33 +121,24 @@ def extract_query_entities(
     """Extract entity mentions from query using embedding similarity.
 
     Matches Microsoft GraphRAG reference implementation:
-    - Primary: Embedding similarity search against entity descriptions
-    - Fallback: Regex for capitalized words (simple pattern match)
-    - Validation: Neo4j lookup to verify entities exist in graph
+    - Embedding similarity search against entity descriptions
+    - Optional Neo4j validation to verify entities exist in graph
 
     Args:
         query: User query string.
         driver: Optional Neo4j driver for entity validation.
 
     Returns:
-        List of entity names found in query.
+        List of entity names found in query (may be empty).
 
     Example:
-        >>> extract_query_entities("How does Sapolsky explain stress?")
-        ["Sapolsky", "stress"]
+        >>> extract_query_entities("How does dopamine affect motivation?")
+        ["dopamine", "motivation", "reward"]
     """
-    # Primary: Embedding-based extraction (Microsoft approach)
+    # Embedding-based extraction (Microsoft approach)
     entities = extract_query_entities_embedding(query)
     if entities:
         logger.info(f"Embedding extraction found: {entities}")
-
-    # Fallback: Regex for capitalized words (simple pattern match)
-    if not entities:
-        cap_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b'
-        capitalized = re.findall(cap_pattern, query)
-        entities.extend(capitalized)
-        if entities:
-            logger.info(f"Regex fallback found: {entities}")
 
     # Validate against Neo4j if driver provided
     if driver and entities:
@@ -157,13 +147,14 @@ def extract_query_entities(
         # Add validated entities (may have different casing)
         entities.extend(validated)
 
-    # Deduplicate while preserving order
-    seen = set()
-    unique = []
-    for e in entities:
-        e_lower = e.lower()
-        if e_lower not in seen:
-            seen.add(e_lower)
-            unique.append(e)
+        # Deduplicate while preserving order
+        seen = set()
+        unique = []
+        for e in entities:
+            e_lower = e.lower()
+            if e_lower not in seen:
+                seen.add(e_lower)
+                unique.append(e)
+        return unique
 
-    return unique
+    return entities

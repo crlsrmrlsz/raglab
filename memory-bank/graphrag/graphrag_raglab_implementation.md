@@ -505,8 +505,6 @@ flowchart TB
         QUERY[User Query] --> EMBED[embed_texts]
         EMBED --> SEARCH["Weaviate Vector Search<br/>Entities collection"]
         SEARCH --> ENTITIES[Matched Entities]
-
-        ENTITIES --> |empty?| REGEX[Regex Fallback<br/>Capitalized words]
     end
 
     subgraph GraphTraversal["Neo4j Traversal"]
@@ -537,7 +535,7 @@ flowchart TB
 
 | Aspect | Microsoft Reference | RAGLab |
 |--------|--------------------|----|
-| Entity matching | Embedding similarity | Embedding similarity (+ regex fallback) |
+| Entity matching | Embedding similarity | Embedding similarity |
 | Relationship ranking | `combined_degree` | `combined_degree` (start + neighbor degree) |
 | Context composition | Token budget allocation | combined_degree ranking (no explicit budget) |
 | Community retrieval | In token budget | By entity membership (separate context) |

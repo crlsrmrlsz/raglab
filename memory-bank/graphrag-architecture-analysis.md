@@ -155,17 +155,9 @@ flowchart TB
         subgraph EntityExtraction["Entity Extraction (query_entities.py)"]
             direction TB
             EmbedQuery["embed_texts([query])<br/>1536-dim vector"]
+            WeaviateSearch["query_entities_by_vector()<br/>Collection: {strategy}_graphrag_entities<br/>top_k=10, min_similarity=0.3"]
 
-            subgraph Primary["Primary: Embedding Search (~50ms)"]
-                WeaviateSearch["query_entities_by_vector()<br/>Collection: {strategy}_graphrag_entities<br/>top_k=10, min_similarity=0.3"]
-            end
-
-            subgraph Fallback["Fallback: Regex"]
-                Regex["r'\\b([A-Z][a-z]+...)\\b'<br/>Capitalized words"]
-            end
-
-            EmbedQuery --> Primary
-            Primary -->|empty| Fallback
+            EmbedQuery --> WeaviateSearch
         end
 
         Entities["query_entities: ['dopamine', 'motivation', 'reward']"]
