@@ -1021,20 +1021,29 @@ GraphRAG uses the `StrategyConfig` system (`src/rag_pipeline/retrieval/preproces
 
 ## 15. What's Not Implemented
 
-### 1. DRIFT Search
+### 1. Dynamic Community Selection
+
+Microsoft's post-paper `DynamicCommunitySelection` is **not implemented**:
+- RAGLab uses **static mode** (original paper): ALL L0 communities processed
+- Dynamic mode: LLM scores relevance per community, traverses hierarchy
+- Parameters: `threshold` (0.5), `max_level`, `keep_parent`
+- Benefit: Filters irrelevant communities, finds optimal granularity
+- Cost: Requires LLM call per community for relevance scoring
+
+### 2. DRIFT Search
 
 Microsoft's Dynamic Reasoning and Inference with Flexible Traversal is **not implemented**:
 - Iterative search with follow-up queries
 - Confidence-based stopping
 - Multi-phase exploration
 
-### 2. Covariates/Claims
+### 3. Covariates/Claims
 
 The optional claims extraction system is **not implemented**:
 - Subject, object, type, status
 - Claim verification
 
-### 3. Token Budget Allocation
+### 4. Token Budget Allocation
 
 RAGLab uses combined_degree ranking instead of explicit token budgets:
 - No `text_unit_prop` (50%)
@@ -1042,27 +1051,27 @@ RAGLab uses combined_degree ranking instead of explicit token budgets:
 - No relationship/entity budget
 - Chunks ranked by graph centrality, not token allocation
 
-### 4. Community Impact Rating
+### 5. Community Impact Rating
 
 The 0-10 impact severity rating is **not used**:
 - No `rating` field
 - No `rating_explanation`
 - No `findings[]` array
 
-### 5. Graph Embeddings (Node2Vec)
+### 6. Graph Embeddings (Node2Vec)
 
 Optional graph structure embeddings:
 - `embed_graph` block
 - Node2Vec walks
 
-### 6. Graph Pruning
+### 7. Graph Pruning
 
 Pre-processing to remove noise:
 - `min_node_freq`
 - `min_node_degree`
 - `min_edge_weight_pct`
 
-### 7. Oversample Scaler
+### 8. Oversample Scaler
 
 Entity retrieval oversampling:
 - `oversample_scaler` (default 2)
