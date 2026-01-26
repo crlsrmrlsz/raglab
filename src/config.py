@@ -733,10 +733,8 @@ GRAPHRAG_MAP_MAX_TOKENS = 300       # Max tokens per map response
 GRAPHRAG_REDUCE_MAX_TOKENS = 500    # Max tokens for reduce response
 
 # Embedding-based entity extraction (Microsoft GraphRAG reference implementation)
-# Replaces LLM extraction with embedding similarity for faster queries
 GRAPHRAG_ENTITY_EXTRACTION_TOP_K = 10   # Max entities from embedding search
 GRAPHRAG_ENTITY_MIN_SIMILARITY = 0.3    # Minimum cosine similarity threshold
-GRAPHRAG_USE_EMBEDDING_EXTRACTION = True  # Use embedding-based extraction (fallback to LLM)
 
 # Strict mode: discard entities with types not in graphrag_types.yaml
 # Follows LangChain's approach to prevent graph fragmentation from type drift
@@ -798,7 +796,6 @@ from src.prompts import (
     # RAPTOR
     RAPTOR_SUMMARY_PROMPT,
     # GraphRAG
-    GRAPHRAG_QUERY_EXTRACTION_PROMPT,
     GRAPHRAG_COMMUNITY_PROMPT,
     GRAPHRAG_HIERARCHICAL_COMMUNITY_PROMPT,
     GRAPHRAG_CHUNK_EXTRACTION_PROMPT,

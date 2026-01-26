@@ -58,7 +58,7 @@ flowchart TB
     end
 
     subgraph Phase3["Query Time (Graph-Only)"]
-        QUERY[User Query] --> ENTITY_EXT[query_entities.py<br/>Embedding + LLM fallback]
+        QUERY[User Query] --> ENTITY_EXT[query_entities.py<br/>Embedding similarity]
         ENTITY_EXT --> |matched entities| NEO4J
         NEO4J --> |graph traversal| NEIGHBORS[Related Entities]
         NEIGHBORS --> CHUNK_IDS[Source Chunk IDs]
@@ -102,7 +102,7 @@ flowchart TB
 | Feature | Microsoft Reference | RAGLab Implementation | Status |
 |---------|--------------------|-----------------------|--------|
 | Local Search | Entity matching → traversal | Entity matching → traversal | Matches |
-| Entity Matching | Embedding similarity | Embedding similarity + LLM fallback | Enhanced |
+| Entity Matching | Embedding similarity | Embedding similarity | Matches |
 | Relationship Prioritization | combined_degree | **combined_degree** (start + neighbor degree) | Matches |
 | Token Budget | 50% text, 10% community | combined_degree ranking (no explicit budget) | Different |
 | Community Context | In token budget | By entity membership (separate) | Different |
@@ -506,9 +506,6 @@ flowchart TB
         EMBED --> SEARCH["Weaviate Vector Search<br/>Entities collection"]
         SEARCH --> ENTITIES[Matched Entities]
 
-        ENTITIES --> |empty?| LLM_FALLBACK[LLM Extraction<br/>extract_query_entities_llm]
-        LLM_FALLBACK --> ENTITIES
-
         ENTITIES --> |empty?| REGEX[Regex Fallback<br/>Capitalized words]
     end
 
@@ -540,7 +537,7 @@ flowchart TB
 
 | Aspect | Microsoft Reference | RAGLab |
 |--------|--------------------|----|
-| Entity matching | Embedding similarity | Embedding + LLM fallback + Regex |
+| Entity matching | Embedding similarity | Embedding similarity (+ regex fallback) |
 | Relationship ranking | `combined_degree` | `combined_degree` (start + neighbor degree) |
 | Context composition | Token budget allocation | combined_degree ranking (no explicit budget) |
 | Community retrieval | In token budget | By entity membership (separate context) |
@@ -722,10 +719,9 @@ GRAPHRAG_MAX_HIERARCHY_LEVELS = 3  # L0, L1, L2
 GRAPHRAG_PAGERANK_DAMPING = 0.85
 GRAPHRAG_PAGERANK_ITERATIONS = 20
 
-# Query-Time Entity Extraction
+# Query-Time Entity Extraction (embedding similarity - matches Microsoft)
 GRAPHRAG_ENTITY_EXTRACTION_TOP_K = 10
 GRAPHRAG_ENTITY_MIN_SIMILARITY = 0.3
-GRAPHRAG_USE_EMBEDDING_EXTRACTION = True
 
 # Local Search
 GRAPHRAG_TOP_COMMUNITIES = 3

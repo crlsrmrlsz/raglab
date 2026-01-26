@@ -118,52 +118,37 @@ def extract_query_entities_embedding(
 def extract_query_entities(
     query: str,
     driver: Optional[Driver] = None,
-    use_embedding: bool = GRAPHRAG_USE_EMBEDDING_EXTRACTION,
-    use_llm_fallback: bool = True,
 ) -> list[str]:
-    """Extract entity mentions from query using embedding similarity + LLM fallback.
+    """Extract entity mentions from query using embedding similarity.
 
-    Primary method: Embedding-based extraction (fast, semantic matching)
-    Fallback 1: LLM-based extraction (handles conceptual terms)
-    Fallback 2: Regex for capitalized words (if both above fail)
-    Validation: Neo4j lookup to verify entities exist in graph
+    Matches Microsoft GraphRAG reference implementation:
+    - Primary: Embedding similarity search against entity descriptions
+    - Fallback: Regex for capitalized words (simple pattern match)
+    - Validation: Neo4j lookup to verify entities exist in graph
 
     Args:
         query: User query string.
-        driver: Optional Neo4j driver for entity lookup.
-        use_embedding: Whether to try embedding extraction first.
-        use_llm_fallback: Whether to fall back to LLM if embedding returns empty.
+        driver: Optional Neo4j driver for entity validation.
 
     Returns:
         List of entity names found in query.
 
     Example:
-        >>> extract_query_entities("What creates lasting happiness?")
-        ["happiness", "pleasure", "hedonic adaptation"]
         >>> extract_query_entities("How does Sapolsky explain stress?")
         ["Sapolsky", "stress"]
     """
-    entities = []
+    # Primary: Embedding-based extraction (Microsoft approach)
+    entities = extract_query_entities_embedding(query)
+    if entities:
+        logger.info(f"Embedding extraction found: {entities}")
 
-    # Primary: Embedding-based extraction (fast, semantic)
-    if use_embedding:
-        entities = extract_query_entities_embedding(query)
-        if entities:
-            logger.info(f"Using embedding extraction: {entities}")
-
-    # Fallback 1: LLM-based extraction
-    if not entities and use_llm_fallback:
-        entities = extract_query_entities_llm(query)
-        if entities:
-            logger.info(f"Using LLM fallback: {entities}")
-
-    # Fallback 2: Regex for capitalized words
+    # Fallback: Regex for capitalized words (simple pattern match)
     if not entities:
         cap_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b'
         capitalized = re.findall(cap_pattern, query)
         entities.extend(capitalized)
         if entities:
-            logger.info(f"Using regex fallback: {entities}")
+            logger.info(f"Regex fallback found: {entities}")
 
     # Validate against Neo4j if driver provided
     if driver and entities:

@@ -309,17 +309,12 @@ flowchart TB
                 WeaviateSearch["query_entities_by_vector()<br/>Collection: {strategy}_graphrag_entities<br/>top_k=10, min_similarity=0.3"]
             end
 
-            subgraph Fallback1["Fallback 1: LLM (~1-2s)"]
-                LLMExtract["extract_query_entities_llm()<br/>GRAPHRAG_QUERY_EXTRACTION_PROMPT<br/>Uses graphrag_types.yaml"]
-            end
-
-            subgraph Fallback2["Fallback 2: Regex"]
+            subgraph Fallback["Fallback: Regex"]
                 Regex["r'\\b([A-Z][a-z]+...)\\b'<br/>Capitalized words"]
             end
 
             EmbedQuery --> Primary
-            Primary -->|empty| Fallback1
-            Fallback1 -->|empty| Fallback2
+            Primary -->|empty| Fallback
         end
 
         Entities["query_entities: ['dopamine', 'motivation', 'reward']"]
@@ -426,14 +421,13 @@ flowchart TB
 
 | Parameter | Value | Source File | Purpose |
 |-----------|-------|-------------|---------|
-| `GRAPHRAG_ENTITY_EXTRACTION_TOP_K` | 10 | config.py:743 | Max entities from embedding search |
-| `GRAPHRAG_ENTITY_MIN_SIMILARITY` | 0.3 | config.py:744 | Minimum cosine similarity |
-| `GRAPHRAG_USE_EMBEDDING_EXTRACTION` | True | config.py:745 | Use embedding (vs LLM only) |
-| `GRAPHRAG_TRAVERSE_DEPTH` | 2 | config.py:725 | Neo4j traversal hops |
-| `GRAPHRAG_TOP_COMMUNITIES` | 3 | config.py:724 | Communities for global queries (local uses entity membership) |
-| `GRAPHRAG_RRF_K` | 60 | config.py:726 | RRF fusion constant |
-| `GRAPHRAG_MAP_MAX_TOKENS` | 300 | config.py:738 | Max tokens per map response |
-| `GRAPHRAG_REDUCE_MAX_TOKENS` | 500 | config.py:739 | Max tokens for reduce |
+| `GRAPHRAG_ENTITY_EXTRACTION_TOP_K` | 10 | config.py | Max entities from embedding search |
+| `GRAPHRAG_ENTITY_MIN_SIMILARITY` | 0.3 | config.py | Minimum cosine similarity |
+| `GRAPHRAG_TRAVERSE_DEPTH` | 2 | config.py | Neo4j traversal hops |
+| `GRAPHRAG_TOP_COMMUNITIES` | 3 | config.py | Communities for global queries (local uses entity membership) |
+| `GRAPHRAG_RRF_K` | 60 | config.py | RRF fusion constant |
+| `GRAPHRAG_MAP_MAX_TOKENS` | 300 | config.py | Max tokens per map response |
+| `GRAPHRAG_REDUCE_MAX_TOKENS` | 500 | config.py | Max tokens for reduce |
 
 ---
 

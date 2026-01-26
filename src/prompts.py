@@ -100,26 +100,6 @@ Summary:"""
 # GRAPHRAG PROMPTS
 # =============================================================================
 
-# Query-time entity extraction (simpler than chunk extraction)
-GRAPHRAG_QUERY_EXTRACTION_PROMPT = """Identify entities mentioned or implied in this query.
-
-Entity types: {entity_types}
-
-Query: {query}
-
-Extract all relevant entities, including:
-- Explicitly named entities (e.g., "Sapolsky", "dopamine")
-- Implied concepts (e.g., "why we procrastinate" implies "procrastination")
-- Domain concepts (e.g., "self-control", "consciousness", "happiness")
-
-Be concise - extract only the key entities (typically 1-5 per query).
-
-IMPORTANT: Respond ONLY with valid JSON in this exact format:
-{{"entities": [{{"name": "entity_name", "entity_type": "TYPE"}}]}}
-
-Example response for "How does stress affect memory?":
-{{"entities": [{{"name": "stress", "entity_type": "CONCEPT"}}, {{"name": "memory", "entity_type": "COGNITIVE_PROCESS"}}]}}"""
-
 # Community summarization prompt
 GRAPHRAG_COMMUNITY_PROMPT = """You are analyzing a community of related entities from a knowledge graph.
 This community was detected via the Leiden algorithm and contains semantically related concepts.
