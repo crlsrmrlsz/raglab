@@ -287,14 +287,25 @@ The prompt instructs generation of:
 
 | Artifact | Field Embedded | Purpose |
 |----------|----------------|---------|
-| Entity | `description` | Local search entity matching |
+| Entity | `title:description` | Local search entity matching |
 | Text Unit | `text` | Source text retrieval |
 | Community Report | `summary` / `full_content` | Community retrieval |
 
 ### 7.2 Entity Description Embeddings
 
 **Critical for Local Search:**
-> "By default, GraphRAG embeds only the entity description field, because this is used during local search to find starting entry points to the graph for traversal."
+
+The reference implementation embeds **`title:description`** (concatenated with a colon separator):
+
+```python
+# From generate_text_embeddings.py
+"data": entities.loc[:, ["id", "title", "description"]].assign(
+    title_description=lambda df: df["title"] + ":" + df["description"]
+),
+"embed_column": "title_description"
+```
+
+The title provides disambiguation context (e.g., distinguishing "John Smith the CEO" from "John Smith the researcher"). These embeddings are used during local search to find starting entry points to the graph for traversal.
 
 **Configuration:**
 - `GRAPHRAG_EMBEDDING_TARGET`: What to embed
@@ -388,9 +399,11 @@ Key directives:
 
 ### 9.1 Map-Reduce Overview
 
+The diagram below shows **static mode** (original paper) where all communities at a selected level are processed. See Section 9.5 for dynamic mode which traverses hierarchy.
+
 ```mermaid
 flowchart TB
-    Q[User Query] --> COMM[All Community Reports]
+    Q[User Query] --> COMM[Community Reports at Selected Level]
 
     subgraph Map["Map Phase (Parallel)"]
         COMM --> B1[Batch 1]
@@ -460,6 +473,42 @@ For each batch:
 **Paper Finding:**
 - C0 (root) required 9-43x fewer tokens than full source text
 - C3 (leaf) required 26-33% fewer tokens than source
+
+### 9.5 Static vs Dynamic Community Selection
+
+The reference implementation supports **two modes** for community selection:
+
+| Mode | Hierarchy Used? | How it works |
+|------|-----------------|--------------|
+| **Static (original paper)** | No | Select a level (C0-C3), process ALL communities at that level |
+| **Dynamic (post-paper)** | Yes | Starts at root, LLM scores relevance, traverses children of relevant communities |
+
+**Static Mode (Original Paper Approach):**
+- User selects a hierarchy level (e.g., C0 for coarse, C3 for fine-grained)
+- ALL community reports at that level are processed via map-reduce
+- Simple but may include irrelevant communities
+
+**Dynamic Mode (`DynamicCommunitySelection`):**
+```python
+# Starts at level 0 (root communities)
+self.starting_communities = self.levels["0"]
+
+# Traverses hierarchy based on LLM relevance scoring
+for child in self.communities[community].children:
+    if child in self.reports:
+        communities_to_rate.append(child)  # Explore relevant children
+
+# Prunes parents when children are more relevant
+if not self.keep_parent:
+    relevant_communities.discard(self.communities[community].parent)
+```
+
+**Dynamic mode parameters:**
+- `threshold`: Relevance score cutoff (default: 0.5)
+- `max_level`: Maximum hierarchy depth to explore
+- `keep_parent`: Whether to retain parent when child is relevant (default: False)
+
+**Note:** The original paper (arXiv:2404.16130) describes static level selection. Dynamic community selection is a post-paper enhancement in the reference implementation that uses LLM-based relevance scoring to navigate the hierarchy intelligently.
 
 ---
 
