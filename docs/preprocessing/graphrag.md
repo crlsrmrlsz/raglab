@@ -20,45 +20,64 @@ Since April 2024, GraphRAG has evolved significantly: Microsoft added DRIFT sear
 **Authors:** Edge et al. (Microsoft Research)
 **Published:** April 2024 ([arXiv:2404.16130](https://arxiv.org/abs/2404.16130))
 
-The authors wanted RAG systems that could answer questions requiring corpus-wide understanding—what they call "query-focused summarization" at scale. Standard RAG retrieves relevant chunks, but relevance isn't synthesis. Their solution: transform documents into a hierarchical knowledge structure that can be queried at different abstraction levels.
+Standard RAG retrieves chunks similar to a query, but similarity isn't synthesis. The authors wanted systems that could answer corpus-wide questions—"What are the main themes across all documents?"—which require understanding patterns, not just finding relevant passages. Their solution: transform documents into a hierarchical knowledge structure that can be queried at different abstraction levels.
 
-The algorithm has two phases:
+### Indexing Phase (Offline)
 
-### Indexing (Offline)
+Indexing runs once per corpus, building the graph and community structures needed for query-time retrieval.
 
-1. **Entity extraction.** An LLM processes each chunk, extracting entities (named items with types like PERSON, CONCEPT, BRAIN_REGION) and relationships (connections between entities with descriptions and strength scores). The paper uses multiple extraction rounds with "gleaning"—prompting the LLM to find missed entities.
+```mermaid
+flowchart LR
+    DOC[Documents] --> CHUNK[Chunking]
+    CHUNK --> EXT["LLM Entity\nExtraction"]
+    EXT --> KG["Knowledge Graph\n(Neo4j)"]
+    KG --> LEIDEN["Leiden\nCommunities"]
+    LEIDEN --> SUMM["LLM Community\nSummaries"]
 
-   The [reference implementation](https://github.com/microsoft/graphrag) uses three prompts with **predefined entity types**:
+    KG --> EMB["Vector Store\n(Weaviate)"]
+    SUMM --> EMB
+```
 
-   | Prompt | Purpose |
-   |--------|---------|
-   | `GRAPH_EXTRACTION_PROMPT` | Main extraction: "entity_type: One of the following types: [{entity_types}]" |
-   | `CONTINUE_PROMPT` | Gleaning: "MANY entities were missed... Add them below" |
-   | `LOOP_PROMPT` | Termination check: "Answer Y if entities remain, N if done" |
+1. **Chunking** — Split documents into text units for extraction
+2. **Entity extraction** — LLM identifies entities (typed: PERSON, CONCEPT) and relationships (with descriptions and strength scores)
+3. **Graph construction** — Entities become nodes, relationships become edges; duplicates merged
+4. **Community detection** — Leiden algorithm partitions graph into hierarchical communities (L0 coarsest → L2 finest)
+5. **Summarization** — Each community gets an LLM-generated summary describing its themes
+6. **Embedding** — Entities and community summaries stored in vector database for retrieval
 
-   Entity types are configured in `settings.yaml` before indexing—the LLM must choose from this predefined list (e.g., `PERSON, ORGANIZATION, LOCATION, EVENT`). This ensures consistent taxonomy but requires knowing your corpus beforehand.
+### Query Phase (Online)
 
-2. **Knowledge graph construction.** Entities become nodes; relationships become weighted edges. Duplicate entity names are merged via string normalization. The result is a connected graph where each node tracks which source chunks mentioned it.
+Queries are classified as **local** or **global** and routed to different retrieval paths.
 
-3. **Community detection.** The Leiden algorithm partitions the graph into communities of densely connected entities. Unlike Louvain (its predecessor), Leiden guarantees well-connected communities through a refinement phase. The algorithm runs recursively, producing a hierarchy: C0 (finest granularity, specific topics), C1 (medium, domain themes), C2 (coarsest, corpus-wide patterns).
+```mermaid
+flowchart TB
+    Q[User Query] --> CLS{Local or Global?}
 
-4. **Community summarization.** For each community, the LLM generates a summary describing its entities, relationships, and themes. Entities are sorted by PageRank (hub entities first). These summaries become the index for global queries.
+    CLS -->|"What is dopamine?"| LOCAL
+    CLS -->|"What are the main themes?"| GLOBAL
 
-### Query (Online)
+    subgraph LOCAL[Local Search]
+        L1["Embed query"] --> L2["Match entities\n(Vector Store)"]
+        L2 --> L3["Traverse graph\n(Graph DB)"]
+        L3 --> L4["Retrieve source chunks"]
+    end
 
-**Local queries** (entity-focused): Extract entities from the query, traverse the graph to find related entities and their source chunks, merge with vector search results using RRF.
+    subgraph GLOBAL[Global Search]
+        G1["Get ALL L0\ncommunities"] --> G2["Map: partial answer\nper community"]
+        G2 --> G3["Reduce: synthesize\nfinal answer"]
+    end
 
-**Global queries** (thematic): Map-reduce over community summaries. The map phase generates partial answers from each relevant community in parallel. The reduce phase synthesizes these into a coherent final answer.
+    LOCAL --> ANS[Answer]
+    GLOBAL --> ANS
+```
 
-### Key Findings
+**Local queries** ask about specific entities or concepts. The system embeds the query, finds matching entities via vector similarity, traverses the graph to discover related entities and their source chunks, then generates an answer from this context.
 
-**Community summaries work.** 72-83% win rate on comprehensiveness versus baseline RAG. The hierarchical structure captures corpus-level patterns that chunk retrieval misses entirely.
+**Global queries** ask about themes, patterns, or corpus-wide understanding. The system retrieves ALL community summaries at the coarsest level (L0), runs parallel LLM calls to generate partial answers from each community (map phase), then synthesizes these into a coherent final answer (reduce phase).
 
-**8k context beats larger.** Surprisingly, 8k token context windows outperformed 16k, 32k, and 64k on comprehensiveness (58.1% average win rate). Larger contexts trigger "lost in the middle" effects where models fail to utilize information in long prompts.
+### Results Summary
 
-**Leiden over Louvain.** Louvain can produce disconnected communities (pathological cases). Leiden's refinement phase guarantees connectivity, making it robust for downstream summarization.
-
-**Token efficiency.** Root-level community summaries (C0) require 9-43x fewer tokens than processing source text directly, amortizing indexing cost across queries.
+The paper demonstrated that community-based retrieval substantially outperforms vector-only approaches for thematic questions, achieving 72-83% win rates on comprehensiveness metrics. The hierarchical structure enables answering questions that would otherwise require processing the entire corpus. Notably, the reference implementation found that smaller context windows (8k tokens) outperformed larger ones (16k-64k) due to models struggling to utilize information in long prompts—a finding that informed the map-reduce design where each community summary is processed independently before synthesis.
 
 
 
