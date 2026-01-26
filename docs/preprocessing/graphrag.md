@@ -100,181 +100,57 @@ The paper demonstrated that community-based retrieval substantially outperforms 
 
 ## RAGLab Implementation
 
-RAGLab implements GraphRAG across two stages with several adaptations for the dual-domain corpus (neuroscience + philosophy):
+RAGLab implements the original GraphRAG algorithm with adaptations for a dual-domain corpus (neuroscience + philosophy) and a different storage architecture.
 
+### Storage: Neo4j + Weaviate
 
-**Curated entity types.** Entity types are defined in `src/graph/graphrag_types.yaml` (8 types). Following industry best practices, types are minimal and non-overlapping: 2 generic (PERSON, WORK), 3 neuroscience (BRAIN_STRUCTURE, CHEMICAL, DISORDER), 2 psychology bridge (MENTAL_STATE, BEHAVIOR), and 1 philosophy (PRINCIPLE). Relationship types remain open-ended per the GraphRAG paper.
+Microsoft's reference implementation uses Parquet files for everything. RAGLab uses **Neo4j** for the knowledge graph (enabling Cypher traversal) and **Weaviate** for vector search (entities, communities, chunks). This dual-storage approach enables graph traversal patterns not possible with flat files, at the cost of additional infrastructure.
 
-**Strict mode filtering.** Following LangChain's approach, RAGLab discards extracted entities whose types don't match the curated list (`GRAPHRAG_STRICT_MODE = True` in config). This prevents graph fragmentation when the LLM ignores type constraints—entities with wrong types are removed rather than stored with inconsistent labels. Relationships involving discarded entities are also pruned during Neo4j upload (source/target won't exist in the entity set).
+### Entity Types
+
+Entity types are defined in `src/graph/graphrag_types.yaml` with 8 curated types. Microsoft defaults to 4 generic types (PERSON, ORGANIZATION, LOCATION, EVENT). RAGLab extends this for the dual-domain corpus while following the industry consensus that fewer, non-overlapping types work better than many specific ones.
 
 <details>
-<summary><strong>Entity type design rationale</strong></summary>
+<summary><strong>Why these 8 types?</strong></summary>
 
-**Why fewer types is better.** Microsoft defaults to just 4 types (PERSON, ORGANIZATION, LOCATION, EVENT). Overlapping types cause: (1) **inconsistent extraction**—the LLM might tag "Aristotle" as PHILOSOPHER, HISTORICAL_FIGURE, or RESEARCHER, fragmenting nodes; (2) **weakened communities**—Leiden clustering relies on co-occurrence, so split entities dilute signal.
+Initial extraction with open types showed PERSON fragmented across 6 variants (RESEARCHER, PHILOSOPHER, HISTORICAL_FIGURE) totaling ~9,000 entities that should be one type. Similarly, CONCEPT dominated with 19,916 entities—too generic for useful retrieval.
 
-**Industry consensus.** [Microsoft GraphRAG](https://microsoft.github.io/graphrag/config/yaml/) (4 types), [LangChain](https://python.langchain.com/api_reference/experimental/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html) ("basic/elementary types"), [LlamaIndex](https://docs.llamaindex.ai/en/stable/module_guides/indexing/lpg_index_guide/) (3-5 in examples), [Neo4j](https://neo4j.com/blog/developer/graphrag-llm-knowledge-graph-builder/) ("minimal schema")—all recommend 4-6 generic types.
-
-**Corpus analysis.** Initial extraction with open types showed PERSON fragmented across 6 variants (RESEARCHER, PHILOSOPHER, HISTORICAL_FIGURE, etc.) totaling ~9,000 entities. Similarly, PSYCHOLOGICAL_PHENOMENON vs PSYCHOLOGICAL_CONCEPT and VIRTUE vs ETHICAL_CONCEPT created semantic overlap.
-
-**Query-driven design.** Evaluation questions connect brain mechanisms → psychological states → behaviors → philosophical principles. The 8 types mirror this retrieval pattern:
+The 8 types mirror the evaluation query pattern (brain mechanisms → psychological states → behaviors → philosophical principles):
 
 | Type | Examples | Query Role |
 |------|----------|------------|
 | PERSON | Sapolsky, Epictetus, Kahneman | Attribution |
-| WORK | Behave, Meditations | Source |
-| BRAIN_STRUCTURE | amygdala, prefrontal cortex, thalamus | Causal mechanism |
+| WORK | Behave, Meditations | Source reference |
+| BRAIN_STRUCTURE | amygdala, prefrontal cortex | Causal mechanism |
 | CHEMICAL | dopamine, serotonin, oxytocin | Causal mechanism |
 | DISORDER | PTSD, depression, addiction | Clinical condition |
 | MENTAL_STATE | emotion, consciousness, suffering | Internal experience |
 | BEHAVIOR | procrastination, aggression, empathy | Observable pattern |
-| PRINCIPLE | dichotomy of control, wu wei, hedonic treadmill | Philosophical interpretation |
+| PRINCIPLE | dichotomy of control, wu wei | Philosophical interpretation |
+
+Strict mode (`GRAPHRAG_STRICT_MODE = True`) discards entities with types not in this list, preventing graph fragmentation.
 
 </details>
 
-<details>
-<summary><strong>Removed: Auto-tuning process</strong></summary>
+### Key Differences from Microsoft
 
-RAGLab originally implemented Microsoft's [auto-tuning](https://www.microsoft.com/en-us/research/blog/graphrag-auto-tuning-provides-rapid-adaptation-to-new-domains/) approach for entity type discovery. The process was:
+**Graph traversal vs text_unit_id lookup.** Microsoft stores `text_unit_ids` on each entity and simply collects them at query time—no graph traversal. RAGLab uses Cypher traversal (`max_hops=2`) to discover multi-hop relationships, enabling cross-domain connections like `self-control → impulse_control → prefrontal_cortex`.
 
-1. **Open-ended extraction** — LLM extracts entities with freely-assigned types (no predefined schema)
-2. **Type aggregation** — Collect all unique types across corpus with frequency counts
-3. **Stratified consolidation** — LLM proposes clean taxonomy, balancing types across neuroscience vs philosophy corpora
-4. **Save for query time** — Store `discovered_types.json` for entity matching
+**Semantic chunking.** The paper uses fixed 300-token chunks. RAGLab uses [semantic chunking](../chunking/semantic-chunking.md) with `std=2.0` for entity extraction—smaller, more cohesive chunks improve relationship capture since entities must appear together in a chunk to form edges.
 
-**Top extracted types (by count):**
+**Deterministic Leiden.** RAGLab runs Leiden with `seed=42` and `concurrency=1`, guaranteeing identical community assignments across runs. This enables crash recovery: if summarization fails midway, re-running picks up where it stopped.
 
-| Type | Count | Issue |
-|------|-------|-------|
-| CONCEPT | 19,916 | Catch-all, too broad for retrieval |
-| BRAIN_REGION | 6,133 | Useful, kept as BRAIN_STRUCTURE |
-| NEURAL_STRUCTURE | 5,248 | Merged with BRAIN_REGION |
-| COGNITIVE_PROCESS | 4,482 | Merged into MENTAL_STATE |
-| RESEARCHER | 4,451 | Merged into PERSON |
-| HISTORICAL_FIGURE | 2,147 | Merged into PERSON |
-| BEHAVIOR | 2,134 | Kept |
-| PHILOSOPHER | 1,172 | Merged into PERSON |
-| EMOTION | 902 | Merged into MENTAL_STATE |
+**RRF fusion.** Local search combines vector results with graph traversal results using Reciprocal Rank Fusion (k=60). Chunks appearing in both lists get boosted—semantically similar AND structurally related.
 
-**Why auto-tuning was removed:**
-
-- **CONCEPT dominated** (19,916 entities) — too generic for useful retrieval
-- **Person fragmentation** — 6 variants (RESEARCHER, PHILOSOPHER, HISTORICAL_FIGURE, PERSON, PEOPLE, RESEARCHERS) totaling ~9,000 entities that should be one type
-- **Consolidation overhead** — extra LLM calls during indexing without quality improvement
-- **Inconsistent runs** — open extraction produced different types on re-runs
-
-The curated 8-type schema provides consistent taxonomy without consolidation cost.
-
-</details>
-
-**Semantic chunking for entity extraction.** The paper uses fixed 300-token chunks, but RAGLab recommends [semantic chunking](../chunking/semantic-chunking.md) with **std coefficient=2.0** for GraphRAG (`GRAPHRAG_SEMANTIC_STD_COEFFICIENT = 2.0` in config). Lower std = more breakpoints = smaller, more cohesive chunks. While entity deduplication happens at merge time regardless of chunk boundaries, *relationships* are extracted per-chunk—entities must appear together to form edges. Semantic chunking keeps related concepts together, improving relationship capture. The std=2.0 setting creates more granular chunks than std=3.0, which is better for entity extraction since each chunk covers fewer topics.
-
-**Deterministic Leiden.** Stage 6b runs Leiden with `seed=42` and `concurrency=1`, guaranteeing identical community assignments on every run. This enables crash recovery: if summarization fails midway, re-running picks up where it stopped because community IDs remain stable.
-
-**Dual extraction at query time.** Entity extraction uses embedding similarity search (~50ms) with LLM fallback (~1-2s) for complex conceptual queries. The embedding approach searches pre-indexed entity descriptions in Weaviate; the LLM approach uses the same curated entity types from `graphrag_types.yaml` to guide extraction.
-
-**RRF merge with graph boost.** Hybrid retrieval combines vector search results with graph traversal results using Reciprocal Rank Fusion (k=60). Chunks appearing in both lists get boosted scores—they're semantically similar AND structurally related through the knowledge graph.
-
-**Community context by entity membership (Microsoft approach).** For local queries, RAGLab retrieves community summaries based on which communities the matched entities belong to—not embedding similarity. This aligns with Microsoft's implementation where community context comes from the entity's community_id property in Neo4j, ensuring we get thematically relevant community summaries.
-
-**Neo4j graph traversal ([VectorCypherRetriever pattern](https://neo4j.com/docs/neo4j-graphrag-python/current/user_guide_rag.html)).** RAGLab uses Cypher traversal (`MATCH path = (start)-[*1..2]-(neighbor)`) instead of Microsoft's simpler text_unit_id lookup. **Why:** Microsoft stores `text_unit_ids` on each entity during indexing and simply collects them at query time—no graph traversal needed. This is efficient but only retrieves chunks that directly mention the matched entity. RAGLab's Cypher traversal discovers **multi-hop relationships**, finding structurally related entities beyond initial matches:
-```
-stress → [ACTIVATES] → amygdala → [INHIBITS] → prefrontal_cortex → [CONTROLS] → decision-making
-```
-For a dual-domain corpus (neuroscience + philosophy), this enables cross-domain connections. A query about "Stoic self-control" can traverse to `prefrontal_cortex` chunks via `self-control → [REQUIRES] → impulse_control → [LOCALIZED_IN] → prefrontal_cortex`, bridging philosophy and neuroscience.
-
-Configuration in `src/config.py`:
+### Configuration
 
 ```python
+# src/config.py
 GRAPHRAG_TRAVERSE_DEPTH = 2        # Hops from query entities
 GRAPHRAG_TOP_COMMUNITIES = 3       # Community summaries in context
-GRAPHRAG_RRF_K = 60                # RRF constant
-GRAPHRAG_LEIDEN_RESOLUTION = 1.0   # Higher = more communities
-GRAPHRAG_LEIDEN_SEED = 42          # Deterministic (crash recovery)
+GRAPHRAG_RRF_K = 60                # RRF fusion constant
+GRAPHRAG_LEIDEN_SEED = 42          # Deterministic communities
 ```
-
-**Output collections:**
-- `Entity_semantic_std2_v1` — Entity descriptions (for query extraction)
-- `Community_semantic_std2_v1` — Community summaries (for thematic context)
-
-
-
----
-
-
-## Implementation Comparison: RAGLab vs Microsoft GraphRAG
-
-### Storage Architecture
-
-| Component | RAGLab | Microsoft GraphRAG |
-|-----------|--------|-------------------|
-| **Entities** | Neo4j (graph) + Weaviate (embeddings) | Parquet files |
-| **Relationships** | Neo4j only | Parquet files |
-| **Communities** | Neo4j + Weaviate + JSON | Parquet files |
-| **Community embeddings** | Yes (Weaviate HNSW) | No (not embedded) |
-| **Entity embeddings** | Yes (Weaviate HNSW) | Yes (Parquet + Lance) |
-| **Text chunks** | Weaviate | Parquet files |
-
-**Key difference:** RAGLab embeds community summaries for vector search, enabling O(log n) retrieval. Microsoft uses map-reduce over all communities without embedding filtering.
-
-### Entity Extraction at Query Time
-
-| Aspect | RAGLab | Microsoft GraphRAG |
-|--------|--------|-------------------|
-| **Primary method** | Embedding similarity (50ms) | Embedding similarity |
-| **Fallback** | LLM extraction (1-2s) | N/A |
-| **Entity limit** | `top_k=10` | Configurable |
-| **Similarity threshold** | `min_similarity=0.3` | N/A |
-| **Collection** | `{strategy}_graphrag_entities` | entities.parquet |
-
-### Local Search Implementation
-
-| Aspect | RAGLab | Microsoft GraphRAG |
-|--------|--------|-------------------|
-| **Entity validation** | Neo4j lookup | N/A (assumes exists) |
-| **Graph traversal** | Neo4j Cypher `max_hops=2`, `limit=50` | No traversal - uses stored text_unit_ids |
-| **Chunk retrieval** | Weaviate batch fetch (ContainsAny) | Text unit lookup by stored IDs |
-| **Community context** | By entity membership (aligned with Microsoft) | By entity membership |
-| **Community level** | L0 only (entities store community_id at finest level) | Selected level |
-| **Fusion method** | RRF (k=60) | RRF or weighted |
-| **Graph ranking** | By path_length (shorter=better) | By relevance score |
-
-### Global Search Implementation
-
-| Aspect | RAGLab | Microsoft GraphRAG |
-|--------|--------|-------------------|
-| **Classification** | LLM-based (local/global) | LLM-based |
-| **Community selection** | ALL L0 communities | ALL at selected level |
-| **Map input** | Summary + 5 entities + 5 rels | Full community report |
-| **Entity ranking** | By PageRank | By importance score |
-| **Map parallelism** | Async (asyncio.gather) | Async |
-| **Chunks in map** | NO (community context only) | NO (reports only) |
-| **Map max tokens** | 300 | Configurable |
-| **Reduce max tokens** | 500 | Configurable |
-
-### Community Hierarchy
-
-| Aspect | RAGLab | Microsoft GraphRAG |
-|--------|--------|-------------------|
-| **Level convention** | L0=coarsest, L2=finest | L0=coarsest (same) |
-| **Number of levels** | 3 (configurable) | Variable |
-| **Global query level** | L0 (coarsest) | L0 (coarsest) |
-| **Local query level** | By entity membership (community_id property) | Selected level |
-| **Algorithm** | Neo4j GDS Leiden | graspologic Leiden |
-| **Determinism** | seed=42, concurrency=1 | seed only |
-
-### Key Differences Summary
-
-1. **Graph traversal (Neo4j pattern):** RAGLab uses Cypher traversal for multi-hop discovery. Microsoft uses direct text_unit_id lookup (no traversal). This enables cross-domain connections in the dual-domain corpus.
-
-2. **Community context (aligned):** RAGLab now uses entity membership for local query community retrieval, matching Microsoft's approach.
-
-3. **Community embeddings:** RAGLab embeds community summaries in Weaviate for global queries. Microsoft does not embed summaries.
-
-4. **Dual storage:** RAGLab uses Neo4j for graph + Weaviate for vectors. Microsoft uses Parquet files.
-
-5. **Entity extraction fallback:** RAGLab has 3-tier fallback (embedding → LLM → regex). Microsoft uses embedding only.
-
-6. **Map-reduce input:** RAGLab uses summary + top 5 entities + top 5 relationships. Microsoft uses full community reports.
 
 ---
 
