@@ -70,9 +70,27 @@ flowchart TB
     GLOBAL --> ANS
 ```
 
-**Local queries** ask about specific entities or concepts. The system embeds the query, finds matching entities via vector similarity, traverses the graph to discover related entities and their source chunks, then generates an answer from this context.
+**Local queries** ask about specific entities or concepts (e.g., "What is dopamine?"):
 
-**Global queries** ask about themes, patterns, or corpus-wide understanding. The system retrieves ALL community summaries at the coarsest level (L0), runs parallel LLM calls to generate partial answers from each community (map phase), then synthesizes these into a coherent final answer (reduce phase).
+1. **Embed query** — The user query is converted to an embedding vector using the same model used during indexing.
+
+2. **Match entities** — Vector similarity search against the entity collection in Weaviate. The query embedding is compared to pre-computed entity description embeddings, returning the top-k most similar entities as graph entry points.
+
+3. **Traverse graph** — Starting from matched entities, traverse the knowledge graph in Neo4j (1-2 hops) to discover related entities and their relationships. This captures structural context that embedding similarity alone would miss.
+
+4. **Retrieve source chunks** — Collect the source chunks associated with matched and traversed entities. These chunks contain the original text that mentioned each entity.
+
+5. **Generate answer** — Combine retrieved chunks with entity/relationship context and send to the LLM for answer generation.
+
+**Global queries** ask about themes, patterns, or corpus-wide understanding (e.g., "What are the main themes?"):
+
+1. **Get ALL L0 communities** — Retrieve all community summaries at the coarsest level (L0). Unlike local search which filters by relevance, global search processes the entire community set to ensure comprehensive coverage.
+
+2. **Map phase** — Run parallel LLM calls, one per community. Each call receives the community summary and generates a partial answer with an importance score (0-100). Communities with no relevant information return score 0.
+
+3. **Filter and rank** — Remove partial answers with score 0, then sort remaining answers by importance score descending. This prioritizes the most relevant community perspectives.
+
+4. **Reduce phase** — A final LLM call synthesizes all partial answers into a coherent response. The prompt instructs the model to merge insights, remove redundancy, and preserve data citations from the map phase.
 
 ### Results Summary
 
