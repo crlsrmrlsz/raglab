@@ -39,12 +39,17 @@ flowchart TB
     SUMM --> EMB
 ```
 
-1. **Chunking** — Split documents into text units for extraction
-2. **Entity extraction** — LLM identifies entities (typed: PERSON, CONCEPT) and relationships (with descriptions and strength scores)
-3. **Graph construction** — Entities become nodes, relationships become edges; duplicates merged
-4. **Community detection** — Leiden algorithm partitions graph into hierarchical communities (L0 coarsest → L2 finest)
-5. **Summarization** — Each community gets an LLM-generated summary describing its themes
-6. **Embedding** — Entities and community summaries stored in vector database for retrieval
+1. **Chunking** — Split documents into text units for extraction.
+
+2. **Entity extraction** — An LLM processes each chunk, extracting entities with predefined types (PERSON, BRAIN_STRUCTURE, CONCEPT) and relationships between them. Each relationship includes a description and a strength score (1-10). The paper recommends "gleaning"—multiple extraction passes where the LLM is prompted to find missed entities.
+
+3. **Graph construction** — Entities become nodes; relationships become weighted edges. When the same entity appears in multiple chunks, descriptions are merged and relationship weights accumulated. The result is a connected knowledge graph where each node tracks which source chunks mentioned it.
+
+4. **Community detection** — The Leiden algorithm partitions the graph into communities of densely connected entities. Unlike Louvain, Leiden guarantees well-connected communities through a refinement phase. It runs hierarchically: L0 produces the coarsest communities (corpus-wide themes), L2 the finest (specific topics).
+
+5. **Summarization** — For each community, an LLM generates a summary describing its key entities, relationships, and themes. Entities are sorted by PageRank so hub entities appear first. These summaries become the index for global queries—enabling corpus-wide answers without processing all source text.
+
+6. **Embedding** — Entity descriptions, community summaries, and source chunks are embedded and stored in a vector database. At query time, embedding similarity finds relevant entities (for local search) and communities (for global search) without requiring LLM calls.
 
 ### Query Phase (Online)
 
