@@ -24,10 +24,12 @@ exponential backoff, which is essential for handling:
 4. Receives response string or raises exception
 """
 
+import json
 import os
 import time
 from typing import Optional, Any, Type, TypeVar
 
+from json_repair import repair_json
 from pydantic import BaseModel, ValidationError as PydanticValidationError
 
 T = TypeVar("T", bound=BaseModel)
@@ -331,17 +333,16 @@ def call_structured_completion(
                 chars_out = len(content)
                 logger.info(f"[LLM] model={model} chars_in={chars_in} chars_out={chars_out} (structured)")
 
-                # Parse and validate with Pydantic
+                # Parse and validate with Pydantic (repair malformed JSON first)
                 try:
                     return response_model.model_validate_json(content)
-                except PydanticValidationError as exc:
-                    if attempt < max_retries:
-                        logger.warning(
-                            f"Pydantic validation failed, "
-                            f"retry {attempt + 1}/{max_retries}: {exc}"
-                        )
-                        continue
-                    raise
+                except PydanticValidationError:
+                    repaired = repair_json(content, return_objects=False)
+                    logger.warning(
+                        f"Repaired malformed JSON from LLM "
+                        f"({len(content)} -> {len(repaired)} chars)"
+                    )
+                    return response_model.model_validate_json(repaired)
 
             # Retryable errors: rate limit or server errors
             if response.status_code >= 500 or response.status_code == 429:
