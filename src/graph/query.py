@@ -53,7 +53,7 @@ from src.rag_pipeline.indexing.weaviate_client import (
     fetch_communities_by_ids,
 )
 from src.rag_pipeline.indexing.weaviate_query import SearchResult
-from .neo4j_client import find_entity_neighbors, find_entities_by_names, get_entity_community_ids
+from .neo4j_client import find_entity_neighbors, get_entity_community_ids
 from .schemas import Community, CommunityMember, CommunityRelationship
 from .query_entities import extract_query_entities
 
@@ -135,7 +135,7 @@ def retrieve_graph_context(
         ...     print(c["name"], c["source_chunk_ids"])
     """
     # Extract entities from query
-    query_entities = extract_query_entities(query, driver)
+    query_entities = extract_query_entities(query)
 
     if not query_entities:
         logger.debug("No entities found in query for graph traversal")
@@ -406,31 +406,23 @@ def get_graph_chunk_ids(
         ["behave::chunk_42", "behave::chunk_43", ...]
     """
     metadata = {
-        "extracted_entities": [],  # What LLM found in query
-        "query_entities": [],      # What matched in Neo4j
+        "extracted_entities": [],
+        "query_entities": [],
         "graph_context": [],
     }
 
     # Step 1: Extract entities from query using embedding similarity
-    # (Matches Microsoft GraphRAG: map_query_to_entities via vector search)
-    extracted = extract_query_entities(query)
-    metadata["extracted_entities"] = extracted
-    logger.info(f"Embedding extraction from query: {extracted}")
+    # All returned entities exist in Neo4j (same indexing source), no validation needed
+    query_entities = extract_query_entities(query)
+    metadata["extracted_entities"] = query_entities
+    metadata["query_entities"] = query_entities
+    logger.info(f"Embedding extraction from query: {query_entities}")
 
-    # Step 2: Validate against Neo4j
-    if extracted and driver:
-        db_entities = find_entities_by_names(driver, extracted)
-        matched = [e["name"] for e in db_entities]
-        metadata["query_entities"] = matched
-        logger.info(f"Matched in Neo4j: {matched}")
-    else:
-        metadata["query_entities"] = []
-
-    if not metadata["query_entities"]:
-        logger.info("No entities matched in graph, skipping traversal")
+    if not query_entities:
+        logger.info("No entities found in query, skipping traversal")
         return [], metadata
 
-    # Step 3: Traverse graph from matched entities
+    # Step 2: Traverse graph from matched entities
     graph_context = retrieve_graph_context(query, driver)
     metadata["graph_context"] = graph_context
 

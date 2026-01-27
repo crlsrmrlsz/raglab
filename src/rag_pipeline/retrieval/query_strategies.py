@@ -207,9 +207,8 @@ def graphrag_strategy(query: str, model: Optional[str] = None) -> PreprocessedQu
     # Import here to avoid circular dependency
     from src.graph.query_entities import extract_query_entities
 
-    # Extract entities using embedding similarity (primary) + LLM fallback
-    # No Neo4j validation at preprocessing - that happens during retrieval
-    query_entities = extract_query_entities(query, driver=None)
+    # Extract entities using embedding similarity against Weaviate entity descriptions
+    query_entities = extract_query_entities(query)
     logger.info(f"[graphrag] Extracted entities: {query_entities}")
 
     elapsed_ms = (time.time() - start_time) * 1000

@@ -8,24 +8,17 @@ related chunks.
 
 **Extraction method**: Embedding similarity search against entity descriptions
 stored in Weaviate. This matches the Microsoft GraphRAG reference implementation.
+Entity descriptions are indexed from the same Neo4j source, so all embedding
+matches are guaranteed to exist in the graph — no separate validation needed.
 
 ## Library Usage
 
 - Weaviate for embedding similarity search (HNSW index)
-- Neo4j for entity validation (optional)
 
 ## Data Flow
 
 Query → Embed → Weaviate vector search → Entity names
-                       ↓
-               Neo4j validation (optional)
-                       ↓
-               Validated entity names
 """
-
-from typing import Optional
-
-from neo4j import Driver
 
 from src.config import (
     GRAPHRAG_ENTITY_EXTRACTION_TOP_K,
@@ -33,7 +26,6 @@ from src.config import (
     get_entity_collection_name,
 )
 from src.shared.files import setup_logging
-from .neo4j_client import find_entities_by_names
 
 logger = setup_logging(__name__)
 
@@ -114,19 +106,16 @@ def extract_query_entities_embedding(
 # ============================================================================
 
 
-def extract_query_entities(
-    query: str,
-    driver: Optional[Driver] = None,
-) -> list[str]:
+def extract_query_entities(query: str) -> list[str]:
     """Extract entity mentions from query using embedding similarity.
 
     Matches Microsoft GraphRAG reference implementation:
-    - Embedding similarity search against entity descriptions
-    - Optional Neo4j validation to verify entities exist in graph
+    embedding similarity search against entity descriptions in Weaviate.
+    All returned entities are guaranteed to exist in Neo4j since both
+    stores are populated from the same indexing pipeline.
 
     Args:
         query: User query string.
-        driver: Optional Neo4j driver for entity validation.
 
     Returns:
         List of entity names found in query (may be empty).
@@ -135,26 +124,8 @@ def extract_query_entities(
         >>> extract_query_entities("How does dopamine affect motivation?")
         ["dopamine", "motivation", "reward"]
     """
-    # Embedding-based extraction (Microsoft approach)
     entities = extract_query_entities_embedding(query)
     if entities:
         logger.info(f"Embedding extraction found: {entities}")
-
-    # Validate against Neo4j if driver provided
-    if driver and entities:
-        db_entities = find_entities_by_names(driver, entities)
-        validated = [e["name"] for e in db_entities]
-        # Add validated entities (may have different casing)
-        entities.extend(validated)
-
-        # Deduplicate while preserving order
-        seen = set()
-        unique = []
-        for e in entities:
-            e_lower = e.lower()
-            if e_lower not in seen:
-                seen.add(e_lower)
-                unique.append(e)
-        return unique
 
     return entities
