@@ -22,7 +22,7 @@ Uses existing infrastructure:
 
 ## Data Flow (Local Queries - Graph-Only)
 
-1. Query → Extract entity mentions (embedding similarity + LLM fallback)
+1. Query → Extract entity mentions (embedding similarity)
 2. Match entities in Neo4j → Traverse graph → Get related chunk IDs
 3. Fetch chunks from Weaviate by ID (batch filter)
 4. Rank by combined_degree (Microsoft approach: hub entities = more informative)
@@ -918,7 +918,7 @@ def graph_retrieval(
     """Pure graph retrieval without vector search (Microsoft GraphRAG design).
 
     Flow:
-        1. Extract entities from query (embedding similarity + LLM fallback)
+        1. Extract entities from query (embedding similarity)
         2. Traverse graph from matched entities
         3. Fetch ALL chunks from graph traversal
         4. Rank by combined_degree (start_degree + neighbor_degree)
