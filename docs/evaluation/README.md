@@ -2,26 +2,12 @@
 
 [← GraphRAG](../preprocessing/graphrag.md) | [Home](../../README.md)
 
-> **Framework:** [RAGAS (Retrieval-Augmented Generation Assessment)](https://docs.ragas.io/) — LLM-as-judge metrics without per-run human evaluation.
 
-RAGLab evaluates RAG configurations through a **5-dimensional grid search**, systematically testing which combinations of chunking, search, and preprocessing produce the best answers.
+RAGLab uses [RAGAS (Retrieval-Augmented Generation Assessment)](https://docs.ragas.io/) to evaluate different RAG configurations, systematically testing which combinations of chunking, alpha, and preprocessing produce the best answers. The **comprehensive mode** runs a grid search across all valid combinations using a curated 15-question subset, while **single mode** runs one configuration against all 45 questions.
 
-**Two evaluation modes:**
+The grid has 4 dimensions: **collections** (chunking strategy used at index time), **alpha** (0.0 = pure BM25 keyword search, 0.5 = balanced hybrid, 1.0 = pure semantic), **reranking** (cross-encoder on/off), and **preprocessing strategy** (none, hyde, decomposition, graphrag). Top-k is fixed at 15 for all evaluation runs.
 
-- **Single configuration** — Run one specific setup against all 45 questions
-- **Comprehensive grid search** — Test ~102 valid combinations against a curated 15-question subset
-
-```
-Collections × Search Types × Alphas × Strategies × Top-K
-    │             │           │          │           │
-    │             │           │          │           └── [10, 20]
-    │             │           │          └── [none, hyde, decomposition, graphrag]
-    │             │           └── [0.5, 1.0] (hybrid only)
-    │             └── [keyword, hybrid]
-    └── [section, contextual, raptor]
-```
-
-Not all combinations are valid. GraphRAG uses a dedicated collection and fixed alpha (1.0), contributing only 1-2 combinations rather than the full grid expansion. Invalid combinations are filtered automatically via `StrategyConfig` constraints.
+Not all combinations are valid. Each strategy declares its constraints via `StrategyConfig` — a declarative configuration system that serves as the single source of truth for what each strategy requires. For example, HyDE requires alpha=1.0 (pure semantic, per the paper), decomposition requires reranking enabled, and GraphRAG uses a dedicated collection with its own internal retrieval. The UI, evaluation grid, and runtime retrieval all consult `StrategyConfig` to prevent invalid states, so only valid combinations are tested.
 
 ---
 
@@ -109,12 +95,12 @@ python -m src.stages.run_stage_7_evaluation --retry-failed comprehensive_2025123
 
 | Argument | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `--search-type`, `-s` | keyword, hybrid | hybrid | Weaviate query method |
-| `--preprocessing`, `-p` | none, hyde, decomposition, graphrag | none | Query transformation |
-| `--alpha`, `-a` | 0.0-1.0 | 0.5 | Hybrid balance (ignored for keyword) |
-| `--top-k`, `-k` | int | 10 | Chunks to retrieve |
+| `--alpha`, `-a` | 0.0-1.0 | 0.5 | Search balance: 0.0=BM25, 0.5=hybrid, 1.0=semantic |
+| `--preprocessing`, `-p` | none, hyde, decomposition, graphrag | none | Query transformation strategy |
+| `--top-k`, `-k` | int | 10 | Chunks to retrieve (fixed at 15 in comprehensive) |
 | `--collection` | string | auto | Weaviate collection name |
-| `--comprehensive` | flag | - | Run 5D grid search |
+| `--reranking` | flag | off | Enable cross-encoder reranking |
+| `--comprehensive` | flag | - | Run 4D grid search over all valid combinations |
 
 </div>
 
