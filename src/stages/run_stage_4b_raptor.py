@@ -64,7 +64,7 @@ def main():
     overwrite_context = OverwriteContext(parse_overwrite_arg(args.overwrite))
 
     logger.info("=" * 60)
-    logger.info("Stage 4.5: RAPTOR Tree Building")
+    logger.info("Stage 4b: RAPTOR Tree Building")
     logger.info("=" * 60)
     logger.info(f"Input:  {DIR_FINAL_CHUNKS}/semantic_std2/")
     logger.info(f"Output: {DIR_FINAL_CHUNKS}/raptor/")
@@ -86,7 +86,7 @@ def main():
         total_leaves = sum(m.leaf_count for m in stats.values())
         total_summaries = sum(m.summary_count for m in stats.values())
         max_depth = max(m.max_level for m in stats.values()) if stats else 0
-        logger.info(f"Stage 4.5 complete. Processed {len(stats)} books.")
+        logger.info(f"Stage 4b complete. Processed {len(stats)} books.")
         logger.info(
             f"Total: {total_nodes} nodes ({total_leaves} leaves, {total_summaries} summaries)"
         )
@@ -113,7 +113,7 @@ def main():
         raise
 
     except Exception as e:
-        logger.error(f"Stage 4.5 failed: {e}")
+        logger.error(f"Stage 4b failed: {e}")
         raise
 
 

@@ -60,7 +60,7 @@ def setup_file_logging() -> Path:
 def main():
     """Run entity extraction stage."""
     parser = argparse.ArgumentParser(
-        description="Stage 4.5: Extract entities/relationships for GraphRAG"
+        description="Stage 4c: Extract entities/relationships for GraphRAG"
     )
     parser.add_argument(
         "--strategy", type=str, default=GRAPHRAG_CHUNKING_STRATEGY,
@@ -98,7 +98,7 @@ def main():
     log_file = setup_file_logging()
 
     logger.info("=" * 60)
-    logger.info("Stage 4.5: Entity Extraction")
+    logger.info("Stage 4c: Entity Extraction")
     logger.info("=" * 60)
     logger.info(f"Strategy: {args.strategy}")
     logger.info(f"Overwrite: {args.overwrite}")
