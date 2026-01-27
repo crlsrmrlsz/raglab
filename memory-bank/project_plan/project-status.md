@@ -116,7 +116,7 @@ Comprehensive code revision for publishing:
 | Change | Description |
 |--------|-------------|
 | Dead code removal | Removed unused `_group_by_pattern()`, orphaned `count_tokens` import |
-| Model IDs fixed | Replaced invalid `gpt-5-nano` with `gpt-4o-mini` |
+| Model IDs fixed | Replaced invalid `gpt-5-nano` with `gpt-4o-mini`, later upgraded to Jan 2026 models |
 | Type hints modernized | All files use Python 3.9+ style (`list[x]` instead of `List[x]`) |
 | Logger naming standardized | All stages use `setup_logging(__name__)` |
 | Import patterns unified | All use `from src.shared.files import ...` |

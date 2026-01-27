@@ -298,10 +298,10 @@ RERANK_INITIAL_K = 50  # Retrieve more candidates than final top_k for reranking
 # DeepSeek V3.2: $0.14/1M input - good balance of cost and capability
 EVAL_GENERATION_MODEL = "deepseek/deepseek-v3.2"
 
-# Evaluation model: GPT-4o-mini with JSON mode for reliable structured output
+# Evaluation model: Claude Haiku 4.5 for reliable structured output
 # Claude 3 Haiku was returning prose instead of JSON, causing OutputParserException
-# GPT-4o-mini supports response_format: json_object for guaranteed JSON compliance
-EVAL_EVALUATION_MODEL = "openai/gpt-4o-mini"
+# Claude Haiku 4.5 supports structured output with improved JSON compliance
+EVAL_EVALUATION_MODEL = "anthropic/claude-haiku-4.5"
 
 # Test questions file location
 EVAL_TEST_QUESTIONS_FILE = PROJECT_ROOT / "src" / "evaluation" / "test_questions.json"
@@ -333,14 +333,14 @@ EVAL_LOGS_DIR = DATA_DIR / "evaluation" / "logs"
 # ============================================================================
 
 # Model for query preprocessing (hyde, decomposition)
-# GPT-4o-mini: HyDE requires domain knowledge - nano models return empty responses
-PREPROCESSING_MODEL = "openai/gpt-4o-mini"
+# DeepSeek V3.2: $0.14/1M input - strong reasoning at low cost
+PREPROCESSING_MODEL = "deepseek/deepseek-v3.2"
 
 # Fallback models for preprocessing (used if dynamic fetch fails)
 # These are updated manually when OpenRouter availability changes
 AVAILABLE_PREPROCESSING_MODELS = [
-    ("openai/gpt-4o-mini", "Value: GPT-4o Mini"),
-    ("deepseek/deepseek-v3.2", "Value: DeepSeek V3.2"),
+    ("deepseek/deepseek-v3.2", "Budget: DeepSeek V3.2"),
+    ("openai/gpt-5-mini", "Value: GPT-5 Mini"),
     ("google/gemini-3-flash-preview", "Quality: Gemini 3 Flash"),
     ("anthropic/claude-haiku-4.5", "Premium: Claude Haiku 4.5"),
 ]
@@ -351,13 +351,13 @@ AVAILABLE_PREPROCESSING_MODELS = [
 # ============================================================================
 
 # Default model for answer generation
-# GPT-4o-mini: $0.15/$0.60 per 1M tokens - consistent with eval/preprocessing
-GENERATION_MODEL = "openai/gpt-4o-mini"
+# GPT-5-mini: improved reasoning for answer synthesis
+GENERATION_MODEL = "openai/gpt-5-mini"
 
 # Fallback models for generation (used if dynamic fetch fails)
 AVAILABLE_GENERATION_MODELS = [
-    ("openai/gpt-4o-mini", "Budget: GPT-4o-mini"),
-    ("deepseek/deepseek-v3.2", "Value: DeepSeek V3.2"),
+    ("deepseek/deepseek-v3.2", "Budget: DeepSeek V3.2"),
+    ("openai/gpt-5-mini", "Value: GPT-5 Mini"),
     ("google/gemini-3-flash-preview", "Quality: Gemini 3 Flash"),
     ("anthropic/claude-haiku-4.5", "Premium: Claude Haiku 4.5"),
 ]
@@ -477,8 +477,8 @@ SEMANTIC_STD_COEFFICIENT = 3.0  # Standard deviations below mean for breakpoint
 
 # Contextual chunking parameters (Anthropic-style)
 # Model for generating contextual snippets
-# GPT-4o-mini: $0.15/$0.60 per 1M tokens - consistent across all tasks
-CONTEXTUAL_MODEL = "openai/gpt-4o-mini"
+# DeepSeek V3.2: $0.14/1M input - good balance of cost and capability
+CONTEXTUAL_MODEL = "deepseek/deepseek-v3.2"
 
 # Maximum tokens for the contextual snippet (output limit)
 # Increased from 100 to allow room for complete sentences
@@ -636,7 +636,7 @@ def get_embedding_folder_path(strategy: str) -> Path:
 # Builds a hierarchical tree of summaries enabling multi-level retrieval.
 
 # Model for generating cluster summaries (reuse contextual model for consistency)
-RAPTOR_SUMMARY_MODEL = CONTEXTUAL_MODEL  # -> openai/gpt-4o-mini
+RAPTOR_SUMMARY_MODEL = CONTEXTUAL_MODEL  # -> deepseek/deepseek-v3.2
 
 # Tree building constraints
 RAPTOR_MAX_LEVELS = 4  # Maximum tree depth (0=leaves, 1-4=summaries)
@@ -678,7 +678,7 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "raglab_graphrag")
 GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-3-haiku"
 
 # Model for community summarization (same as extraction for consistency)
-GRAPHRAG_SUMMARY_MODEL = CONTEXTUAL_MODEL  # -> openai/gpt-4o-mini
+GRAPHRAG_SUMMARY_MODEL = CONTEXTUAL_MODEL  # -> deepseek/deepseek-v3.2
 
 # Entity extraction parameters
 GRAPHRAG_MAX_EXTRACTION_TOKENS = 4000  # Max tokens for extraction response

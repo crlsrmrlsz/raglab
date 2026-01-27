@@ -38,13 +38,13 @@ PREPROCESSING_CURATED: dict[str, list[str]] = {
     ],
     "Value": [
         "google/gemini-3-flash-preview",
-        "openai/gpt-4o-mini",
+        "openai/gpt-5-mini",
         "google/gemini-2.0-flash-001",
     ],
     "Quality": [
         "anthropic/claude-haiku-4.5",
         "google/gemini-3-flash-preview",
-        "openai/gpt-4o-mini",
+        "openai/gpt-5-mini",
     ],
     "Premium": [
         "anthropic/claude-opus-4.5",
@@ -59,11 +59,11 @@ GENERATION_CURATED: dict[str, list[str]] = {
     "Budget": [
         "deepseek/deepseek-v3.2",
         "deepseek/deepseek-chat",
-        "openai/gpt-4o-mini",
+        "openai/gpt-5-mini",
     ],
     "Value": [
         "google/gemini-3-flash-preview",
-        "openai/gpt-4o-mini",
+        "openai/gpt-5-mini",
         "deepseek/deepseek-v3.2",
     ],
     "Quality": [

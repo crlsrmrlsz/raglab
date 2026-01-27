@@ -102,8 +102,8 @@ Key settings are in `src/config.py`. Some important parameters:
 | `MAX_CHUNK_TOKENS` | 800 | Target chunk size |
 | `OVERLAP_SENTENCES` | 2 | Sentence overlap between chunks |
 | `DEFAULT_TOP_K` | 10 | Chunks to retrieve per query |
-| `PREPROCESSING_MODEL` | gpt-4o-mini | Model for HyDE/decomposition |
-| `GENERATION_MODEL` | gpt-4o-mini | Model for answer generation |
+| `PREPROCESSING_MODEL` | deepseek-v3.2 | Model for HyDE/decomposition |
+| `GENERATION_MODEL` | gpt-5-mini | Model for answer generation |
 | `RERANK_MODEL` | mxbai-rerank-xsmall-v1 | Cross-encoder for reranking |
 
 </div>

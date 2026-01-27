@@ -697,7 +697,7 @@ GRAPHRAG_CHUNKING_STRATEGY = "semantic_std2"  # Uses semantic chunks for topic c
 
 # Extraction
 GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-3-haiku"
-GRAPHRAG_SUMMARY_MODEL = "openai/gpt-4o-mini"
+GRAPHRAG_SUMMARY_MODEL = "deepseek/deepseek-v3.2"
 GRAPHRAG_MAX_EXTRACTION_TOKENS = 4000
 GRAPHRAG_MAX_ENTITIES = 10        # Per chunk (paper: no limit)
 GRAPHRAG_MAX_RELATIONSHIPS = 7    # Per chunk (paper: no limit)

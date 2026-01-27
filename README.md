@@ -122,7 +122,7 @@ In summary, humans care about others' opinions due to a complex interplay of bio
 - [9] *The Art of Living, The Classical Manual on Virtue Happiness and Effectiveness* — Epictetus, Section: Trust Your Moral Intuitions
 - [10] *Fundamentals of Cognitive Neuroscience, A Beginner's Guide* — Nicole M. Gage, Bernard Baars, Section: Our Social Nature
 
-*Config: RAPTOR (Hierarchical) | hybrid (α=0.5) | hyde | 10 results | 28,607ms | Model: openai/gpt-4o-mini*
+*Config: RAPTOR (Hierarchical) | hybrid (α=0.5) | hyde | 10 results | 28,607ms | Model: openai/gpt-5-mini*
 
 </details>
 

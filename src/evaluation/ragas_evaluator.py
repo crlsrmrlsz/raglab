@@ -48,7 +48,7 @@ logger = setup_logging(__name__)
 
 
 # Default model for answer generation (can be overridden)
-DEFAULT_CHAT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_CHAT_MODEL = "anthropic/claude-haiku-4.5"
 
 # Mapping from our metric names to RAGAS DataFrame column names
 RAGAS_METRIC_COLUMN_MAP = {
@@ -85,7 +85,7 @@ def _is_valid_score(value: Any) -> bool:
 # ============================================================================
 
 
-def create_evaluator_llm(model: str = "openai/gpt-4o-mini") -> LangchainLLMWrapper:
+def create_evaluator_llm(model: str = "anthropic/claude-haiku-4.5") -> LangchainLLMWrapper:
     """
     Create LLM wrapper for RAGAS evaluation via OpenRouter.
 
@@ -669,7 +669,7 @@ def run_evaluation(
     metrics: Optional[list[str]] = None,
     top_k: int = DEFAULT_TOP_K,
     generation_model: str = DEFAULT_CHAT_MODEL,
-    evaluation_model: str = "openai/gpt-4o-mini",
+    evaluation_model: str = "anthropic/claude-haiku-4.5",
     collection_name: Optional[str] = None,
     use_reranking: bool = True,
     alpha: float = 0.5,

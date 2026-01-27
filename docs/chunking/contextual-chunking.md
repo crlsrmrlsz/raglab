@@ -8,7 +8,7 @@ While section and semantic chunking optimize *where* to split text, contextual c
 
 Here [Anthropic Blog: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) approach is implemented as a **post-processing step on semantic chunks (std=2)**, using these parameters:
 - **Max snippet tokens**: 150, brief disambiguation with buffer for complete sentences
-- **Model**: gpt-4o-mini, cost-efficient for simple contextualization
+- **Model**: deepseek-v3.2, cost-efficient for simple contextualization
 
 
 

@@ -86,7 +86,7 @@ def call_chat_completion(
     Args:
         messages: List of message dicts with 'role' and 'content' keys.
             Example: [{"role": "user", "content": "Hello"}]
-        model: OpenRouter model ID (e.g., "openai/gpt-4o-mini").
+        model: OpenRouter model ID (e.g., "deepseek/deepseek-v3.2").
         temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative).
         max_tokens: Maximum tokens in response.
         top_p: Nucleus sampling threshold (0.0-1.0). If set, only tokens with
@@ -106,7 +106,7 @@ def call_chat_completion(
     Example:
         >>> response = call_chat_completion(
         ...     messages=[{"role": "user", "content": "What is 2+2?"}],
-        ...     model="openai/gpt-4o-mini",
+        ...     model="deepseek/deepseek-v3.2",
         ... )
         >>> print(response)
         "4"
@@ -226,7 +226,7 @@ def call_simple_prompt(
     Example:
         >>> response = call_simple_prompt(
         ...     "Summarize: The quick brown fox...",
-        ...     model="openai/gpt-4o-mini",
+        ...     model="deepseek/deepseek-v3.2",
         ... )
     """
     messages = [{"role": "user", "content": prompt}]
@@ -260,7 +260,7 @@ def call_structured_completion(
 
     Args:
         messages: List of message dicts with 'role' and 'content' keys.
-        model: OpenRouter model ID (e.g., "openai/gpt-4o-mini").
+        model: OpenRouter model ID (e.g., "deepseek/deepseek-v3.2").
         response_model: Pydantic BaseModel class defining expected response.
         temperature: Sampling temperature (0.0 recommended for structured).
         max_tokens: Maximum tokens in response.
@@ -282,7 +282,7 @@ def call_structured_completion(
         ...     answer: str
         >>> result = call_structured_completion(
         ...     messages=[{"role": "user", "content": "Say hello"}],
-        ...     model="openai/gpt-4o-mini",
+        ...     model="deepseek/deepseek-v3.2",
         ...     response_model=Result,
         ... )
         >>> result.answer

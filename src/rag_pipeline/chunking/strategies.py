@@ -140,7 +140,7 @@ def contextual_strategy(
 
     Args:
         model: OpenRouter model ID for context generation.
-            Default: gpt-4o-mini (fast, cheap).
+            Default: deepseek-v3.2 (fast, cheap).
         overwrite_context: Context for handling existing file overwrites.
 
     Returns:
@@ -234,7 +234,7 @@ def get_strategy(strategy_id: str, **kwargs: Any) -> ChunkingStrategyFunction:
         >>> strategy_fn = get_strategy("semantic", std_coefficient=2.0)
         >>> stats = strategy_fn()
         >>> print(stats)  # {"book1": 45, "book2": 67}
-        >>> strategy_fn = get_strategy("contextual", model="anthropic/claude-3-haiku")
+        >>> strategy_fn = get_strategy("contextual", model="deepseek/deepseek-v3.2")
         >>> stats = strategy_fn()
     """
     if strategy_id not in STRATEGIES:
