@@ -3,11 +3,37 @@
 [← GraphRAG](../preprocessing/graphrag.md) | [Home](../../README.md)
 
 
-RAGLab uses [RAGAS (Retrieval-Augmented Generation Assessment)](https://docs.ragas.io/) to evaluate different RAG configurations, systematically testing which combinations of chunking, alpha, and preprocessing produce the best answers. The **comprehensive mode** runs a grid search across all valid combinations using a curated 15-question subset, while **single mode** runs one configuration against all 45 questions.
+RAGLab uses [RAGAS (Retrieval-Augmented Generation Assessment)](https://docs.ragas.io/) to evaluate different RAG configurations, systematically testing which combinations of chunking, alpha (search balance), reranking, and preprocessing produce the best answers. RAGAS provides LLM-as-judge metrics that don't require human evaluation for every run, enabling automated comparison across many configurations. Unlike benchmarks that test generation given pre-retrieved documents (e.g., RAGBench), RAGLab evaluates the **full end-to-end pipeline** — from retrieval through generation — so metric differences reflect real pipeline behavior, not just LLM output quality.
 
-The grid has 4 dimensions: **collections** (chunking strategy used at index time), **alpha** (0.0 = pure BM25 keyword search, 0.5 = balanced hybrid, 1.0 = pure semantic), **reranking** (cross-encoder on/off), and **preprocessing strategy** (none, hyde, decomposition, graphrag). Top-k is fixed at 15 for all evaluation runs.
+The **comprehensive mode** runs a 4D grid search across all valid combinations using a curated 15-question subset. **Single mode** runs one configuration against all 45 questions. Top-k is fixed at 15 for all evaluation runs.
 
-Not all combinations are valid. Each strategy declares its constraints via `StrategyConfig` — a declarative configuration system that serves as the single source of truth for what each strategy requires. For example, HyDE requires alpha=1.0 (pure semantic, per the paper), decomposition requires reranking enabled, and GraphRAG uses a dedicated collection with its own internal retrieval. The UI, evaluation grid, and runtime retrieval all consult `StrategyConfig` to prevent invalid states, so only valid combinations are tested.
+### Comprehensive Grid
+
+<div align="center">
+
+| Dimension | Values | Notes |
+|-----------|--------|-------|
+| **Collections** | section, semantic_std2, semantic_std3, contextual, raptor | Chunking strategy used at index time |
+| **Alpha** | 0.0, 0.5, 1.0 | 0.0 = pure BM25, 0.5 = hybrid, 1.0 = pure semantic |
+| **Reranking** | on, off | Cross-encoder re-scoring of retrieved chunks |
+| **Strategy** | none, hyde, decomposition, graphrag | Query-time preprocessing |
+
+</div>
+
+Not all combinations are valid — each strategy declares constraints that reduce the grid. The table below shows what each strategy allows:
+
+<div align="center">
+
+| Strategy | Alpha | Reranking | Collections | Rationale |
+|----------|-------|-----------|-------------|-----------|
+| **none** | any (0.0, 0.5, 1.0) | optional (on/off) | all 5 | Baseline, no constraints |
+| **hyde** | fixed (1.0) | optional (on/off) | all 5 | Paper requires pure semantic search |
+| **decomposition** | fixed (1.0) | required (on) | all 5 | Paper requires cross-encoder reranking |
+| **graphrag** | fixed (1.0) | forbidden (off) | dedicated (semantic_std2) | Own graph-based retrieval and ranking |
+
+</div>
+
+These constraints are enforced by `StrategyConfig` — a declarative configuration system that serves as the single source of truth. The UI, evaluation grid, and runtime retrieval all consult it to prevent invalid states, so only valid combinations are tested.
 
 ---
 
