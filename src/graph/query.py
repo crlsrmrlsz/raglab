@@ -810,10 +810,9 @@ def hybrid_graph_retrieval_with_map_reduce(
 
     # First, get graph context regardless of query type
     graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
-    extracted_entities = graph_meta.get("extracted_entities", [])
 
     # Determine if this is a global query that should use map-reduce
-    if use_map_reduce and should_use_map_reduce(query, extracted_entities):
+    if use_map_reduce and should_use_map_reduce(query):
         logger.info("Global query detected, using map-reduce")
 
         # Retrieve ALL L0 (coarsest) communities for global query map-reduce
@@ -826,7 +825,7 @@ def hybrid_graph_retrieval_with_map_reduce(
 
             # Build metadata with map-reduce info
             metadata = {
-                "extracted_entities": extracted_entities,
+                "extracted_entities": graph_meta.get("extracted_entities", []),
                 "query_entities": graph_meta.get("query_entities", []),
                 "graph_context": graph_meta.get("graph_context", []),
                 "community_context": [
@@ -1034,10 +1033,9 @@ def graph_retrieval_with_map_reduce(
 
     # Get graph context to check for global query
     graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
-    extracted_entities = graph_meta.get("extracted_entities", [])
 
     # Global query path: map-reduce over communities
-    if use_map_reduce and should_use_map_reduce(query, extracted_entities):
+    if use_map_reduce and should_use_map_reduce(query):
         logger.info("Global query detected, using map-reduce")
 
         communities = retrieve_communities_for_map_reduce(query, level=0)
@@ -1046,7 +1044,7 @@ def graph_retrieval_with_map_reduce(
             mr_result = map_reduce_global_query(query, communities)
 
             metadata = {
-                "extracted_entities": extracted_entities,
+                "extracted_entities": graph_meta.get("extracted_entities", []),
                 "query_entities": graph_meta.get("query_entities", []),
                 "graph_context": graph_meta.get("graph_context", []),
                 "community_context": [

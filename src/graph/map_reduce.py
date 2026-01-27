@@ -359,35 +359,23 @@ def map_reduce_global_query(
     )
 
 
-def should_use_map_reduce(
-    query: str,
-    extracted_entities: list[str],
-    threshold_entities: int = 0,
-) -> bool:
+def should_use_map_reduce(query: str) -> bool:
     """Determine if map-reduce should be used for a query.
 
-    Heuristic: If no entities were extracted AND query is classified
-    as global, use map-reduce.
+    Uses LLM classification to decide if the query is global
+    (themes, patterns, overviews) or local (specific entities, facts).
 
     Args:
         query: User query.
-        extracted_entities: Entities extracted from query.
-        threshold_entities: Entity count below which to consider global.
 
     Returns:
         True if map-reduce should be used, False for local retrieval.
 
     Example:
-        >>> entities = extract_query_entities("What is dopamine?")
-        >>> should_use_map_reduce("What is dopamine?", entities)
+        >>> should_use_map_reduce("What is dopamine?")
         False
-        >>> should_use_map_reduce("What are the main themes?", [])
+        >>> should_use_map_reduce("What are the main themes?")
         True
     """
-    # If entities were extracted, likely a local query
-    if len(extracted_entities) > threshold_entities:
-        return False
-
-    # Classify to confirm
     query_type = classify_query(query)
     return query_type == "global"
