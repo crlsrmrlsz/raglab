@@ -710,7 +710,6 @@ GRAPHRAG_MAX_CONTEXT_TOKENS = 8000  # Max input tokens for summarization (matche
 # Graph retrieval parameters
 GRAPHRAG_TOP_COMMUNITIES = 3        # Number of communities to retrieve
 GRAPHRAG_TRAVERSE_DEPTH = 2         # Hops for entity traversal
-GRAPHRAG_RRF_K = 60                 # RRF constant for score fusion
 
 # Hierarchical community parameters (Microsoft GraphRAG paper)
 # Level 0 (C0) = coarsest granularity (corpus themes), higher levels = finer

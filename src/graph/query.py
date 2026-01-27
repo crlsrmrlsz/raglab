@@ -18,7 +18,6 @@ For local queries, pure graph traversal (Microsoft's design):
 Uses existing infrastructure:
 - Neo4j for graph queries and entity matching
 - Weaviate for chunk fetching (batch filter, not vector search)
-- RRF preserved for decomposition strategy compatibility
 
 ## Data Flow (Local Queries - Graph-Only)
 
@@ -30,8 +29,8 @@ Uses existing infrastructure:
 
 ## Data Flow (Global Queries - Map-Reduce)
 
-1. Query → Classify as global (no entities, abstract question)
-2. Retrieve L0 communities (coarsest level)
+1. Query → LLM classifies as local or global
+2. Retrieve ALL L0 communities (coarsest level)
 3. Map: Parallel LLM calls → partial answers per community
 4. Reduce: Synthesize final answer
 """
@@ -44,7 +43,6 @@ from neo4j import Driver
 from src.config import (
     GRAPHRAG_TOP_COMMUNITIES,
     GRAPHRAG_TRAVERSE_DEPTH,
-    GRAPHRAG_RRF_K,
     GRAPHRAG_MAX_HIERARCHY_LEVELS,
     get_community_collection_name,
     get_collection_name,
@@ -56,7 +54,6 @@ from src.rag_pipeline.indexing.weaviate_client import (
     query_communities_by_vector,
 )
 from src.rag_pipeline.indexing.weaviate_query import SearchResult
-from src.rag_pipeline.retrieval.rrf import reciprocal_rank_fusion
 from .neo4j_client import find_entity_neighbors, find_entities_by_names, get_entity_community_ids
 from .community import load_communities
 from .schemas import Community
@@ -625,243 +622,6 @@ def _build_graph_ranked_list(
     return ranked_results
 
 
-def hybrid_graph_retrieval(
-    query: str,
-    driver: Driver,
-    vector_results: list[dict[str, Any]],
-    top_k: int = 10,
-    collection_name: Optional[str] = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Merge vector search results with graph traversal using RRF.
-
-    NOTE: This function is preserved for decomposition strategy compatibility.
-    For GraphRAG, use graph_retrieval() instead (pure graph, no vector search).
-
-    Enhances vector search with knowledge graph context:
-    1. Traverses graph from query entities to find related chunk IDs
-    2. Fetches ALL graph-discovered chunks from Weaviate
-    3. Ranks graph chunks by combined_degree (hub importance)
-    4. Uses RRF to merge vector list + graph list (chunks in both get boosted)
-    5. Adds community summaries for thematic context
-
-    The key insight: RRF boosts chunks that appear in BOTH lists. A chunk
-    with vector_rank=5 and graph_rank=3 gets score = 1/(k+5) + 1/(k+3),
-    higher than a chunk appearing in only one list.
-
-    Args:
-        query: User query string.
-        driver: Neo4j driver instance.
-        vector_results: Results from Weaviate vector search (list of dicts).
-        top_k: Number of results to return.
-        collection_name: Weaviate collection (default: from config).
-
-    Returns:
-        Tuple of:
-        - RRF-merged results (vector + graph sources combined)
-        - Metadata dict with entities, graph context, and communities
-    """
-    # Get graph chunk IDs and metadata
-    graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
-
-    # Get community context by entity membership (Microsoft approach)
-    # Uses communities that CONTAIN the matched entities, not embedding similarity
-    query_entities = graph_meta.get("query_entities", [])
-    community_context = retrieve_community_context_by_membership(
-        entity_names=query_entities,
-        driver=driver,
-    )
-
-    # Build metadata
-    metadata = {
-        "extracted_entities": graph_meta.get("extracted_entities", []),
-        "query_entities": graph_meta.get("query_entities", []),
-        "graph_context": graph_meta.get("graph_context", []),
-        "community_context": community_context,
-        "graph_chunk_count": len(graph_chunk_ids),
-    }
-
-    if not graph_chunk_ids:
-        # No graph results, return vector results as-is
-        logger.info("No graph chunks found, returning vector results only")
-        return vector_results[:top_k], metadata
-
-    # Convert vector_results (dicts) to SearchResult objects for RRF
-    vector_chunk_ids = {r.get("chunk_id") for r in vector_results if r.get("chunk_id")}
-    vector_search_results = []
-    for r in vector_results:
-        vector_search_results.append(
-            SearchResult(
-                chunk_id=r.get("chunk_id", ""),
-                book_id=r.get("book_id", ""),
-                section=r.get("section", ""),
-                context=r.get("context", ""),
-                text=r.get("text", ""),
-                token_count=r.get("token_count", 0),
-                score=r.get("similarity", 0.0),
-                is_summary=r.get("is_summary", False),
-                tree_level=r.get("tree_level", 0),
-            )
-        )
-
-    # Fetch ALL graph-discovered chunks from Weaviate (not just graph-only)
-    # This enables proper RRF boosting for chunks in both lists
-    all_graph_chunks = fetch_chunks_by_ids(graph_chunk_ids, collection_name)
-
-    if all_graph_chunks:
-        # Build graph-ranked list ordered by combined_degree (Microsoft approach)
-        # Higher combined_degree = hub entities = more informative
-        graph_context = graph_meta.get("graph_context", [])
-        graph_ranked_results = _build_graph_ranked_list(graph_context, all_graph_chunks)
-
-        # RRF merge: chunks in BOTH lists get boosted
-        # e.g., chunk at vector_rank=5, graph_rank=3 gets score = 1/(k+5) + 1/(k+3)
-        rrf_result = reciprocal_rank_fusion(
-            result_lists=[vector_search_results, graph_ranked_results],
-            query_types=["vector", "graph"],
-            k=GRAPHRAG_RRF_K,
-            top_k=top_k,
-        )
-        merged_results = rrf_result.results
-
-        # Count overlaps for logging
-        graph_chunk_set = set(graph_chunk_ids)
-        overlap_count = sum(1 for r in vector_search_results if r.chunk_id in graph_chunk_set)
-        graph_only_count = len(graph_chunk_set - vector_chunk_ids)
-
-        logger.info(
-            f"RRF merge: {len(vector_search_results)} vector + "
-            f"{len(graph_ranked_results)} graph (path-ranked) -> "
-            f"{len(merged_results)} results ({overlap_count} overlapping, {graph_only_count} graph-only)"
-        )
-    else:
-        # No graph chunks fetched (Weaviate empty or error), use vector results
-        merged_results = vector_search_results[:top_k]
-        graph_chunk_set = set(graph_chunk_ids)
-        overlap_count = 0
-        graph_only_count = len(graph_chunk_ids)
-        logger.info(f"No graph chunks fetched, using {len(merged_results)} vector results")
-
-    # Mark which results came from graph traversal (for visibility/debugging)
-    merged_dicts = []
-    for r in merged_results:
-        result_dict = {
-            "chunk_id": r.chunk_id,
-            "book_id": r.book_id,
-            "section": r.section,
-            "context": r.context,
-            "text": r.text,
-            "token_count": r.token_count,
-            "similarity": r.score,  # Now contains RRF score
-            "is_summary": r.is_summary,
-            "tree_level": r.tree_level,
-        }
-        # Mark if this chunk was found via graph traversal
-        if r.chunk_id in graph_chunk_set:
-            result_dict["graph_found"] = True
-        # Mark if this was ONLY in graph results (not in original vector results)
-        if r.chunk_id not in vector_chunk_ids:
-            result_dict["graph_only"] = True
-        merged_dicts.append(result_dict)
-
-    # Update metadata
-    metadata["overlap_count"] = overlap_count
-    metadata["graph_only_count"] = graph_only_count
-    metadata["graph_fetched"] = len(all_graph_chunks) if all_graph_chunks else 0
-    metadata["rrf_merged"] = bool(all_graph_chunks)
-
-    logger.info(
-        f"Hybrid retrieval: {overlap_count} in both lists (RRF boosted), "
-        f"{graph_only_count} graph-only, {metadata['graph_fetched']} total fetched"
-    )
-
-    return merged_dicts, metadata
-
-
-def hybrid_graph_retrieval_with_map_reduce(
-    query: str,
-    driver: Driver,
-    vector_results: list[dict[str, Any]],
-    top_k: int = 10,
-    collection_name: Optional[str] = None,
-    use_map_reduce: bool = True,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Enhanced hybrid retrieval with optional map-reduce for global queries.
-
-    NOTE: This function is preserved for decomposition strategy compatibility.
-    For GraphRAG, use graph_retrieval_with_map_reduce() instead (pure graph).
-
-    Extends hybrid_graph_retrieval with map-reduce support:
-    - For local queries: Standard RRF merge (entity traversal + vector)
-    - For global queries: Map-reduce over community summaries
-
-    Args:
-        query: User query string.
-        driver: Neo4j driver instance.
-        vector_results: Results from Weaviate vector search.
-        top_k: Number of results to return.
-        collection_name: Weaviate collection name.
-        use_map_reduce: Whether to use map-reduce for global queries.
-
-    Returns:
-        Tuple of (results, metadata).
-        For global queries with map-reduce, metadata includes "map_reduce_result".
-    """
-    from .map_reduce import map_reduce_global_query, should_use_map_reduce
-
-    # First, get graph context regardless of query type
-    graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
-
-    # Determine if this is a global query that should use map-reduce
-    if use_map_reduce and should_use_map_reduce(query):
-        logger.info("Global query detected, using map-reduce")
-
-        # Retrieve ALL L0 (coarsest) communities for global query map-reduce
-        # Microsoft GraphRAG: map-reduce over all community reports at selected level
-        communities = retrieve_communities_for_map_reduce(query, level=0)
-
-        if communities:
-            # Run map-reduce
-            mr_result = map_reduce_global_query(query, communities)
-
-            # Build metadata with map-reduce info
-            metadata = {
-                "extracted_entities": graph_meta.get("extracted_entities", []),
-                "query_entities": graph_meta.get("query_entities", []),
-                "graph_context": graph_meta.get("graph_context", []),
-                "community_context": [
-                    {"community_id": c.community_id, "summary": c.summary, "member_count": c.member_count}
-                    for c in communities
-                ],
-                "query_type": "global",
-                "map_reduce_result": {
-                    "final_answer": mr_result.final_answer,
-                    "communities_used": mr_result.communities_used,
-                    "map_time_ms": mr_result.map_time_ms,
-                    "reduce_time_ms": mr_result.reduce_time_ms,
-                    "total_time_ms": mr_result.total_time_ms,
-                },
-            }
-
-            logger.info(
-                f"Map-reduce complete: {len(mr_result.communities_used)} communities, "
-                f"{mr_result.total_time_ms:.0f}ms total"
-            )
-
-            # Still return vector results for reference
-            return vector_results[:top_k], metadata
-
-    # Fall back to standard hybrid retrieval for local queries
-    results, metadata = hybrid_graph_retrieval(
-        query=query,
-        driver=driver,
-        vector_results=vector_results,
-        top_k=top_k,
-        collection_name=collection_name,
-    )
-    metadata["query_type"] = "local"
-    return results, metadata
-
-
 def format_graph_context_for_generation(
     metadata: dict[str, Any],
     max_chars: int = 2000,
@@ -872,7 +632,7 @@ def format_graph_context_for_generation(
     to augment the retrieved chunks.
 
     Args:
-        metadata: Dict from hybrid_graph_retrieval().
+        metadata: Dict from graph_retrieval().
         max_chars: Maximum characters for context.
 
     Returns:

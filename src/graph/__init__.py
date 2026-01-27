@@ -19,16 +19,16 @@ GraphRAG enables global queries ("What are the main themes across all documents?
 - hierarchy.py: Multi-level community parsing from Leiden
 - centrality.py: PageRank computation for entity importance
 - map_reduce.py: Async map-reduce for global queries
-- query_entities.py: Query entity extraction (embedding + LLM)
-- query.py: Graph retrieval strategy for hybrid search
+- query_entities.py: Query entity extraction (embedding similarity)
+- query.py: Graph retrieval (pure graph traversal + map-reduce)
 
 ## Data Flow
 
 1. Section chunks → Entity extraction → Neo4j upload
 2. Neo4j graph → Leiden communities → Community summaries (stored in Weaviate)
-3. Query → Embedding/LLM entity extraction → Graph traversal → Chunk ID discovery
-4. Vector search (Weaviate) + Fetch graph-only chunks → RRF merge → Answer
-5. For global queries: Map-reduce over community summaries
+3. Query → Embedding entity extraction → Graph traversal → Chunk ID discovery
+4. Fetch graph-discovered chunks from Weaviate (batch filter) → Rank by combined_degree
+5. For global queries: Map-reduce over L0 community summaries
 """
 
 from .schemas import (
@@ -82,8 +82,6 @@ from .query import (
     retrieve_communities_for_map_reduce,
     format_graph_context_for_generation,
     fetch_chunks_by_ids,
-    hybrid_graph_retrieval,
-    hybrid_graph_retrieval_with_map_reduce,
 )
 
 __all__ = [
@@ -130,6 +128,4 @@ __all__ = [
     "retrieve_communities_for_map_reduce",
     "format_graph_context_for_generation",
     "fetch_chunks_by_ids",
-    "hybrid_graph_retrieval",
-    "hybrid_graph_retrieval_with_map_reduce",
 ]

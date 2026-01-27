@@ -8,14 +8,14 @@ Research: "From Local to Global: A Graph RAG Approach to Query-Focused Summariza
           Shows +72-83% win rate vs baseline on global queries.
 
 Key algorithm (local queries):
-    1. Extract entities from query (embedding similarity + LLM fallback)
+    1. Extract entities from query (embedding similarity)
     2. Traverse Neo4j graph from entities -> find related chunk IDs
     3. Fetch graph-discovered chunks from Weaviate (batch filter, not vector search)
     4. Rank by combined_degree (Microsoft approach: hub entities = more informative)
     5. Return top-k chunks
 
 Key algorithm (global queries):
-    1. Detect abstract query (no entities, global classification)
+    1. LLM classifies query as local or global
     2. Map-reduce over L0 community summaries
     3. Synthesize final answer from community perspectives
 """
@@ -50,7 +50,7 @@ class GraphRAGRetrieval:
         4. Return top-k chunks
 
     Flow (global):
-        1. Detect abstract query (no entities)
+        1. LLM classifies query as global
         2. Map-reduce over L0 communities
         3. Synthesize answer
 
