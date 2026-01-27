@@ -63,7 +63,7 @@ The generator LLM can filter irrelevant context (low precision is recoverable), 
 
 ### GraphRAG metric differences
 
-GraphRAG contributes fewer grid combinations because it operates under dedicated constraints: a fixed collection (entity-chunk ID matching), fixed alpha (1.0), and its own graph-based ranking. The same 5 RAGAS metrics apply, but the retrieval path differs — entity extraction, graph traversal, and RRF merging replace standard vector search.
+GraphRAG contributes fewer grid combinations because it operates under dedicated constraints: a fixed collection (entity-chunk ID matching), fixed alpha (1.0), and its own graph-based ranking. The same 5 RAGAS metrics apply, but the retrieval path differs — entity extraction, graph traversal, and `combined_degree` ranking replace standard vector search.
 
 ---
 
