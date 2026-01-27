@@ -332,7 +332,16 @@ def call_structured_completion(
                 logger.info(f"[LLM] model={model} chars_in={chars_in} chars_out={chars_out} (structured)")
 
                 # Parse and validate with Pydantic
-                return response_model.model_validate_json(content)
+                try:
+                    return response_model.model_validate_json(content)
+                except PydanticValidationError as exc:
+                    if attempt < max_retries:
+                        logger.warning(
+                            f"Pydantic validation failed, "
+                            f"retry {attempt + 1}/{max_retries}: {exc}"
+                        )
+                        continue
+                    raise
 
             # Retryable errors: rate limit or server errors
             if response.status_code >= 500 or response.status_code == 429:
