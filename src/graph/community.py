@@ -977,6 +977,10 @@ def _upload_community_to_weaviate(
 ) -> None:
     """Upload a community to Weaviate with error handling.
 
+    Serializes members and relationships as JSON strings so that
+    query-time functions can reconstruct full Community objects
+    from Weaviate without needing communities.json.
+
     Args:
         weaviate_client: Weaviate client instance.
         collection_name: Name of the collection.
@@ -987,6 +991,9 @@ def _upload_community_to_weaviate(
         return
 
     try:
+        members_json = json.dumps([m.model_dump() for m in community.members])
+        relationships_json = json.dumps([r.model_dump() for r in community.relationships])
+
         weaviate_upload_community(
             client=weaviate_client,
             collection_name=collection_name,
@@ -996,6 +1003,8 @@ def _upload_community_to_weaviate(
             member_count=community.member_count,
             relationship_count=community.relationship_count,
             level=community.level,
+            members_json=members_json,
+            relationships_json=relationships_json,
         )
     except Exception as e:
         logger.warning(f"Failed to upload {community.community_id} to Weaviate: {e}")

@@ -78,7 +78,6 @@ from .query_entities import (
 from .query import (
     get_graph_chunk_ids,
     retrieve_graph_context,
-    retrieve_community_context,
     retrieve_communities_for_map_reduce,
     format_graph_context_for_generation,
     fetch_chunks_by_ids,
@@ -124,7 +123,6 @@ __all__ = [
     # Query
     "get_graph_chunk_ids",
     "retrieve_graph_context",
-    "retrieve_community_context",
     "retrieve_communities_for_map_reduce",
     "format_graph_context_for_generation",
     "fetch_chunks_by_ids",

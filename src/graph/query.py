@@ -36,31 +36,72 @@ Uses existing infrastructure:
 """
 
 from typing import Any, Optional
+import json
 
-import numpy as np
 from neo4j import Driver
 
 from src.config import (
-    GRAPHRAG_TOP_COMMUNITIES,
     GRAPHRAG_TRAVERSE_DEPTH,
     GRAPHRAG_MAX_HIERARCHY_LEVELS,
     get_community_collection_name,
     get_collection_name,
 )
 from src.shared.files import setup_logging
-from src.rag_pipeline.embedding.embedder import embed_texts
 from src.rag_pipeline.indexing.weaviate_client import (
     get_client as get_weaviate_client,
-    query_communities_by_vector,
+    fetch_all_communities_by_level,
+    fetch_communities_by_ids,
 )
 from src.rag_pipeline.indexing.weaviate_query import SearchResult
 from .neo4j_client import find_entity_neighbors, find_entities_by_names, get_entity_community_ids
-from .community import load_communities
-from .schemas import Community
-# Entity extraction logic moved to query_entities.py
+from .schemas import Community, CommunityMember, CommunityRelationship
 from .query_entities import extract_query_entities
 
 logger = setup_logging(__name__)
+
+
+def _deserialize_community(data: dict[str, Any]) -> Community:
+    """Deserialize a Weaviate community dict into a Community object.
+
+    Parses the members_json and relationships_json TEXT fields
+    back into CommunityMember and CommunityRelationship objects.
+
+    Args:
+        data: Dict from Weaviate query with community_id, summary,
+              members_json, relationships_json, etc.
+
+    Returns:
+        Full Community object with members and relationships.
+    """
+    community_id = data.get("community_id", "unknown")
+
+    try:
+        members = [
+            CommunityMember(**m)
+            for m in json.loads(data.get("members_json", "[]"))
+        ]
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to deserialize members for {community_id}: {e}")
+        members = []
+
+    try:
+        relationships = [
+            CommunityRelationship(**r)
+            for r in json.loads(data.get("relationships_json", "[]"))
+        ]
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to deserialize relationships for {community_id}: {e}")
+        relationships = []
+
+    return Community(
+        community_id=community_id,
+        level=data.get("level", 0),
+        members=members,
+        member_count=data.get("member_count", len(members)),
+        relationships=relationships,
+        relationship_count=data.get("relationship_count", len(relationships)),
+        summary=data.get("summary", ""),
+    )
 
 
 # ============================================================================
@@ -215,28 +256,9 @@ def fetch_chunks_by_ids(
         client.close()
 
 
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two vectors.
-
-    Args:
-        a: First embedding vector.
-        b: Second embedding vector.
-
-    Returns:
-        Cosine similarity score in range [-1, 1].
-    """
-    a_arr = np.array(a)
-    b_arr = np.array(b)
-    norm_product = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
-    if norm_product == 0:
-        return 0.0
-    return float(np.dot(a_arr, b_arr) / norm_product)
-
-
 def retrieve_community_context_by_membership(
     entity_names: list[str],
     driver: Driver,
-    communities: Optional[list[Community]] = None,
 ) -> list[dict[str, Any]]:
     """Retrieve community summaries by entity membership (Microsoft approach).
 
@@ -244,10 +266,12 @@ def retrieve_community_context_by_membership(
     matched query entities. This is how Microsoft GraphRAG does local
     search community context.
 
+    Queries Neo4j for community IDs, then fetches full community data
+    from Weaviate by community_id filter.
+
     Args:
         entity_names: Entity names matched from query (already validated).
         driver: Neo4j driver instance.
-        communities: Pre-loaded communities (optional, loads from file if None).
 
     Returns:
         List of community dicts with summary, member info, and score.
@@ -271,159 +295,42 @@ def retrieve_community_context_by_membership(
 
     logger.info(f"Found {len(community_ids)} communities for entities {entity_names}")
 
-    # Load communities if not provided
-    if communities is None:
-        try:
-            communities = load_communities()
-        except FileNotFoundError:
-            logger.warning("No communities file found")
-            return []
-
-    # Build lookup by community_id (need to parse the key format)
-    from .hierarchy import parse_community_key, build_community_key
-
-    # Finest level = GRAPHRAG_MAX_HIERARCHY_LEVELS - 1 (e.g., L2 for 3 levels)
+    # Build Weaviate community_id keys for the finest level
     # Entities in Neo4j store community_id from Leiden's finest level
+    from .hierarchy import build_community_key
+
     finest_level = GRAPHRAG_MAX_HIERARCHY_LEVELS - 1
+    community_keys = [
+        build_community_key(finest_level, cid) for cid in community_ids
+    ]
 
-    community_lookup = {}
-    for c in communities:
-        # community_id format: "community_L2_42" → extract (level, id)
-        try:
-            level, cid = parse_community_key(c.community_id)
-            # Only include finest level (where entities have community_id)
-            if level == finest_level:
-                community_lookup[cid] = c
-        except ValueError:
-            continue
-
-    # Get matching communities
-    results = []
-    for cid in community_ids:
-        if cid in community_lookup:
-            c = community_lookup[cid]
-            results.append({
-                "community_id": c.community_id,
-                "summary": c.summary,
-                "member_count": c.member_count,
-                "score": 1.0,  # Full membership match
-            })
-
-    logger.info(f"Retrieved {len(results)} communities by entity membership")
-    return results
-
-
-def retrieve_community_context(
-    query: str,
-    communities: Optional[list[Community]] = None,
-    top_k: int = GRAPHRAG_TOP_COMMUNITIES,
-) -> list[dict[str, Any]]:
-    """Retrieve relevant community summaries using embedding similarity.
-
-    NOTE: This is the legacy approach. For local queries, prefer
-    retrieve_community_context_by_membership() which uses entity
-    membership (Microsoft GraphRAG approach).
-
-    Tries Weaviate first for efficient HNSW search, then falls back to
-    in-memory file-based search if Weaviate collection doesn't exist.
-
-    Args:
-        query: User query string.
-        communities: List of Community objects (only for legacy fallback).
-        top_k: Number of top communities to return.
-
-    Returns:
-        List of community dicts with summary, member info, and score.
-
-    Example:
-        >>> context = retrieve_community_context("What are the main themes?")
-        >>> for c in context:
-        ...     print(c["summary"][:100], c["score"])
-    """
-    # Try Weaviate first (preferred - O(log n) HNSW search)
+    # Fetch from Weaviate by community_id filter
     try:
         collection_name = get_community_collection_name()
         client = get_weaviate_client()
-
-        if client.collections.exists(collection_name):
-            logger.debug(f"Using Weaviate community retrieval from {collection_name}")
-            query_embedding = embed_texts([query])[0]
-
-            results = query_communities_by_vector(
+        try:
+            weaviate_results = fetch_communities_by_ids(
                 client=client,
                 collection_name=collection_name,
-                query_embedding=query_embedding,
-                top_k=top_k,
+                community_ids=community_keys,
             )
-
+        finally:
             client.close()
-            logger.info(f"Weaviate community retrieval found {len(results)} communities")
-            return results
-        else:
-            client.close()
-            logger.debug(f"Weaviate collection {collection_name} not found, using file fallback")
     except Exception as e:
-        logger.warning(f"Weaviate community retrieval failed: {e}, using file fallback")
-
-    # Fallback: file-based retrieval (legacy - O(n) loop)
-    if communities is None:
-        try:
-            communities = load_communities()
-        except FileNotFoundError:
-            logger.warning("No communities file found, skipping community retrieval")
-            return []
-
-    if not communities:
+        logger.warning(f"Weaviate community fetch failed: {e}")
         return []
 
-    # Check if embeddings are available
-    has_embeddings = any(c.embedding for c in communities)
+    results = [
+        {
+            "community_id": r["community_id"],
+            "summary": r["summary"],
+            "member_count": r["member_count"],
+            "score": 1.0,  # Full membership match
+        }
+        for r in weaviate_results
+    ]
 
-    if has_embeddings:
-        # Embedding-based retrieval (preferred)
-        logger.debug("Using file-based embedding community retrieval")
-        query_embedding = embed_texts([query])[0]
-
-        scored = []
-        for community in communities:
-            if community.embedding:
-                similarity = cosine_similarity(query_embedding, community.embedding)
-                scored.append((similarity, community))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-    else:
-        # Fallback: keyword matching (legacy)
-        logger.debug("No community embeddings, using keyword fallback")
-        query_words = set(query.lower().split())
-
-        scored = []
-        for community in communities:
-            # Count keyword matches in summary
-            summary_words = set(community.summary.lower().split())
-            overlap = len(query_words & summary_words)
-
-            # Also check member names
-            member_names = " ".join(m.entity_name for m in community.members).lower()
-            member_overlap = sum(1 for w in query_words if w in member_names)
-
-            score = overlap + member_overlap * 2  # Weight member matches higher
-
-            if score > 0:
-                scored.append((score, community))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-
-    # Return top-k
-    results = []
-    for score, community in scored[:top_k]:
-        results.append({
-            "community_id": community.community_id,
-            "summary": community.summary,
-            "member_count": community.member_count,
-            "score": float(score),
-        })
-
-    logger.info(f"File-based community retrieval found {len(results)} communities")
+    logger.info(f"Retrieved {len(results)} communities by entity membership")
     return results
 
 
@@ -433,64 +340,42 @@ def retrieve_communities_for_map_reduce(
 ) -> list[Community]:
     """Retrieve full Community objects for map-reduce processing.
 
-    Unlike retrieve_community_context() which returns dicts,
-    this returns full Community objects with members and relationships
-    for use in map-reduce global queries.
-
-    Microsoft GraphRAG uses ALL communities at the selected level for
-    global queries (map-reduce over all community reports).
+    Returns full Community objects with members and relationships
+    for use in map-reduce global queries. Fetches ALL communities
+    at the specified level from Weaviate (Microsoft GraphRAG design).
 
     Args:
-        query: User query string.
+        query: User query string (unused — all L0 communities are fetched).
         level: Hierarchy level filter (0=coarsest for global queries).
 
     Returns:
-        List of Community objects sorted by relevance (full data for map-reduce).
+        List of Community objects with full data for map-reduce.
     """
-    # Load communities from JSON (has full data)
+    if level is None:
+        level = 0
+
     try:
-        communities = load_communities()
-    except FileNotFoundError:
-        logger.warning("No communities file found for map-reduce")
+        collection_name = get_community_collection_name()
+        client = get_weaviate_client()
+        try:
+            weaviate_results = fetch_all_communities_by_level(
+                client=client,
+                collection_name=collection_name,
+                level=level,
+            )
+        finally:
+            client.close()
+    except Exception as e:
+        logger.warning(f"Weaviate community fetch failed for map-reduce: {e}")
         return []
 
-    if not communities:
+    if not weaviate_results:
+        logger.warning(f"No communities found at level {level} in Weaviate")
         return []
 
-    # Filter by level if specified (L0 = coarsest for global queries)
-    if level is not None:
-        communities = [c for c in communities if c.level == level]
-        logger.debug(f"Filtered to {len(communities)} communities at level {level}")
-
-    if not communities:
-        return []
-
-    # Sort by relevance (embedding similarity or keyword matching)
-    has_embeddings = any(c.embedding for c in communities)
-
-    if has_embeddings:
-        query_embedding = embed_texts([query])[0]
-
-        scored = []
-        for community in communities:
-            if community.embedding:
-                similarity = cosine_similarity(query_embedding, community.embedding)
-                scored.append((similarity, community))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [community for _, community in scored]
-    else:
-        # Fallback: keyword matching
-        query_words = set(query.lower().split())
-
-        scored = []
-        for community in communities:
-            summary_words = set(community.summary.lower().split())
-            overlap = len(query_words & summary_words)
-            scored.append((overlap, community))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [community for _, community in scored]
+    communities = [_deserialize_community(r) for r in weaviate_results]
+    logger.info(f"Retrieved {len(communities)} communities at level {level} from Weaviate")
+    return communities
 
 
 def get_graph_chunk_ids(

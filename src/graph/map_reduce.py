@@ -228,7 +228,7 @@ async def map_reduce_global_query_async(
         MapReduceResult with final answer and timing info.
 
     Example:
-        >>> communities = retrieve_community_context(query, top_k=5)
+        >>> communities = retrieve_communities_for_map_reduce(query, level=0)
         >>> result = await map_reduce_global_query_async(query, communities)
         >>> print(result.final_answer)
     """
@@ -344,7 +344,7 @@ def map_reduce_global_query(
         MapReduceResult with final answer.
 
     Example:
-        >>> communities = retrieve_community_context(query, top_k=5)
+        >>> communities = retrieve_communities_for_map_reduce(query, level=0)
         >>> result = map_reduce_global_query(query, communities)
         >>> print(result.final_answer)
     """

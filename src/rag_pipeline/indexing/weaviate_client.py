@@ -274,6 +274,8 @@ def create_community_collection(
             Property(name="member_count", data_type=DataType.INT),
             Property(name="relationship_count", data_type=DataType.INT),
             Property(name="level", data_type=DataType.INT),
+            Property(name="members_json", data_type=DataType.TEXT),
+            Property(name="relationships_json", data_type=DataType.TEXT),
         ],
     )
 
@@ -299,6 +301,8 @@ def upload_community(
     member_count: int,
     relationship_count: int = 0,
     level: int = 0,
+    members_json: str = "[]",
+    relationships_json: str = "[]",
 ) -> None:
     """Upload a single community to Weaviate.
 
@@ -314,6 +318,8 @@ def upload_community(
         member_count: Number of entities in community.
         relationship_count: Number of relationships in community.
         level: Hierarchy level (0 = base level).
+        members_json: JSON-serialized list of CommunityMember dicts.
+        relationships_json: JSON-serialized list of CommunityRelationship dicts.
     """
     collection = client.collections.get(collection_name)
 
@@ -324,6 +330,8 @@ def upload_community(
             "member_count": member_count,
             "relationship_count": relationship_count,
             "level": level,
+            "members_json": members_json,
+            "relationships_json": relationships_json,
         },
         vector=embedding,
         uuid=_generate_uuid_from_community_id(community_id),
@@ -401,6 +409,99 @@ def query_communities_by_vector(
             "summary": obj.properties["summary"],
             "member_count": obj.properties["member_count"],
             "score": similarity,
+        })
+
+    return results
+
+
+def fetch_all_communities_by_level(
+    client: weaviate.WeaviateClient,
+    collection_name: str,
+    level: int,
+) -> list[dict[str, Any]]:
+    """Fetch all communities at a specific hierarchy level.
+
+    Used for global queries (map-reduce) where ALL L0 communities
+    are needed (Microsoft GraphRAG design). No vector ranking —
+    retrieves every community matching the level filter.
+
+    Args:
+        client: Connected Weaviate client.
+        collection_name: Community collection name.
+        level: Hierarchy level to filter (0 = coarsest for global queries).
+
+    Returns:
+        List of dicts with community_id, summary, member_count,
+        members_json, and relationships_json.
+    """
+    from weaviate.classes.query import Filter
+
+    if not client.collections.exists(collection_name):
+        return []
+
+    collection = client.collections.get(collection_name)
+
+    response = collection.query.fetch_objects(
+        filters=Filter.by_property("level").equal(level),
+        limit=1000,
+    )
+
+    results = []
+    for obj in response.objects:
+        results.append({
+            "community_id": obj.properties["community_id"],
+            "summary": obj.properties["summary"],
+            "member_count": obj.properties["member_count"],
+            "relationship_count": obj.properties.get("relationship_count", 0),
+            "level": obj.properties.get("level", 0),
+            "members_json": obj.properties.get("members_json", "[]"),
+            "relationships_json": obj.properties.get("relationships_json", "[]"),
+        })
+
+    return results
+
+
+def fetch_communities_by_ids(
+    client: weaviate.WeaviateClient,
+    collection_name: str,
+    community_ids: list[str],
+) -> list[dict[str, Any]]:
+    """Fetch communities by their community_id values.
+
+    Used for local queries where community context is retrieved
+    by entity membership (specific community IDs from Neo4j).
+
+    Args:
+        client: Connected Weaviate client.
+        collection_name: Community collection name.
+        community_ids: List of community_id strings to fetch.
+
+    Returns:
+        List of dicts with community_id, summary, member_count,
+        members_json, and relationships_json.
+    """
+    from weaviate.classes.query import Filter
+
+    if not community_ids or not client.collections.exists(collection_name):
+        return []
+
+    collection = client.collections.get(collection_name)
+
+    response = collection.query.fetch_objects(
+        filters=Filter.by_property("community_id").contains_any(community_ids),
+        limit=len(community_ids),
+    )
+
+    results = []
+    for obj in response.objects:
+        results.append({
+            "community_id": obj.properties["community_id"],
+            "summary": obj.properties["summary"],
+            "member_count": obj.properties["member_count"],
+            "relationship_count": obj.properties.get("relationship_count", 0),
+            "level": obj.properties.get("level", 0),
+            "members_json": obj.properties.get("members_json", "[]"),
+            "relationships_json": obj.properties.get("relationships_json", "[]"),
         })
 
     return results
