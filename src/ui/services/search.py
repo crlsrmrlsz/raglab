@@ -50,7 +50,7 @@ from src.shared.files import setup_logging
 
 logger = setup_logging(__name__)
 from src.rag_pipeline.indexing import get_client, query_similar, query_hybrid, SearchResult
-from src.rag_pipeline.retrieval.reranking_utils import apply_reranking_with_metadata
+from src.rag_pipeline.retrieval.reranking import apply_reranking_with_metadata
 
 # Import RRF for backward compatibility (search_multi_query still exists)
 from src.rag_pipeline.retrieval.rrf import reciprocal_rank_fusion, RRFResult

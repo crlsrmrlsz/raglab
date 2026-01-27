@@ -59,7 +59,7 @@ from src.config import (
     SEMANTIC_STD_COEFFICIENT,
     get_semantic_folder_name,
 )
-from src.rag_pipeline.embedding.embedder import embed_texts
+from src.rag_pipeline.embedder import embed_texts
 from src.rag_pipeline.chunking.section_chunker import (
     split_oversized_sentence,
     parse_section_name,

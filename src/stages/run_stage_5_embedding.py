@@ -31,7 +31,7 @@ from src.config import (
 )
 
 from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_arg
-from src.rag_pipeline.embedding.embedder import embed_texts
+from src.rag_pipeline.embedder import embed_texts
 from src.rag_pipeline.chunking.strategies import list_strategies
 
 # ---------------------------------------------------------------------------

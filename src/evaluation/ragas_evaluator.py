@@ -39,7 +39,7 @@ from src.config import (
     EVAL_TRACES_DIR,
 )
 from src.rag_pipeline.indexing import get_client, query_hybrid
-from src.rag_pipeline.retrieval.reranking_utils import apply_reranking_if_enabled
+from src.rag_pipeline.retrieval.reranking import apply_reranking_if_enabled
 from src.shared.files import setup_logging
 from src.shared.openrouter_client import call_simple_prompt
 from src.evaluation.schemas import QuestionTrace, EvaluationTrace

@@ -11,7 +11,7 @@ from src.shared import (
     OverwriteContext,
     parse_overwrite_arg,
 )
-from src.content_preparation.cleaning.text_cleaner import run_structural_cleaning, setup_cleaning_logger
+from src.content_preparation.cleaning import run_structural_cleaning, setup_cleaning_logger
 
 logger = setup_logging("Stage2_Processing")
 

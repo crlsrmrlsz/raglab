@@ -22,9 +22,9 @@ from src.rag_pipeline.retrieval.strategy_protocol import (
 from src.rag_pipeline.retrieval.query_preprocessing import preprocess_query
 from src.rag_pipeline.retrieval.query_strategy_config import get_strategy_config
 from src.rag_pipeline.retrieval.query_helpers import execute_search
-from src.rag_pipeline.embedding.embedder import embed_texts
+from src.rag_pipeline.embedder import embed_texts
 from src.rag_pipeline.indexing.weaviate_query import query_hybrid
-from src.rag_pipeline.retrieval.reranking_utils import apply_reranking_if_enabled
+from src.rag_pipeline.retrieval.reranking import apply_reranking_if_enabled
 from src.shared.files import setup_logging
 
 logger = setup_logging(__name__)

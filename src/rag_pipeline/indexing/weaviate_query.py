@@ -15,7 +15,7 @@ import weaviate
 from weaviate.classes.query import MetadataQuery, Filter
 
 from src.config import get_collection_name
-from src.rag_pipeline.embedding.embedder import embed_texts
+from src.rag_pipeline.embedder import embed_texts
 from src.shared.files import setup_logging
 
 logger = setup_logging(__name__)

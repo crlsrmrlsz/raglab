@@ -60,7 +60,7 @@ from src.config import (
 )
 from src.shared.files import setup_logging
 from src.shared.tokens import count_tokens
-from src.rag_pipeline.embedding.embedder import embed_texts
+from src.rag_pipeline.embedder import embed_texts
 from src.rag_pipeline.chunking.raptor.schemas import (
     RaptorNode,
     ClusterResult,

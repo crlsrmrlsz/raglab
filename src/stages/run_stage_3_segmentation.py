@@ -12,7 +12,7 @@ from src.shared import (
     OverwriteContext,
     parse_overwrite_arg,
 )
-from src.content_preparation.segmentation.nlp_segmenter import segment_document
+from src.content_preparation.segmentation import segment_document
 
 logger = setup_logging("Stage3_Segmentation")
 

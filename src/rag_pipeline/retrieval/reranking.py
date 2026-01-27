@@ -276,3 +276,62 @@ def get_model_info() -> dict:
         "default_initial_k": RERANK_INITIAL_K,
         "description": "Cross-encoder reranker for two-stage retrieval",
     }
+
+
+# =============================================================================
+# RERANKING UTILITIES
+# =============================================================================
+
+
+def apply_reranking_if_enabled(
+    results: list[SearchResult],
+    question: str,
+    top_k: int,
+    use_reranking: bool,
+) -> list[SearchResult]:
+    """Apply cross-encoder reranking if enabled and results exist.
+
+    This is the simple interface for evaluation code that only needs
+    the reranked results list.
+
+    Args:
+        results: Search results to potentially rerank.
+        question: Original question for reranking context.
+        top_k: Number of results to return after reranking.
+        use_reranking: Whether reranking is enabled.
+
+    Returns:
+        Reranked list if use_reranking is True and results exist,
+        otherwise returns original results.
+    """
+    if use_reranking and results:
+        return rerank(question, results, top_k=top_k).results
+    return results
+
+
+def apply_reranking_with_metadata(
+    results: list[SearchResult],
+    question: str,
+    top_k: int,
+    use_reranking: bool,
+) -> tuple[list[SearchResult], Optional[RerankResult]]:
+    """Apply cross-encoder reranking and return both results and metadata.
+
+    This is the interface for UI code that needs reranking metadata
+    (timing info, order changes) for logging/display.
+
+    Args:
+        results: Search results to potentially rerank.
+        question: Original question for reranking context.
+        top_k: Number of results to return after reranking.
+        use_reranking: Whether reranking is enabled.
+
+    Returns:
+        Tuple of (reranked_results, rerank_metadata):
+        - reranked_results: List of SearchResult (reranked or original)
+        - rerank_metadata: RerankResult with timing/order info, or None if not reranked
+    """
+    if use_reranking and results:
+        rerank_result = rerank(question, results, top_k=top_k)
+        return rerank_result.results, rerank_result
+    return results, None

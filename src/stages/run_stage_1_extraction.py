@@ -11,7 +11,7 @@ from src.shared import (
     OverwriteContext,
     parse_overwrite_arg,
 )
-from src.content_preparation.extraction.docling_parser import extract_pdf
+from src.content_preparation.extraction import extract_pdf
 
 logger = setup_logging("Stage1_Extraction")
 

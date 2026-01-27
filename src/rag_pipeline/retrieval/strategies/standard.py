@@ -12,7 +12,7 @@ from src.rag_pipeline.retrieval.strategy_protocol import (
 )
 from src.rag_pipeline.retrieval.query_preprocessing import preprocess_query
 from src.rag_pipeline.retrieval.query_helpers import execute_search
-from src.rag_pipeline.retrieval.reranking_utils import apply_reranking_if_enabled
+from src.rag_pipeline.retrieval.reranking import apply_reranking_if_enabled
 from src.shared.files import setup_logging
 
 logger = setup_logging(__name__)
