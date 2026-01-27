@@ -3,20 +3,26 @@
 [← GraphRAG](../preprocessing/graphrag.md) | [Home](../../README.md)
 
 
-RAGLab uses [RAGAS (Retrieval-Augmented Generation Assessment)](https://docs.ragas.io/) to evaluate different RAG configurations, systematically testing which combinations of chunking, alpha (search balance), reranking, and preprocessing produce the best answers. RAGAS provides LLM-as-judge metrics that don't require human evaluation for every run, enabling automated comparison across many configurations. Unlike benchmarks that test generation given pre-retrieved documents (e.g., RAGBench), RAGLab evaluates the **full end-to-end pipeline** — from retrieval through generation — so metric differences reflect real pipeline behavior, not just LLM output quality.
+RAGLab uses [RAGAS (Retrieval-Augmented Generation Assessment)](https://docs.ragas.io/) to evaluate different RAG configurations, systematically testing which combinations of chunking, alpha (search balance), reranking, and preprocessing produce the best answers, especially for open, abstract questions connecting topics from neuroscience and philosophy.
 
-The **comprehensive mode** runs a 4D grid search across all valid combinations using a curated 15-question subset. **Single mode** runs one configuration against all 45 questions. Top-k is fixed at 15 for all evaluation runs.
+The main two characteristics of the evaluation done here are:
+- Corpus specific dataset, own-crafted from corpus and type of questions of interest
+- Full configuration combination test, to test the possible influence of each configuration decision or technique on the others.
 
-### Comprehensive Grid
+
+
+## RAG configuration combinations tested
+
+The different combinations iterate over these possible dimensions:
 
 <div align="center">
 
 | Dimension | Values | Notes |
 |-----------|--------|-------|
-| **Collections** | section, semantic_std2, semantic_std3, contextual, raptor | Chunking strategy used at index time |
-| **Alpha** | 0.0, 0.5, 1.0 | 0.0 = pure BM25, 0.5 = hybrid, 1.0 = pure semantic |
+| **Chunk Collections** | section, semantic_std2, semantic_std3, contextual, raptor | Chunking strategy used at index time |
+| **Search Type (Alpha)** | 0.0, 0.5, 1.0 | 0.0 = pure BM25, 0.5 = hybrid, 1.0 = pure semantic |
 | **Reranking** | on, off | Cross-encoder re-scoring of retrieved chunks |
-| **Strategy** | none, hyde, decomposition, graphrag | Query-time preprocessing |
+| **Advanced Strategy** | none, hyde, decomposition, graphrag | Query-time preprocessing |
 
 </div>
 
@@ -39,6 +45,8 @@ These constraints are enforced by `StrategyConfig` — a declarative configurati
 
 ## RAGAS Metrics
 
+RAGAS provides LLM-as-judge metrics that don't require human evaluation for every run, enabling automated comparison across many configurations. 
+
 Five metrics evaluate both retrieval and generation quality:
 
 <div align="center">
@@ -57,17 +65,14 @@ Five metrics evaluate both retrieval and generation quality:
 
 Answer Correctness combines two signals: **75% factual similarity** (statement overlap with reference) and **25% semantic similarity** (embedding distance). This weights factual accuracy over surface-level phrasing.
 
-### Key finding: Recall > Precision
-
-The generator LLM can filter irrelevant context (low precision is recoverable), but cannot invent missing information (low recall is unrecoverable). This means retrieval should prioritize casting a wide net over returning only precise results.
-
 ### GraphRAG metric differences
 
 GraphRAG contributes fewer grid combinations because it operates under dedicated constraints: a fixed collection (entity-chunk ID matching), fixed alpha (1.0), and its own graph-based ranking. The same 5 RAGAS metrics apply, but the retrieval path differs — entity extraction, graph traversal, and `combined_degree` ranking replace standard vector search.
 
----
 
 ## Test Dataset
+
+The test dataset was composed using Claude Code by reading the whole corpus and creating different types of questions, with ground truth references to evaluate Context Recall and Answer Correctness.
 
 ### Corpus
 
@@ -97,40 +102,15 @@ GraphRAG contributes fewer grid combinations because it operates under dedicated
 
 The 15-question curated subset (`comprehensive_questions.json`) was selected for grid search based on: multi-source retrieval requirement, synthesis difficulty, and coverage of both single-concept and cross-domain question types. This smaller set keeps grid search tractable while maintaining evaluation signal.
 
----
 
 ## Running Evaluation
 
 ```bash
-# Single configuration (full 45 questions)
-python -m src.stages.run_stage_7_evaluation \
-  --collection RAG_section_embed3large_v1 \
-  --search-type hybrid \
-  --preprocessing hyde \
-  --alpha 0.7 \
-  --top-k 15
-
 # Comprehensive grid search (15-question curated subset)
 python -m src.stages.run_stage_7_evaluation --comprehensive
-
-# Retry failed combinations from a previous run
-python -m src.stages.run_stage_7_evaluation --retry-failed comprehensive_20251231_120000
 ```
 
-<div align="center">
 
-| Argument | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `--alpha`, `-a` | 0.0-1.0 | 0.5 | Search balance: 0.0=BM25, 0.5=hybrid, 1.0=semantic |
-| `--preprocessing`, `-p` | none, hyde, decomposition, graphrag | none | Query transformation strategy |
-| `--top-k`, `-k` | int | 10 | Chunks to retrieve (fixed at 15 in comprehensive) |
-| `--collection` | string | auto | Weaviate collection name |
-| `--reranking` | flag | off | Enable cross-encoder reranking |
-| `--comprehensive` | flag | - | Run 4D grid search over all valid combinations |
-
-</div>
-
----
 
 ## Navigation
 
