@@ -1,8 +1,8 @@
 # GraphRAG Entity Types
 # Optimized for dual-domain corpus: Neuroscience (8 books) + Philosophy/Wisdom (11 books)
 #
-# Design: 8 types following industry best practices (Microsoft: 4, LangChain: "basic types")
-# Goal: Connect brain mechanisms → psychological states → behaviors → philosophical principles
+# Design: 9 types following industry best practices (Microsoft: 4, LangChain: "basic types")
+# Goal: Connect brain mechanisms → psychological states → behaviors → theories & philosophy
 #
 # Previous version had 33 types with significant overlap (RESEARCHER/PHILOSOPHER/HISTORICAL_FIGURE,
 # PSYCHOLOGICAL_PHENOMENON/PSYCHOLOGICAL_CONCEPT, VIRTUE/VICE/ETHICAL_CONCEPT). Consolidated based on:
@@ -13,6 +13,8 @@
 # v3 changes: dropped WORK (low-connectivity, better as chunk metadata), added BRAIN_FUNCTION
 # to capture the process layer between anatomy and psychology (neuroplasticity, fear conditioning).
 # MENTAL_STATE vs BEHAVIOR kept separate but requires explicit boundary examples in extraction prompt.
+# v4 changes: split PRINCIPLE into THEORY (empirical) and PHILOSOPHY (normative) to prevent
+# dumping-ground effect. Extraction boundary: empirical/testable → THEORY, prescriptive/metaphysical → PHILOSOPHY.
 
 entity_types:
   # Generic (1) - minimal base
@@ -28,5 +30,6 @@ entity_types:
   - MENTAL_STATE     # internal experiences (emotion, consciousness, suffering, happiness)
   - BEHAVIOR         # observable patterns (procrastination, aggression, conformity, helping)
 
-  # Philosophy (1) - interpretive frameworks
-  - PRINCIPLE        # prescriptive/explanatory frameworks (dichotomy of control, dual process theory, wu wei, hedonic treadmill)
+  # Frameworks (2) - empirical vs normative, split to prevent dumping-ground effect
+  - THEORY           # empirical models: testable, explains *how something works* (dual process theory, prospect theory, classical conditioning, hedonic adaptation, cognitive dissonance)
+  - PHILOSOPHY       # normative/metaphysical: prescriptive, interprets *what is true or how to live* (stoicism, wu wei, dichotomy of control, virtue ethics, determinism, eudaimonia)
