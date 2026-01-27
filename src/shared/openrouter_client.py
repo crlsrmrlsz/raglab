@@ -367,22 +367,7 @@ def call_structured_completion(
                         f"Repaired malformed JSON from LLM "
                         f"({len(content)} -> {len(repaired)} chars)"
                     )
-                    try:
-                        return response_model.model_validate_json(repaired)
-                    except PydanticValidationError:
-                        # Truncated output may leave incomplete items in
-                        # arrays. Drop the last element of each top-level
-                        # list and retry validation.
-                        obj = json.loads(repaired)
-                        for key, val in obj.items():
-                            if isinstance(val, list) and val:
-                                obj[key] = val[:-1]
-                        trimmed = json.dumps(obj)
-                        logger.warning(
-                            "Trimmed trailing array elements from "
-                            "truncated LLM output"
-                        )
-                        return response_model.model_validate_json(trimmed)
+                    return response_model.model_validate_json(repaired)
 
             # Retryable errors: rate limit or server errors
             if response.status_code >= 500 or response.status_code == 429:
