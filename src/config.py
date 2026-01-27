@@ -681,7 +681,7 @@ GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-haiku-4.5"
 GRAPHRAG_SUMMARY_MODEL = CONTEXTUAL_MODEL  # -> deepseek/deepseek-v3.2
 
 # Entity extraction parameters
-GRAPHRAG_MAX_EXTRACTION_TOKENS = 4000  # Max tokens for extraction response
+GRAPHRAG_MAX_EXTRACTION_TOKENS = 8000  # Max tokens for extraction response
 GRAPHRAG_MAX_ENTITIES = 10             # Max entities per chunk (reduced from 15 to prevent truncation)
 GRAPHRAG_MAX_RELATIONSHIPS = 7         # Max relationships per chunk (reduced from 10 to prevent truncation)
 
