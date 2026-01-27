@@ -180,23 +180,19 @@ def decomposition_strategy(query: str, model: Optional[str] = None) -> Preproces
 def graphrag_strategy(query: str, model: Optional[str] = None) -> PreprocessedQuery:
     """GraphRAG: Pure graph retrieval with combined_degree ranking.
 
-    This strategy extracts entities from the query using embedding similarity
-    (primary) or LLM (fallback). Entities are stored in PreprocessedQuery.query_entities
-    for use during graph traversal at retrieval time.
-
-    Entity extraction uses the Microsoft GraphRAG reference approach:
-    - Primary: Embedding similarity search against entity descriptions (fast, ~50ms)
-    - Fallback: LLM-based extraction if embedding returns empty (~1-2s)
+    Extracts entities from the query using embedding similarity against
+    entity descriptions in Weaviate (~50ms). Entities are stored in
+    PreprocessedQuery.query_entities for graph traversal at retrieval time.
 
     The actual graph retrieval happens in the search phase where it can access
-    the Neo4j driver for entity validation and traversal. Chunks are ranked
-    by combined_degree (start_degree + neighbor_degree) per Microsoft's design.
+    the Neo4j driver for traversal. Chunks are ranked by combined_degree
+    (start_degree + neighbor_degree) per Microsoft's design.
 
     Research: arXiv:2404.16130 - GraphRAG: +72-83% win rate vs baseline
 
     Args:
         query: The user's original query.
-        model: Model for LLM fallback extraction (optional).
+        model: Model for preprocessing (optional).
 
     Returns:
         PreprocessedQuery with query_entities for retrieval layer.
