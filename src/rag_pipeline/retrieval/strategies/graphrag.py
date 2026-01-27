@@ -12,7 +12,7 @@ Key algorithm (local queries):
     2. Traverse Neo4j graph from entities -> find related chunk IDs
     3. Fetch graph-discovered chunks from Weaviate (batch filter, not vector search)
     4. Rank by combined_degree (Microsoft approach: hub entities = more informative)
-    5. Return top-k chunks
+    5. Return top-k chunks (no reranking — StrategyConfig forbids it)
 
 Key algorithm (global queries):
     1. LLM classifies query as local or global
@@ -28,7 +28,6 @@ from src.rag_pipeline.retrieval.strategy_protocol import (
 )
 from src.rag_pipeline.retrieval.query_preprocessing import preprocess_query
 from src.rag_pipeline.indexing.weaviate_query import SearchResult
-from src.rag_pipeline.retrieval.reranking_utils import apply_reranking_if_enabled
 from src.shared.files import setup_logging
 
 logger = setup_logging(__name__)
@@ -47,7 +46,7 @@ class GraphRAGRetrieval:
         1. Extract entities from query
         2. Traverse graph from entities -> related chunk IDs
         3. Rank by combined_degree (start_degree + neighbor_degree)
-        4. Return top-k chunks
+        4. Return top-k chunks (reranking forbidden by StrategyConfig)
 
     Flow (global):
         1. LLM classifies query as global
@@ -124,14 +123,6 @@ class GraphRAGRetrieval:
             )
             for r in results_dicts
         ]
-
-        # Apply reranking if enabled (after graph ranking)
-        results = apply_reranking_if_enabled(
-            results,
-            query,
-            context.top_k,
-            context.use_reranking,
-        )
 
         logger.info(
             f"[graphrag] Retrieved {len(results)} results "
