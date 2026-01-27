@@ -57,7 +57,7 @@ class GraphEntity(BaseModel):
         min_length=1,
     )
     entity_type: str = Field(
-        ...,
+        default="CONCEPT",
         description="Entity type from the allowed types list",
     )
     description: str = Field(
@@ -142,7 +142,7 @@ class GraphRelationship(BaseModel):
         description="Name of the target entity (to)",
     )
     relationship_type: str = Field(
-        ...,
+        default="RELATED_TO",
         description="Relationship type from the allowed types list",
     )
     description: str = Field(
