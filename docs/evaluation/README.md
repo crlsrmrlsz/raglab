@@ -35,7 +35,7 @@ Not all combinations are valid — each strategy declares constraints that reduc
 
 These constraints are enforced by `StrategyConfig` — a declarative configuration system that serves as the single source of truth. The UI, evaluation grid, and runtime retrieval all consult it to prevent invalid states, so only valid combinations are tested.
 
----
+
 
 ## RAGAS Metrics
 

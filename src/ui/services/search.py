@@ -56,8 +56,7 @@ from src.rag_pipeline.retrieval.reranking import apply_reranking_with_metadata
 from src.rag_pipeline.retrieval.rrf import reciprocal_rank_fusion, RRFResult
 
 # Import strategy pattern components
-from src.rag_pipeline.retrieval.strategy_protocol import RetrievalContext, RetrievalResult
-from src.rag_pipeline.retrieval.strategy_factory import get_strategy
+from src.rag_pipeline.retrieval.strategy_registry import RetrievalContext, RetrievalResult, get_strategy
 
 
 @dataclass

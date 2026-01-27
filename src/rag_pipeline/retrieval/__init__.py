@@ -6,8 +6,8 @@ from src.rag_pipeline.retrieval.query_preprocessing import (
     hyde_prompt,
     preprocess_query,
 )
-from src.rag_pipeline.retrieval.query_strategies import (
-    get_strategy,
+from src.rag_pipeline.retrieval.strategy_registry import (
+    get_functional_strategy as get_strategy,
     list_strategies,
     STRATEGIES,
 )

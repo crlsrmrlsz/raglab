@@ -22,7 +22,7 @@ Key algorithm (global queries):
 
 from typing import Optional
 
-from src.rag_pipeline.retrieval.strategy_protocol import (
+from src.rag_pipeline.retrieval.strategy_registry import (
     RetrievalContext,
     RetrievalResult,
 )

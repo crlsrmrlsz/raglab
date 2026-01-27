@@ -54,7 +54,7 @@ def extract_query_entities(
         >>> extract_query_entities("How does dopamine affect motivation?")
         ["dopamine", "motivation", "reward"]
     """
-    from src.rag_pipeline.embedding.embedder import embed_texts
+    from src.rag_pipeline.embedder import embed_texts
     from src.rag_pipeline.indexing.weaviate_client import (
         get_client as get_weaviate_client,
         query_entities_by_vector,

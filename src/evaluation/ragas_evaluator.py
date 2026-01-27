@@ -300,8 +300,7 @@ def retrieve_contexts(
           - GraphRAGRetrieval: Graph + vector hybrid
         - Cross-encoder reranking improves precision by 20-35%
     """
-    from src.rag_pipeline.retrieval.strategy_protocol import RetrievalContext
-    from src.rag_pipeline.retrieval.strategy_factory import get_strategy
+    from src.rag_pipeline.retrieval.strategy_registry import RetrievalContext, get_strategy
 
     collection_name = collection_name or get_collection_name()
 

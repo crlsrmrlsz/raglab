@@ -40,7 +40,7 @@ from src.shared.files import setup_logging
 
 if TYPE_CHECKING:
     from src.rag_pipeline.retrieval.reranking import RerankResult
-    from src.rag_pipeline.retrieval.strategy_protocol import RetrievalContext
+    from src.rag_pipeline.retrieval.strategy_registry import RetrievalContext
 
 logger = setup_logging(__name__)
 

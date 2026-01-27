@@ -109,7 +109,7 @@ def upload_entity_embeddings_to_weaviate(driver) -> int:
     Returns:
         Number of entities uploaded.
     """
-    from src.rag_pipeline.embedding.embedder import embed_texts
+    from src.rag_pipeline.embedder import embed_texts
     from src.rag_pipeline.indexing.weaviate_client import (
         get_client as get_weaviate_client,
         create_entity_collection,

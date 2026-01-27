@@ -251,7 +251,7 @@ def preprocess_query(
     """
     # Import here to avoid circular imports
     from src.config import DEFAULT_PREPROCESSING_STRATEGY
-    from src.rag_pipeline.retrieval.query_strategies import get_strategy
+    from src.rag_pipeline.retrieval.strategy_registry import get_functional_strategy as get_strategy
 
     # Use default strategy if none specified
     if strategy is None:

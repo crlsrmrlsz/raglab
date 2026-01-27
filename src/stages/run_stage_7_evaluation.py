@@ -79,7 +79,6 @@ from src.config import (
     EVAL_EVALUATION_MODEL,
     EVAL_TEST_QUESTIONS_FILE,
     EVAL_RESULTS_DIR,
-    EVAL_LOGS_DIR,
     EVAL_DEFAULT_METRICS,
     PROJECT_ROOT,
     MAX_CHUNK_TOKENS,
@@ -89,13 +88,7 @@ from src.config import (
 )
 from src.evaluation import run_evaluation
 from src.shared.files import setup_logging, OverwriteContext, parse_overwrite_arg
-from src.rag_pipeline.retrieval.query_strategy_config import (
-    get_strategy_config,
-    is_valid_combination,
-    list_strategy_configs,
-    EVAL_TOP_K,
-    get_all_collections,
-)
+from src.rag_pipeline.retrieval.query_strategy_config import get_strategy_config
 
 from src.evaluation.comprehensive import (
     run_comprehensive_evaluation,
