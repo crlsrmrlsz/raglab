@@ -334,25 +334,18 @@ def retrieve_community_context_by_membership(
     return results
 
 
-def retrieve_communities_for_map_reduce(
-    query: str,
-    level: Optional[int] = None,
-) -> list[Community]:
+def retrieve_communities_for_map_reduce(level: int = 0) -> list[Community]:
     """Retrieve full Community objects for map-reduce processing.
 
-    Returns full Community objects with members and relationships
-    for use in map-reduce global queries. Fetches ALL communities
-    at the specified level from Weaviate (Microsoft GraphRAG design).
+    Fetches ALL communities at the specified level from Weaviate
+    (Microsoft GraphRAG design: global queries use L0 coarsest level).
 
     Args:
-        query: User query string (unused — all L0 communities are fetched).
         level: Hierarchy level filter (0=coarsest for global queries).
 
     Returns:
         List of Community objects with full data for map-reduce.
     """
-    if level is None:
-        level = 0
 
     try:
         collection_name = get_community_collection_name()
@@ -675,7 +668,7 @@ def graph_retrieval_with_map_reduce(
     if use_map_reduce and should_use_map_reduce(query):
         logger.info("Global query detected, using map-reduce")
 
-        communities = retrieve_communities_for_map_reduce(query, level=0)
+        communities = retrieve_communities_for_map_reduce(level=0)
 
         if communities:
             mr_result = map_reduce_global_query(query, communities)
