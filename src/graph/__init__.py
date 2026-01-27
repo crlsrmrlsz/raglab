@@ -13,7 +13,7 @@ GraphRAG enables global queries ("What are the main themes across all documents?
 ## Module Structure
 
 - schemas.py: Pydantic models for entities, relationships, communities
-- extractor.py: LLM-based entity/relationship extraction
+- extraction_utils.py: LLM-based entity/relationship extraction and consolidation
 - neo4j_client.py: Neo4j connection and Cypher operations
 - community.py: Leiden detection + community summarization
 - hierarchy.py: Multi-level community parsing from Leiden
@@ -38,10 +38,6 @@ from .schemas import (
     Community,
     CommunityMember,
     CommunityRelationship,
-)
-from .extractor import (
-    load_chunks_for_extraction,
-    save_extraction_results,
 )
 from .neo4j_client import (
     get_driver,
@@ -73,7 +69,6 @@ from .map_reduce import (
 )
 from .query_entities import (
     extract_query_entities,
-    extract_query_entities_embedding,
 )
 from .query import (
     get_graph_chunk_ids,
@@ -91,9 +86,6 @@ __all__ = [
     "Community",
     "CommunityMember",
     "CommunityRelationship",
-    # Extraction helpers
-    "load_chunks_for_extraction",
-    "save_extraction_results",
     # Neo4j
     "get_driver",
     "get_gds_client",
@@ -119,7 +111,6 @@ __all__ = [
     "should_use_map_reduce",
     # Query entities
     "extract_query_entities",
-    "extract_query_entities_embedding",
     # Query
     "get_graph_chunk_ids",
     "retrieve_graph_context",

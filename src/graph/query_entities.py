@@ -30,20 +30,17 @@ from src.shared.files import setup_logging
 logger = setup_logging(__name__)
 
 
-# ============================================================================
-# Embedding-Based Entity Extraction
-# ============================================================================
-
-
-def extract_query_entities_embedding(
+def extract_query_entities(
     query: str,
     top_k: int = GRAPHRAG_ENTITY_EXTRACTION_TOP_K,
     min_similarity: float = GRAPHRAG_ENTITY_MIN_SIMILARITY,
 ) -> list[str]:
-    """Extract entities from query using embedding similarity.
+    """Extract entity mentions from query using embedding similarity.
 
     Searches entity descriptions in Weaviate for semantic matches to the query.
-    This is the primary extraction method per Microsoft GraphRAG reference.
+    Matches Microsoft GraphRAG reference implementation. All returned entities
+    are guaranteed to exist in Neo4j since both stores are populated from
+    the same indexing pipeline.
 
     Args:
         query: User query string.
@@ -51,12 +48,11 @@ def extract_query_entities_embedding(
         min_similarity: Minimum cosine similarity threshold.
 
     Returns:
-        List of entity names found via embedding search.
+        List of entity names found via embedding search (may be empty).
 
     Example:
-        >>> entities = extract_query_entities_embedding("What is dopamine?")
-        >>> entities
-        ["dopamine", "neurotransmitter", "reward"]
+        >>> extract_query_entities("How does dopamine affect motivation?")
+        ["dopamine", "motivation", "reward"]
     """
     from src.rag_pipeline.embedding.embedder import embed_texts
     from src.rag_pipeline.indexing.weaviate_client import (
@@ -99,33 +95,3 @@ def extract_query_entities_embedding(
     except Exception as e:
         logger.warning(f"Embedding extraction failed: {e}")
         return []
-
-
-# ============================================================================
-# Main Entity Extraction Function
-# ============================================================================
-
-
-def extract_query_entities(query: str) -> list[str]:
-    """Extract entity mentions from query using embedding similarity.
-
-    Matches Microsoft GraphRAG reference implementation:
-    embedding similarity search against entity descriptions in Weaviate.
-    All returned entities are guaranteed to exist in Neo4j since both
-    stores are populated from the same indexing pipeline.
-
-    Args:
-        query: User query string.
-
-    Returns:
-        List of entity names found in query (may be empty).
-
-    Example:
-        >>> extract_query_entities("How does dopamine affect motivation?")
-        ["dopamine", "motivation", "reward"]
-    """
-    entities = extract_query_entities_embedding(query)
-    if entities:
-        logger.info(f"Embedding extraction found: {entities}")
-
-    return entities

@@ -28,9 +28,8 @@ Uses the official neo4j Python driver (v6):
 """
 
 from typing import Any, Optional
-from contextlib import contextmanager
 
-from neo4j import GraphDatabase, Driver, Session
+from neo4j import GraphDatabase, Driver
 from graphdatascience import GraphDataScience
 
 from src.config import (
@@ -90,29 +89,6 @@ def get_gds_client(driver: Driver) -> GraphDataScience:
         '2.x.x'
     """
     return GraphDataScience.from_neo4j_driver(driver)
-
-
-@contextmanager
-def neo4j_session(driver: Driver):
-    """Context manager for Neo4j session.
-
-    Ensures session is properly closed after use.
-
-    Args:
-        driver: Neo4j driver instance.
-
-    Yields:
-        Neo4j Session.
-
-    Example:
-        >>> with neo4j_session(driver) as session:
-        ...     result = session.run("MATCH (n) RETURN count(n)")
-    """
-    session = driver.session()
-    try:
-        yield session
-    finally:
-        session.close()
 
 
 def verify_connection(driver: Driver) -> bool:

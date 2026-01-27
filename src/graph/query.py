@@ -166,7 +166,6 @@ def get_chunk_ids_from_graph(
     """Extract unique chunk IDs from graph context.
 
     Used to fetch full chunk content from Weaviate or files.
-    Handles both old format (source_chunk_id) and new format (source_chunk_ids list).
 
     Args:
         graph_context: List from retrieve_graph_context().
@@ -176,14 +175,9 @@ def get_chunk_ids_from_graph(
     """
     chunk_ids = set()
     for entity in graph_context:
-        # Handle new format: source_chunk_ids as list
-        if entity.get("source_chunk_ids"):
-            for cid in entity["source_chunk_ids"]:
-                if cid:
-                    chunk_ids.add(cid)
-        # Backward compatibility: source_chunk_id as string
-        elif entity.get("source_chunk_id"):
-            chunk_ids.add(entity["source_chunk_id"])
+        for cid in entity.get("source_chunk_ids", []):
+            if cid:
+                chunk_ids.add(cid)
     return list(chunk_ids)
 
 
@@ -456,14 +450,7 @@ def _build_graph_ranked_list(
         neighbor_degree = entity.get("degree", 0)
         combined_degree = start_degree + neighbor_degree
 
-        # Handle new format: source_chunk_ids as list
-        chunk_ids = entity.get("source_chunk_ids", [])
-        if not chunk_ids:
-            # Backward compatibility: source_chunk_id as string
-            chunk_id = entity.get("source_chunk_id")
-            chunk_ids = [chunk_id] if chunk_id else []
-
-        for chunk_id in chunk_ids:
+        for chunk_id in entity.get("source_chunk_ids", []):
             if chunk_id:
                 if chunk_id not in chunk_combined_degrees:
                     chunk_combined_degrees[chunk_id] = combined_degree
@@ -544,6 +531,7 @@ def graph_retrieval(
     driver: Driver,
     top_k: int = 10,
     collection_name: Optional[str] = None,
+    _precomputed: Optional[tuple[list[str], dict[str, Any]]] = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Pure graph retrieval without vector search (Microsoft GraphRAG design).
 
@@ -560,6 +548,8 @@ def graph_retrieval(
         driver: Neo4j driver instance.
         top_k: Number of results to return.
         collection_name: Weaviate collection (default: from config).
+        _precomputed: Pre-computed (graph_chunk_ids, graph_meta) from caller
+            to avoid redundant entity extraction. Internal use only.
 
     Returns:
         Tuple of:
@@ -575,8 +565,11 @@ def graph_retrieval(
         >>> len(results) <= 10
         True
     """
-    # Get graph chunk IDs and metadata
-    graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
+    # Use pre-computed data if available, otherwise compute
+    if _precomputed is not None:
+        graph_chunk_ids, graph_meta = _precomputed
+    else:
+        graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
 
     # Get community context by entity membership (Microsoft approach)
     query_entities = graph_meta.get("query_entities", [])
@@ -704,12 +697,14 @@ def graph_retrieval_with_map_reduce(
                 "falling back to local graph retrieval"
             )
 
-    # Local query path: pure graph retrieval
+    # Local query path: pure graph retrieval (pass pre-computed data to avoid
+    # redundant entity extraction + graph traversal)
     results, metadata = graph_retrieval(
         query=query,
         driver=driver,
         top_k=top_k,
         collection_name=collection_name,
+        _precomputed=(graph_chunk_ids, graph_meta),
     )
     metadata["query_type"] = "local"
     return results, metadata
