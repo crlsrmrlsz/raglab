@@ -9,20 +9,24 @@
 # - Corpus extraction analysis (discovered_types.json): PERSON fragmented across 6 types (~9k entities)
 # - Evaluation questions: queries connect brain→behavior→philosophy, not fine-grained subtypes
 # - Industry consensus: 4-6 generic + 2-4 domain-specific maximum
+#
+# v3 changes: dropped WORK (low-connectivity, better as chunk metadata), added BRAIN_FUNCTION
+# to capture the process layer between anatomy and psychology (neuroplasticity, fear conditioning).
+# MENTAL_STATE vs BEHAVIOR kept separate but requires explicit boundary examples in extraction prompt.
 
 entity_types:
-  # Generic (2) - minimal base
+  # Generic (1) - minimal base
   - PERSON           # researchers, philosophers, historical figures (Sapolsky, Epictetus, Kahneman)
-  - WORK             # books, papers, texts (Behave, Meditations, Thinking Fast and Slow)
 
-  # Neuroscience (3) - causal mechanisms
+  # Neuroscience (4) - structure, function, chemistry, pathology
   - BRAIN_STRUCTURE  # regions, systems (amygdala, prefrontal cortex, thalamus, nucleus accumbens)
+  - BRAIN_FUNCTION   # processes, mechanisms (neuroplasticity, long-term potentiation, fear conditioning, fight-or-flight)
   - CHEMICAL         # neurotransmitters, hormones (dopamine, serotonin, oxytocin, cortisol)
   - DISORDER         # clinical conditions (PTSD, depression, addiction)
 
   # Psychology bridge (2) - observable and internal
-  - MENTAL_STATE     # internal experiences (emotion, consciousness, suffering, happiness, self-control)
-  - BEHAVIOR         # observable patterns (procrastination, aggression, empathy, conformity)
+  - MENTAL_STATE     # internal experiences (emotion, consciousness, suffering, happiness)
+  - BEHAVIOR         # observable patterns (procrastination, aggression, conformity, helping)
 
   # Philosophy (1) - interpretive frameworks
-  - PRINCIPLE        # ideas, theories, virtues (dichotomy of control, wu wei, hedonic treadmill, virtue)
+  - PRINCIPLE        # prescriptive/explanatory frameworks (dichotomy of control, dual process theory, wu wei, hedonic treadmill)
