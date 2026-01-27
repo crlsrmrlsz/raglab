@@ -249,14 +249,15 @@ def call_structured_completion(
     max_retries: int = 5,
     backoff_base: float = 2.5,
 ) -> T:
-    """Call OpenRouter with JSON mode and Pydantic validation.
+    """Call OpenRouter with JSON Schema mode and Pydantic validation.
 
     This function provides structured outputs by:
-    1. Requesting JSON output from the model (json_object mode)
-    2. Parsing and validating response with Pydantic
+    1. Generating a JSON Schema from the Pydantic model
+    2. Requesting schema-constrained output from the model (json_schema mode)
+    3. Parsing and validating response with Pydantic
 
-    Uses json_object mode for broad compatibility across providers.
-    Pydantic validation ensures the response matches the expected schema.
+    Uses json_schema mode to constrain LLM output at generation time.
+    Pydantic validation provides a secondary check with JSON repair fallback.
 
     Args:
         messages: List of message dicts with 'role' and 'content' keys.
@@ -297,13 +298,25 @@ def call_structured_completion(
         "Content-Type": "application/json",
     }
 
-    # Build payload with json_object mode (widely supported across providers)
+    # Build payload with json_schema mode for schema-guided output.
+    # strict=false allows defaults and constraints (minLength, min/max)
+    # that strict mode would reject. Some models still wrap output in
+    # markdown fences, which is handled by the fence-stripping below.
+    json_schema = response_model.model_json_schema()
+
     payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "response_format": {"type": "json_object"},
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": response_model.__name__,
+                "strict": False,
+                "schema": json_schema,
+            },
+        },
     }
 
     for attempt in range(max_retries + 1):
@@ -328,12 +341,24 @@ def call_structured_completion(
 
                 content = result["choices"][0]["message"]["content"]
 
+                # Strip markdown code fences (```json ... ```) that some
+                # models wrap around JSON output in json_object mode
+                stripped = content.strip()
+                if stripped.startswith("```"):
+                    # Remove opening fence (```json or ```)
+                    first_newline = stripped.index("\n")
+                    stripped = stripped[first_newline + 1:]
+                    # Remove closing fence
+                    if stripped.endswith("```"):
+                        stripped = stripped[:-3].rstrip()
+                    content = stripped
+
                 # Log successful LLM call
                 chars_in = sum(len(m.get("content", "")) for m in messages)
                 chars_out = len(content)
                 logger.info(f"[LLM] model={model} chars_in={chars_in} chars_out={chars_out} (structured)")
 
-                # Parse and validate with Pydantic (repair malformed JSON first)
+                # Parse and validate with Pydantic (repair malformed JSON as fallback)
                 try:
                     return response_model.model_validate_json(content)
                 except PydanticValidationError:
