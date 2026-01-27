@@ -696,7 +696,7 @@ GRAPHRAG_CHUNKING_STRATEGY = "semantic_std2"  # Uses semantic chunks for topic c
 #   get_graphrag_chunk_collection_name() -> "RAG_semantic_std2_embed3large_v1"
 
 # Extraction
-GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-3-haiku"
+GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-haiku-4.5"
 GRAPHRAG_SUMMARY_MODEL = "deepseek/deepseek-v3.2"
 GRAPHRAG_MAX_EXTRACTION_TOKENS = 4000
 GRAPHRAG_MAX_ENTITIES = 10        # Per chunk (paper: no limit)

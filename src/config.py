@@ -673,9 +673,9 @@ NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "raglab_graphrag")
 
 # Model for entity/relationship extraction
-# Claude 3 Haiku for reliable structured output (JSON Schema)
+# Claude Haiku 4.5 for reliable structured output (JSON Schema)
 # GPT-4o-mini produced 400 errors with structured output
-GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-3-haiku"
+GRAPHRAG_EXTRACTION_MODEL = "anthropic/claude-haiku-4.5"
 
 # Model for community summarization (same as extraction for consistency)
 GRAPHRAG_SUMMARY_MODEL = CONTEXTUAL_MODEL  # -> deepseek/deepseek-v3.2
