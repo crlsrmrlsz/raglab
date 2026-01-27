@@ -132,7 +132,6 @@ Based on [RAGAS research "Evaluating the Evaluators"](https://blog.ragas.io/eval
 
 **Rationale:** Cross-domain corpus (philosophy + neuroscience) requires diverse training data. MiniLM trained only on web search queries underperforms on BEIR (+16% gap). mxbai-xsmall offers best quality/speed balance for CPU.
 
-See `docs/preprocessing/reranking.md` for full analysis.
 
 ---
 

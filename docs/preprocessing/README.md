@@ -52,23 +52,6 @@ How each technique improves retrieval:
 
 - **GraphRAG**: Synthesizes information across documents by leveraging a pre-built knowledge graph. Entity extraction identifies key concepts in the query, which are matched to graph communities (clusters of related entities). Community summaries provide corpus-wide context that no individual chunk contains, enabling answers to thematic or comparative questions.
 
-### Reranking (After Search)
-
-<div align="center">
-
-| Strategy | Failure Mode Addressed | Latency |
-|----------|------------------------|---------|
-| **None** | — (baseline) | 0ms |
-| [**Cross-Encoder**](reranking.md) | Recall vs precision tradeoff | ~1s CPU |
-
-</div>
-
-How reranking improves retrieval:
-
-- **Cross-Encoder**: Initial retrieval (BM25 or hybrid) optimizes for recall—casting a wide net to avoid missing relevant documents. A cross-encoder then re-scores candidates by jointly encoding query and passage together, enabling fine-grained semantic comparison. This boosts precision by pushing truly relevant chunks to the top while demoting tangentially related results.
-
-
-
 
 ## Navigation
 

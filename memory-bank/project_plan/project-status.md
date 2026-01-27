@@ -69,7 +69,6 @@ The pipeline includes RAGAS-based evaluation metrics:
 - Chosen for cross-domain corpus (philosophy + neuroscience)
 - 8x faster than large-v1 on CPU (~3s vs ~60s for 50 docs)
 - MiniLM alternatives faster but trained only on web search (lower BEIR scores)
-- See `docs/preprocessing/reranking.md` for full model comparison
 
 ## Stage 8: Query Preprocessing + Answer Generation (Completed Dec 22)
 

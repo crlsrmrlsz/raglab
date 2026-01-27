@@ -19,6 +19,7 @@ Since April 2024, GraphRAG has evolved significantly: Microsoft added DRIFT sear
 **Paper:** "From Local to Global: A Graph RAG Approach to Query-Focused Summarization"
 **Authors:** Edge et al. (Microsoft Research)
 **Published:** April 2024 ([arXiv:2404.16130](https://arxiv.org/abs/2404.16130))
+([Microsoft GraphRAG Official Implementation](https://github.com/microsoft/graphrag))
 
 Standard RAG retrieves chunks similar to a query, but similarity isn't synthesis. The authors wanted systems that could answer corpus-wide questions—"What are the main themes across all documents?"—which require understanding patterns, not just finding relevant passages. Their solution: transform documents into a hierarchical knowledge structure that can be queried at different abstraction levels.
 
@@ -30,7 +31,7 @@ Indexing runs once per corpus, building the graph and community structures neede
     <img src="../../assets/graphrag_index.png" alt="GraphRAG index pipeline">
 </div>
 
-1. **Chunking** — Split documents into text units for extraction.
+1. **Chunking** — Split documents into text units for extraction. It uses semantic chunking with 2 standard deviation coefficient.
 
 2. **Entity extraction** — An LLM processes each chunk, extracting entities with predefined types (PERSON, BRAIN_STRUCTURE, CONCEPT) and relationships between them. Each relationship includes a description and a strength score (1-10). The paper recommends "gleaning"—multiple extraction passes where the LLM is prompted to find missed entities.
 
@@ -122,26 +123,13 @@ Strict mode (`GRAPHRAG_STRICT_MODE = True`) discards entities with types not in 
 
 **RRF fusion.** Local search combines vector results with graph traversal results using Reciprocal Rank Fusion (k=60). Chunks appearing in both lists get boosted—semantically similar AND structurally related.
 
-### Configuration
 
-```python
-# src/config.py
-GRAPHRAG_TRAVERSE_DEPTH = 2        # Hops from query entities
-GRAPHRAG_TOP_COMMUNITIES = 3       # Community summaries in context
-GRAPHRAG_RRF_K = 60                # RRF fusion constant
-GRAPHRAG_LEIDEN_SEED = 42          # Deterministic communities
-```
-
----
 
 ## Navigation
-
-**Next:** [Reranking](reranking.md) — Cross-encoder for precision
 
 **Related:**
 - [RAPTOR](../chunking/raptor.md) — Alternative hierarchy via clustering (no Neo4j)
 - [HyDE](hyde.md) — Simpler query transformation (no graph)
 - [Query Decomposition](query-decomposition.md) — Sub-query strategy
 - [Preprocessing Overview](README.md) — Strategy comparison
-- [Paper (arXiv)](https://arxiv.org/abs/2404.16130) — Original GraphRAG research
-- [Microsoft GraphRAG](https://github.com/microsoft/graphrag) — Official implementation
+

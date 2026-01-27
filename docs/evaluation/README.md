@@ -1,6 +1,6 @@
 # Evaluation Framework
 
-[← Reranking](../preprocessing/reranking.md) | [Home](../../README.md)
+[Home](../../README.md)
 
 > **Framework:** [RAGAS (Retrieval-Augmented Generation Assessment)](https://docs.ragas.io/)
 

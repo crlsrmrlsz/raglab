@@ -271,7 +271,7 @@ MAX_TOP_K = 20
 # - mxbai-xsmall offers 8x speedup vs large-v1 while retaining diverse training
 # - Expected: ~3s for 50 docs on CPU (vs ~1min with large-v1)
 #
-# Model Comparison (see docs/preprocessing/reranking.md for full analysis):
+# Model Comparison:
 # ┌─────────────────────────────────────┬─────────┬────────────┬──────────────────┐
 # │ Model                               │ Params  │ BEIR NDCG  │ CPU Speed        │
 # ├─────────────────────────────────────┼─────────┼────────────┼──────────────────┤
