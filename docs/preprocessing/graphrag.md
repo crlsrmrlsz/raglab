@@ -127,6 +127,8 @@ Strict mode (`GRAPHRAG_STRICT_MODE = True`) discards entities with types not in 
 
 ## Navigation
 
+**Next:** [Evaluation Framework](../evaluation/README.md) — How strategies are compared
+
 **Related:**
 - [RAPTOR](../chunking/raptor.md) — Alternative hierarchy via clustering (no Neo4j)
 - [HyDE](hyde.md) — Simpler query transformation (no graph)
