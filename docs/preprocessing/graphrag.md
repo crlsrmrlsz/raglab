@@ -123,7 +123,7 @@ Strict mode (`GRAPHRAG_STRICT_MODE = True`) discards entities with types not in 
 
 **Deterministic Leiden.** RAGLab runs Leiden with `seed=42` and `concurrency=1`, guaranteeing identical community assignments across runs. This enables crash recovery: if summarization fails midway, re-running picks up where it stopped.
 
-**RRF fusion.** Local search combines vector results with graph traversal results using Reciprocal Rank Fusion (k=60). Chunks appearing in both lists get boosted—semantically similar AND structurally related.
+**Combined degree ranking.** Local search ranks chunks by `combined_degree = start_degree + neighbor_degree` (Microsoft's approach). Chunks reached via hub entities score higher—well-connected nodes carry more information value.
 
 
 
