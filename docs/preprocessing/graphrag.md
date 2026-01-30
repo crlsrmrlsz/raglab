@@ -87,6 +87,8 @@ RAGLab implements the original GraphRAG algorithm with adaptations for a dual-do
 
 Microsoft's reference implementation uses Parquet files for everything. RAGLab uses **Neo4j** for the knowledge graph (enabling Cypher traversal) and **Weaviate** for vector search (entities, communities, chunks). This dual-storage approach enables graph traversal patterns not possible with flat files, at the cost of additional infrastructure.
 
+> **Note:** Neo4j 5.x+ supports native vector indexes, which could consolidate entity and community embeddings into Neo4j—enabling unified graph+vector queries in single Cypher statements. Chunk embeddings would remain in Weaviate due to its superior hybrid search. See [Neo4j Vector Indexes](https://neo4j.com/docs/cypher-manual/current/indexes/semantic-indexes/vector-indexes/).
+
 ### Entity Types
 
 Entity types are defined in `src/graph/graphrag_types.yaml` with 8 curated types. Microsoft defaults to 4 generic types (PERSON, ORGANIZATION, LOCATION, EVENT). RAGLab extends this for the dual-domain corpus while following the industry consensus that fewer, non-overlapping types work better than many specific ones.
