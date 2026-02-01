@@ -96,14 +96,15 @@ def load_extraction_results(
         return json.load(f)
 
 
-def upload_entity_embeddings_to_weaviate(driver) -> int:
+def upload_entity_embeddings_to_weaviate(driver, chunk_size: int = 5000) -> int:
     """Upload entity description embeddings to Weaviate for embedding-based extraction.
 
-    Reads entities from Neo4j, embeds their descriptions, and uploads to
-    a Weaviate collection for fast semantic search at query time.
+    Uses streaming chunks to avoid memory exhaustion when processing large entity
+    counts. Each chunk is embedded and uploaded before the next is loaded.
 
     Args:
         driver: Neo4j driver for reading entities.
+        chunk_size: Number of entities to process per chunk (default 5000).
 
     Returns:
         Number of entities uploaded.
@@ -120,39 +121,23 @@ def upload_entity_embeddings_to_weaviate(driver) -> int:
     collection_name = get_entity_collection_name()
     logger.info(f"Entity collection: {collection_name}")
 
-    # Read entities from Neo4j
-    query = """
+    # Get total count first
+    count_query = """
     MATCH (e:Entity)
     WHERE e.description IS NOT NULL AND e.description <> ''
-    RETURN
-        e.name as entity_name,
-        e.normalized_name as normalized_name,
-        e.entity_type as entity_type,
-        e.description as description
+    RETURN count(e) as total
     """
-    result = driver.execute_query(query)
-    entities_from_neo4j = [dict(record) for record in result.records]
+    count_result = driver.execute_query(count_query)
+    total_entities = count_result.records[0]["total"]
 
-    if not entities_from_neo4j:
+    if total_entities == 0:
         logger.warning("No entities with descriptions found in Neo4j")
         return 0
 
-    logger.info(f"Found {len(entities_from_neo4j)} entities with descriptions")
+    logger.info(f"Found {total_entities} entities with descriptions")
+    logger.info(f"Processing in chunks of {chunk_size} to manage memory")
 
-    # Embed descriptions in batches
-    descriptions = [e["description"] for e in entities_from_neo4j]
-    logger.info(f"Embedding {len(descriptions)} entity descriptions...")
-
-    embed_start = time.time()
-    embeddings = embed_texts(descriptions)
-    embed_time = time.time() - embed_start
-    logger.info(f"Embedding complete in {embed_time:.1f}s")
-
-    # Add embeddings to entities
-    for entity, embedding in zip(entities_from_neo4j, embeddings):
-        entity["embedding"] = embedding
-
-    # Upload to Weaviate
+    # Prepare Weaviate collection
     client = get_weaviate_client()
 
     try:
@@ -164,21 +149,69 @@ def upload_entity_embeddings_to_weaviate(driver) -> int:
         logger.info(f"Creating collection {collection_name}")
         create_entity_collection(client, collection_name)
 
-        # Upload entities
-        upload_start = time.time()
-        uploaded_count = upload_entity_descriptions(
-            client, collection_name, entities_from_neo4j
-        )
-        upload_time = time.time() - upload_start
+        # Process entities in streaming chunks
+        total_uploaded = 0
+        offset = 0
+        chunk_num = 0
+        overall_start = time.time()
 
-        logger.info(f"Upload complete in {upload_time:.1f}s")
-        logger.info(f"  Uploaded: {uploaded_count} entities")
+        while offset < total_entities:
+            chunk_num += 1
+            chunk_start = time.time()
+
+            # Fetch chunk from Neo4j
+            chunk_query = """
+            MATCH (e:Entity)
+            WHERE e.description IS NOT NULL AND e.description <> ''
+            RETURN
+                e.name as entity_name,
+                e.normalized_name as normalized_name,
+                e.entity_type as entity_type,
+                e.description as description
+            ORDER BY e.normalized_name
+            SKIP $offset LIMIT $limit
+            """
+            result = driver.execute_query(
+                chunk_query,
+                parameters_={"offset": offset, "limit": chunk_size}
+            )
+            chunk_entities = [dict(record) for record in result.records]
+
+            if not chunk_entities:
+                break
+
+            # Embed this chunk
+            descriptions = [e["description"] for e in chunk_entities]
+            embeddings = embed_texts(descriptions)
+
+            # Add embeddings to entities
+            for entity, embedding in zip(chunk_entities, embeddings):
+                entity["embedding"] = embedding
+
+            # Upload this chunk to Weaviate
+            uploaded = upload_entity_descriptions(client, collection_name, chunk_entities)
+            total_uploaded += uploaded
+
+            chunk_time = time.time() - chunk_start
+            logger.info(
+                f"Chunk {chunk_num}: {uploaded} entities "
+                f"({offset + 1}-{offset + len(chunk_entities)} of {total_entities}) "
+                f"in {chunk_time:.1f}s"
+            )
+
+            # Release memory before next chunk
+            del chunk_entities, descriptions, embeddings
+            offset += chunk_size
+
+        overall_time = time.time() - overall_start
+        logger.info(f"Upload complete in {overall_time:.1f}s")
+        logger.info(f"  Total uploaded: {total_uploaded} entities")
 
         # Verify
         final_count = get_entity_collection_count(client, collection_name)
         logger.info(f"  Verified: {final_count} entities in collection")
 
-        return uploaded_count
+        return total_uploaded
 
     finally:
         client.close()
