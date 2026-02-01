@@ -64,7 +64,6 @@ from src.graph.neo4j_client import (
 )
 from src.graph.community import (
     detect_and_summarize_communities,
-    save_communities,
     get_community_ids_from_neo4j,
 )
 
@@ -320,13 +319,9 @@ def main():
                 )
                 leiden_time = time.time() - leiden_start
 
-                # Save communities
-                output_path = save_communities(communities)
-
                 logger.info(f"Complete in {leiden_time:.1f}s")
                 logger.info(f"  Communities: {len(communities)}")
                 logger.info(f"  Total members: {sum(c.member_count for c in communities)}")
-                logger.info(f"  Output: {output_path}")
 
         # Phase 4: Entity Embedding Upload
         if not args.skip_entity_embeddings:

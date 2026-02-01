@@ -571,24 +571,22 @@ def _get_existing_ids_for_resume(
 
     Returns:
         Set of existing community IDs to skip.
+
+    Raises:
+        RuntimeError: If resume mode is requested but Weaviate is unavailable.
     """
     if not resume:
         return set()
 
-    if use_weaviate:
-        existing_ids = weaviate_get_existing_ids(weaviate_client, collection_name)
-        logger.info(f"Found {len(existing_ids)} existing communities in Weaviate")
-        return existing_ids
+    if not use_weaviate:
+        raise RuntimeError(
+            "Resume mode requires Weaviate but it is unavailable. "
+            "Ensure Weaviate is running: docker compose up -d weaviate"
+        )
 
-    # Fallback: load from JSON file
-    try:
-        existing = load_communities()
-        existing_ids = {c.community_id for c in existing}
-        logger.info(f"Loaded {len(existing_ids)} existing summaries from file")
-        return existing_ids
-    except FileNotFoundError:
-        logger.info("No existing summaries found, starting fresh")
-        return set()
+    existing_ids = weaviate_get_existing_ids(weaviate_client, collection_name)
+    logger.info(f"Found {len(existing_ids)} existing communities in Weaviate")
+    return existing_ids
 
 
 def _run_leiden_phase(
@@ -871,8 +869,6 @@ def detect_and_summarize_communities(
 
             if use_weaviate:
                 _upload_community_to_weaviate(weaviate_client, collection_name, community)
-
-            save_communities(communities)
     else:
         # Full hierarchy mode - process finest-to-coarsest (Microsoft GraphRAG approach)
         max_level = hierarchy_levels - 1
@@ -909,8 +905,6 @@ def detect_and_summarize_communities(
                 if use_weaviate:
                     _upload_community_to_weaviate(weaviate_client, collection_name, community)
 
-                save_communities(communities)
-
     # Cleanup
     if graph is not None:
         gds.graph.drop(graph.name())
@@ -922,84 +916,4 @@ def detect_and_summarize_communities(
         f"Generated {new_summaries} new community summaries "
         f"({len(communities)} total, stored in Weaviate: {use_weaviate})"
     )
-    return communities
-
-
-def save_communities(
-    communities: list[Community],
-    output_name: str = "communities.json",
-) -> Path:
-    """Save community data to JSON file.
-
-    Args:
-        communities: List of Community objects.
-        output_name: Output filename.
-
-    Returns:
-        Path to saved file.
-    """
-    output_dir = DIR_GRAPH_DATA
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    output_path = output_dir / output_name
-
-    data = {
-        "communities": [c.to_dict() for c in communities],
-        "total_count": len(communities),
-        "total_members": sum(c.member_count for c in communities),
-    }
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-    logger.info(f"Saved {len(communities)} communities to {output_path}")
-    return output_path
-
-
-def load_communities(
-    input_name: str = "communities.json",
-) -> list[Community]:
-    """Load communities from JSON file.
-
-    Handles both old format (without relationships) and new format
-    (with relationships and parent_id).
-
-    Args:
-        input_name: Input filename.
-
-    Returns:
-        List of Community objects.
-
-    Raises:
-        FileNotFoundError: If file doesn't exist.
-    """
-    input_path = DIR_GRAPH_DATA / input_name
-
-    with open(input_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    communities = []
-    for c_data in data["communities"]:
-        # Parse members
-        members = [CommunityMember(**m) for m in c_data.get("members", [])]
-
-        # Parse relationships (new field, may be missing in old files)
-        relationships = [
-            CommunityRelationship(**r) for r in c_data.get("relationships", [])
-        ]
-
-        community = Community(
-            community_id=c_data["community_id"],
-            level=c_data.get("level", 0),
-            parent_id=c_data.get("parent_id"),  # New field
-            members=members,
-            member_count=c_data["member_count"],
-            relationships=relationships,  # New field
-            relationship_count=c_data["relationship_count"],
-            summary=c_data["summary"],
-            embedding=c_data.get("embedding"),
-        )
-        communities.append(community)
-
-    logger.info(f"Loaded {len(communities)} communities from {input_path}")
     return communities
