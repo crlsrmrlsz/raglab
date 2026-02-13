@@ -2,7 +2,7 @@
 
 [← Evaluation Framework](README.md) | [Home](../../README.md)
 
-*Evaluation runs pending. This page will be populated with RAGAS metrics after running the comprehensive grid search.*
+**Status: Work in progress.** Evaluation infrastructure is complete (see [Evaluation Framework](README.md)); results will be added after running the comprehensive grid search across all 46 strategy configurations.
 
 ## Planned Evaluation
 
@@ -62,7 +62,6 @@ python -m src.stages.run_stage_7_evaluation --comprehensive
 - **Context Precision < 0.5** = retrieval needs tuning
 - **Large alpha gap** = BM25 keywords matter for this corpus
 
-*Check back after evaluation runs are complete.*
 
 ---
 

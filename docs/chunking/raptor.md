@@ -59,7 +59,7 @@ The main deviation in this implementation is using larger leaf chunks. The paper
 | **Leaf chunks** | 100 tokens | Semantic std=2 (~500 tokens avg) |
 | **Document scope** | Per-document | Per-book |
 | **Summary model** | gpt-3.5-turbo | deepseek-v3.2 |
-| **Cluster assignment** | Soft (P > 0.3) | Hard (highest probability) |
+| **Cluster assignment** | Soft (P > 0.3) | Hard (argmax); threshold used for logging only |
 | **Retrieval** | Collapsed tree | Collapsed tree (same) |
 
 </div>

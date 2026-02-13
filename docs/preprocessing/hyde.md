@@ -86,7 +86,7 @@ Paragraph:
 
 ## RAGLab Implementation
 
-RAGLab follows the paper's parameters and includes the original query in the embedding average. Configuration in `src/config.py`:
+RAGLab follows the paper's parameters but includes the **original query** in the embedding average (K+1 vectors instead of K). This means the final search vector is the average of the original query embedding + K hypothetical embeddings, anchoring the search closer to the user's intent while still benefiting from document-style language. Configuration in `src/config.py`:
 
 ```python
 HYDE_K = 4              # Total hypotheticals: 2 neuroscience + 2 philosophy

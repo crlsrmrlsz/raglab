@@ -96,10 +96,9 @@ Anthropic tested on short documents (papers, articles) where the full document f
 {chunk_text}
 </chunk>
 
-Please give a short succinct context to situate this chunk within the book
-for the purposes of improving search retrieval of the chunk. Use key terms
-from the section title that help identify what this chunk is about.
-Answer only with the succinct context and nothing else.
+Write a brief context (1-2 sentences, ~50-80 words) to situate this chunk within the book for search retrieval.
+Use key terms from the section title. Ensure sentences are complete - do not end mid-sentence.
+Answer only with the context, nothing else.
 ```
 
 Key differences from Anthropic's prompt:

@@ -21,7 +21,7 @@ I started with a simple RAG system with naive chunking and semantic search over 
 
 So trying to improve the RAG system performance I ended up building a customized evaluation framework to test some of the recent improvements in RAG techniques. I created an user interface to easily tune (embedding collection, preprocessing technique, type of search) and inspect each step result (chunks retrieved, LLM call and responses and final answer) and compare results with different configurations to get an intuition of the effect of each one.
 
-To get more consistent results it runs a comprehensive evaluation using each possible hyperparameter combination (102 cases) over a handcrafted set of test questions that cover both single concept and cross domain concepts. All details are accessible through the links at the end of this README file.
+To get more consistent results it runs a comprehensive evaluation using each possible hyperparameter combination (46 configurations) over a handcrafted set of test questions that cover both single concept and cross domain concepts. All details are accessible through the links at the end of this README file.
 
 This is custom and simple evaluation framework tailored to this specific project and does not aim to be used as a general framework. There are professional frameworks out there for that purpose, but nowadays it is quite easy to construct something like this with coding agents. I built this using Claude Code and Opus 4.5.
 

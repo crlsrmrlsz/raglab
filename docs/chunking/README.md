@@ -82,7 +82,7 @@ python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 
 # Contextual - Requires semantic chunks (std=2) first
 python -m src.stages.run_stage_4_chunking --strategy contextual
 
-# RAPTOR - Requires section chunks first (Stage 4b)
+# RAPTOR - Requires semantic_std2 chunks first (Stage 4b)
 python -m src.stages.run_stage_4b_raptor
 ```
 

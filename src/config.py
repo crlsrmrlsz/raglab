@@ -395,7 +395,7 @@ DEFAULT_SEARCH_TYPE = "hybrid"
 AVAILABLE_PREPROCESSING_STRATEGIES = [
     ("none", "None", "No preprocessing, use original query"),
     ("hyde", "HyDE", "Generate hypothetical answer for semantic matching (arXiv:2212.10496)"),
-    ("decomposition", "Decomposition", "Break into sub-questions + RRF merge (arXiv:2507.00355)"),
+    ("decomposition", "Decomposition", "Break into sub-questions + union merge + rerank (arXiv:2507.00355)"),
     ("graphrag", "GraphRAG", "Pure graph retrieval with combined_degree ranking (arXiv:2404.16130)"),
 ]
 

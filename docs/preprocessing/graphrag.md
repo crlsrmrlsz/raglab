@@ -33,7 +33,7 @@ Indexing runs once per corpus, building the graph and community structures neede
 
 1. **Chunking** — Split documents into text units for extraction. It uses semantic chunking with 2 standard deviation coefficient.
 
-2. **Entity extraction** — An LLM processes each chunk, extracting entities with predefined types (PERSON, BRAIN_STRUCTURE, CONCEPT) and relationships between them. Each relationship includes a description and a strength score (1-10). The paper recommends "gleaning"—multiple extraction passes where the LLM is prompted to find missed entities.
+2. **Entity extraction** — An LLM processes each chunk, extracting entities with predefined types (PERSON, BRAIN_STRUCTURE, CONCEPT) and relationships between them. Each relationship includes a description and a weight (0.0-1.0). The paper recommends "gleaning"—multiple extraction passes where the LLM is prompted to find missed entities.
 
 3. **Graph construction** — Entities become nodes; relationships become weighted edges. When the same entity appears in multiple chunks, descriptions are merged and relationship weights accumulated. The result is a connected knowledge graph where each node tracks which source chunks mentioned it.
 
