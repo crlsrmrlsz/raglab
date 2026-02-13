@@ -161,7 +161,7 @@ def build_networkx_graph(
 
 def filter_top_nodes(
     G: nx.DiGraph,
-    top_n: int = 50,
+    top_n: int = 30,
     metric: str = "degree",
 ) -> nx.DiGraph:
     """Filter graph to top-N nodes by a given metric.
@@ -278,12 +278,12 @@ def build_pyvis_network(
             description = description[:200] + "..."
 
         tooltip = (
-            f"<b>{name}</b><br>"
-            f"<b>Type:</b> {entity_type}<br>"
-            f"<b>Degree:</b> {degree}<br>"
-            f"<b>PageRank:</b> {pagerank:.4f}<br>"
-            f"<b>Community:</b> {community_id}<br>"
-            f"<b>Description:</b> {description}"
+            f"{name}\n"
+            f"Type: {entity_type}\n"
+            f"Degree: {degree}\n"
+            f"PageRank: {pagerank:.4f}\n"
+            f"Community: {community_id}\n"
+            f"Description: {description}"
         )
 
         net.add_node(
@@ -302,7 +302,7 @@ def build_pyvis_network(
         if len(description) > 150:
             description = description[:150] + "..."
 
-        edge_tooltip = f"<b>{edge_type}</b><br>{description}"
+        edge_tooltip = f"{edge_type}\n{description}"
 
         edge_kwargs = {
             "width": max(0.5, min(weight, 5.0)),
@@ -350,7 +350,7 @@ def build_pyvis_network(
 
 def export_graph(
     output_dir: Path = None,
-    top_n: int = 50,
+    top_n: int = 30,
     metric: str = "degree",
     include_full: bool = False,
 ) -> dict[str, Path]:
@@ -462,8 +462,8 @@ def main():
     parser.add_argument(
         "--top-n",
         type=int,
-        default=50,
-        help="Number of top nodes for the filtered graph (default: 50).",
+        default=30,
+        help="Number of top nodes for the filtered graph (default: 30).",
     )
     parser.add_argument(
         "--metric",
