@@ -421,9 +421,11 @@ def fetch_all_communities_by_level(
 ) -> list[dict[str, Any]]:
     """Fetch all communities at a specific hierarchy level.
 
-    Used for global queries (map-reduce) where ALL L0 communities
-    are needed (Microsoft GraphRAG design). No vector ranking —
-    retrieves every community matching the level filter.
+    Originally used for map-reduce global queries where ALL L0 communities
+    were needed. Active global queries now use DRIFT search
+    (src.graph.drift.drift_search) with HNSW top-K selection instead.
+    This function is retained for the deprecated map-reduce path.
+    No vector ranking — retrieves every community matching the level filter.
 
     Args:
         client: Connected Weaviate client.

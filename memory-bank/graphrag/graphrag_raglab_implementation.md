@@ -12,7 +12,7 @@
 6. [Community Summarization](#6-community-summarization)
 7. [Embeddings & Storage](#7-embeddings--storage)
 8. [Local Search Query Pipeline](#8-local-search-query-pipeline)
-9. [Global Search (Map-Reduce)](#9-global-search-map-reduce)
+9. [Global Search (DRIFT)](#9-global-search-drift)
 10. [Data Models](#10-data-models)
 11. [Configuration Reference](#11-configuration-reference)
 12. [Prompts Comparison](#12-prompts-comparison)
@@ -106,7 +106,7 @@ flowchart TB
 | Relationship Prioritization | combined_degree | **combined_degree** (start + neighbor degree) | Matches |
 | Token Budget | 50% text, 10% community | combined_degree ranking (no explicit budget) | Different |
 | Community Context | In token budget | By entity membership (separate) | Different |
-| Global Search | Map-reduce over communities | Map-reduce over L0 communities | Matches |
+| Global Search | Map-reduce over communities | **DRIFT** (top-K HNSW + primer folds + reduce) | Different |
 | Query Classification | LLM-based | LLM-based | Matches |
 | DRIFT Search | Dynamic iterative search | **Simplified DRIFT** (top-K HNSW + primer folds + reduce) | Implemented |
 
@@ -467,7 +467,7 @@ flowchart LR
         ENTS --> |Entity extraction| NEO4J[Neo4j]
         NEO4J --> |Graph traversal| CHUNKS
         CHUNKS --> |Batch fetch| RESULTS[Final Results]
-        COMMS --> |Global queries| MAPRED[Map-Reduce]
+        COMMS --> |Global queries| MAPRED[DRIFT Search]
     end
 
     style CHUNKS fill:#fa8072
@@ -556,46 +556,49 @@ This aligns with Microsoft's relationship prioritization strategy.
 
 ---
 
-## 9. Global Search (Map-Reduce)
+## 9. Global Search (DRIFT)
 
 ### Pipeline
+
+RAGLab uses simplified DRIFT search (Dynamic Reasoning with Inference-time Fine-Tuning) for global queries, replacing the original map-reduce approach.
 
 ```mermaid
 flowchart TB
     subgraph Classification["Query Classification"]
         QUERY[User Query] --> CLASSIFY["classify_query<br/>local or global"]
-        CLASSIFY --> |global| RETRIEVE["Retrieve ALL L0 communities<br/>(matches Microsoft)"]
+        CLASSIFY --> |global| DRIFT["DRIFT Search"]
         CLASSIFY --> |local| LOCAL[Pure graph retrieval<br/>combined_degree ranking]
     end
 
-    subgraph MapPhase["Map Phase (Parallel)"]
-        RETRIEVE --> C1[Community 1]
-        RETRIEVE --> C2[Community 2]
-        RETRIEVE --> CN[Community N]
+    subgraph DRIFTPhase["DRIFT Search (replaces Map-Reduce)"]
+        DRIFT --> EMBED["Embed query"]
+        EMBED --> HNSW["Weaviate HNSW<br/>Top-K communities (K=20)"]
+        HNSW --> FOLD1["Fold 1<br/>(5 communities)"]
+        HNSW --> FOLD2["Fold 2<br/>(5 communities)"]
+        HNSW --> FOLD3["Fold 3<br/>(5 communities)"]
+        HNSW --> FOLD4["Fold 4<br/>(5 communities)"]
 
-        C1 --> |async| MAP1["LLM Map"]
-        C2 --> |async| MAP2[LLM]
-        CN --> |async| MAPN[LLM]
+        FOLD1 --> |async| P1["LLM Primer"]
+        FOLD2 --> |async| P2["LLM Primer"]
+        FOLD3 --> |async| P3["LLM Primer"]
+        FOLD4 --> |async| P4["LLM Primer"]
 
-        MAP1 --> P1[Partial Answer 1]
-        MAP2 --> P2[Partial Answer 2]
-        MAPN --> PN[Partial Answer N]
-    end
-
-    subgraph Filter["Filter"]
-        P1 --> FILTER{Not relevant?}
-        P2 --> FILTER
-        PN --> FILTER
-        FILTER --> |Yes| DISCARD[Discard]
-        FILTER --> |No| KEEP[Keep for reduce]
+        P1 --> INTER1[Intermediate Answer 1]
+        P2 --> INTER2[Intermediate Answer 2]
+        P3 --> INTER3[Intermediate Answer 3]
+        P4 --> INTER4[Intermediate Answer 4]
     end
 
     subgraph ReducePhase["Reduce Phase"]
-        KEEP --> REDUCE["LLM Reduce"]
+        INTER1 --> REDUCE["LLM Reduce"]
+        INTER2 --> REDUCE
+        INTER3 --> REDUCE
+        INTER4 --> REDUCE
         REDUCE --> FINAL[Final Synthesized Answer]
     end
 
     style LOCAL fill:#90EE90
+    style DRIFT fill:#87CEEB
 ```
 
 ### DRIFT Search Configuration (replaces Map-Reduce)
@@ -730,7 +733,7 @@ GRAPHRAG_TOP_COMMUNITIES = 3
 GRAPHRAG_TRAVERSE_DEPTH = 2       # Max hops for entity traversal
 # Note: GRAPHRAG_RRF_K (60) exists but is NOT used for GraphRAG (pure graph retrieval)
 
-# Map-Reduce
+# Map-Reduce (deprecated — DRIFT search is now active for global queries)
 GRAPHRAG_MAP_MAX_TOKENS = 300
 GRAPHRAG_REDUCE_MAX_TOKENS = 500
 ```
@@ -1025,7 +1028,7 @@ GraphRAG uses the `StrategyConfig` system (`src/rag_pipeline/retrieval/preproces
 ### 1. Dynamic Community Selection
 
 Microsoft's post-paper `DynamicCommunitySelection` is **not implemented**:
-- RAGLab uses **static mode** (original paper): ALL L0 communities processed
+- RAGLab previously used static mode (ALL L0 communities). Now uses **DRIFT** with top-K HNSW selection
 - Dynamic mode: LLM scores relevance per community, traverses hierarchy
 - Parameters: `threshold` (0.5), `max_level`, `keep_parent`
 - Benefit: Filters irrelevant communities, finds optimal granularity

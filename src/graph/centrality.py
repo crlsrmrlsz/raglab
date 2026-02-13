@@ -9,7 +9,7 @@ because it considers the quality of connections, not just quantity.
 Used for:
 1. Prioritizing entities in community summaries (top-k by PageRank)
 2. Ordering members in generation context
-3. Selecting representative entities for map-reduce
+3. Selecting representative entities for community search
 
 ## Library Usage
 

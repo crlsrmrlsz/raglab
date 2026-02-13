@@ -4,13 +4,13 @@
 
 When you ask "What are the main themes across all 19 books?", no single chunk contains this answer. Vector search finds chunks similar to your query, but similarity doesn't help when the answer requires synthesizing information scattered across thousands of pages. This is the **global query problem**: questions about patterns, themes, and relationships that span an entire corpus.
 
-[GraphRAG](https://arxiv.org/abs/2404.16130) solves this by building a knowledge graph from your documents. Entities (people, concepts, brain regions) become nodes; relationships become edges. The Leiden algorithm then detects communities of densely connected entities. Each community gets an LLM-generated summary. For global queries, GraphRAG uses map-reduce over these summaries to synthesize corpus-wide answers.
+[GraphRAG](https://arxiv.org/abs/2404.16130) solves this by building a knowledge graph from your documents. Entities (people, concepts, brain regions) become nodes; relationships become edges. The Leiden algorithm then detects communities of densely connected entities. Each community gets an LLM-generated summary. For global queries, GraphRAG uses DRIFT search — embedding the query, retrieving the top-K most relevant communities via HNSW, processing them in parallel primer folds, then reducing into a final synthesized answer.
 
 **When GraphRAG helps:** Cross-document synthesis, thematic questions, relationship discovery, "compare authors' perspectives on X" queries.
 
 **When it struggles:** Simple factual lookups (overkill), frequently updated corpora (requires reindexing), small datasets (setup cost exceeds benefit).
 
-Since April 2024, GraphRAG has evolved significantly: Microsoft added DRIFT search (hybrid local/global) and dynamic community selection; LightRAG achieved 6× cost reduction with incremental updates; LazyGraphRAG cut indexing to 0.1% of original cost; HippoRAG and HopRAG improved multi-hop reasoning by up to 76%; agentic variants now dynamically select tools per query. **This project deliberately implements the original paper algorithm.** The goal is a controlled baseline: understand how pure GraphRAG—Leiden communities, static map-reduce, entity-based local search—compares against other foundational RAG techniques (HyDE, RAPTOR, query decomposition) on the same corpus and evaluation set. Layering optimizations would confound the comparison. With the baseline established, specific enhancements can be adopted based on measured gaps.
+Since April 2024, GraphRAG has evolved significantly: Microsoft added DRIFT search (hybrid local/global) and dynamic community selection; LightRAG achieved 6× cost reduction with incremental updates; LazyGraphRAG cut indexing to 0.1% of original cost; HippoRAG and HopRAG improved multi-hop reasoning by up to 76%; agentic variants now dynamically select tools per query. **This project implements the original paper's indexing pipeline with a simplified DRIFT search for global queries.** The original map-reduce approach processed ALL communities with O(n) LLM calls; DRIFT replaces this with HNSW top-K retrieval (O(log n)), reducing ~1000 LLM calls to ~5. Local search uses entity-based graph traversal. The goal remains a controlled baseline for comparing against other foundational RAG techniques (HyDE, RAPTOR, query decomposition) on the same corpus and evaluation set.
 
 
 
@@ -63,19 +63,17 @@ Queries are classified as **local** or **global** and routed to different retrie
 
 5. **Generate answer** — Combine retrieved chunks with entity/relationship context and send to the LLM for answer generation.
 
-**Global queries** ask about themes, patterns, or corpus-wide understanding (e.g., "What are the main themes?"):
+**Global queries** ask about themes, patterns, or corpus-wide understanding (e.g., "What are the main themes?"). RAGLab uses **DRIFT search** (simplified from Microsoft's Dynamic Reasoning with Inference-time Fine-Tuning):
 
-1. **Get ALL L0 communities** — Retrieve all community summaries at the coarsest level (L0). Unlike local search which filters by relevance, global search processes the entire community set to ensure comprehensive coverage.
+1. **Embed query + HNSW top-K** — The query is embedded and compared against pre-computed community summary embeddings via Weaviate's HNSW index. The top-K most relevant L0 communities are retrieved (default K=20). This replaces the original paper's exhaustive approach of processing ALL communities.
 
-2. **Map phase** — Run parallel LLM calls, one per community. Each call receives the community summary and generates a partial answer with an importance score (0-100). Communities with no relevant information return score 0.
+2. **Primer folds** — The top-K communities are split into folds (default 4 folds of 5 communities each). Each fold runs a parallel LLM call that generates an intermediate answer from its community subset. Communities not relevant to the query are filtered out.
 
-3. **Filter and rank** — Remove partial answers with score 0, then sort remaining answers by importance score descending. This prioritizes the most relevant community perspectives.
-
-4. **Reduce phase** — A final LLM call synthesizes all partial answers into a coherent response. The prompt instructs the model to merge insights, remove redundancy, and preserve data citations from the map phase.
+3. **Reduce** — A final LLM call synthesizes all intermediate fold answers into a coherent response, merging insights and removing redundancy. Total: ~5 LLM calls instead of ~1000.
 
 ### Results Summary
 
-The paper demonstrated that community-based retrieval substantially outperforms vector-only approaches for thematic questions, achieving 72-83% win rates on comprehensiveness metrics. The hierarchical structure enables answering questions that would otherwise require processing the entire corpus. Notably, the reference implementation found that smaller context windows (8k tokens) outperformed larger ones (16k-64k) due to models struggling to utilize information in long prompts—a finding that informed the map-reduce design where each community summary is processed independently before synthesis.
+The paper demonstrated that community-based retrieval substantially outperforms vector-only approaches for thematic questions, achieving 72-83% win rates on comprehensiveness metrics. The hierarchical structure enables answering questions that would otherwise require processing the entire corpus. Notably, the reference implementation found that smaller context windows (8k tokens) outperformed larger ones (16k-64k) due to models struggling to utilize information in long prompts—a finding that informed the original map-reduce design. RAGLab replaces map-reduce with DRIFT search, which similarly processes small community subsets (primer folds) independently before synthesis.
 
 
 

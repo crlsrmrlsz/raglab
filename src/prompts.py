@@ -237,7 +237,7 @@ Summary:"""
 
 
 # =============================================================================
-# MAP-REDUCE PROMPTS (GraphRAG Global Query Handling)
+# MAP-REDUCE PROMPTS (DEPRECATED — replaced by DRIFT prompts in src/graph/drift.py)
 # =============================================================================
 
 # Query classification: local (entity-specific) vs global (thematic)
@@ -257,7 +257,7 @@ Query: {query}
 
 Respond with ONLY the word 'local' or 'global'."""
 
-# Map phase: Generate partial answer from one community
+# DEPRECATED Map phase: Generate partial answer from one community
 GRAPHRAG_MAP_PROMPT = """Answer this question using ONLY the community context below.
 
 Community Theme:
@@ -276,7 +276,7 @@ If this community is not relevant to the question, respond with "Not relevant to
 
 Answer:"""
 
-# Reduce phase: Synthesize partial answers into final response
+# DEPRECATED Reduce phase: Synthesize partial answers into final response
 GRAPHRAG_REDUCE_PROMPT = """Synthesize these partial answers from different thematic communities into a comprehensive response.
 
 Question: {query}

@@ -8,7 +8,7 @@ Microsoft GraphRAG (arXiv:2404.16130) uses Leiden's multi-level output:
 - Level 2 (C2): Finest granularity - specific topics within domains
 
 Query routing uses hierarchy:
-- Global queries (thematic): Use L0 (coarsest) communities with map-reduce
+- Global queries (thematic): Use L0 (coarsest) communities with DRIFT search
 - Local queries (entity-specific): Use L2 (finest) communities
 
 ## Data Flow

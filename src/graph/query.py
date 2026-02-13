@@ -5,8 +5,8 @@
 GraphRAG uses two retrieval methods:
 1. **Local search**: Entity matching → Graph traversal → Related chunks
    - Ranks by combined_degree (relationship hub importance)
-2. **Global search**: Query → Community summary matching → Theme context
-   - Map-reduce over Leiden communities
+2. **Global search**: Query → DRIFT search → Theme context
+   - HNSW top-K communities → primer folds → reduce
 
 For local queries, pure graph traversal (Microsoft's design):
 - Leverages relationship structure (hub entities = more informative)
@@ -331,6 +331,11 @@ def retrieve_community_context_by_membership(
 
 def retrieve_communities_for_map_reduce(level: int = 0) -> list[Community]:
     """Retrieve full Community objects for map-reduce processing.
+
+    .. deprecated::
+        Map-reduce global queries have been replaced by DRIFT search.
+        Use :func:`src.graph.drift.drift_search` for global queries instead.
+        This function is retained for backward compatibility.
 
     Fetches ALL communities at the specified level from Weaviate
     (Microsoft GraphRAG design: global queries use L0 coarsest level).
