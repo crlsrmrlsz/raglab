@@ -161,7 +161,7 @@ def build_networkx_graph(
 
 def filter_top_nodes(
     G: nx.DiGraph,
-    top_n: int = 30,
+    top_n: int = 15,
     metric: str = "degree",
 ) -> nx.DiGraph:
     """Filter graph to top-N nodes by a given metric.
@@ -271,20 +271,11 @@ def build_pyvis_network(
 
         # Build hover tooltip
         name = attrs.get("name", node_id)
-        pagerank = attrs.get("pagerank", 0.0)
-        community_id = attrs.get("community_id", "N/A")
         description = attrs.get("description", "")
         if len(description) > 200:
             description = description[:200] + "..."
 
-        tooltip = (
-            f"{name}\n"
-            f"Type: {entity_type}\n"
-            f"Degree: {degree}\n"
-            f"PageRank: {pagerank:.4f}\n"
-            f"Community: {community_id}\n"
-            f"Description: {description}"
-        )
+        tooltip = description
 
         net.add_node(
             node_id,
@@ -350,7 +341,7 @@ def build_pyvis_network(
 
 def export_graph(
     output_dir: Path = None,
-    top_n: int = 30,
+    top_n: int = 15,
     metric: str = "degree",
     include_full: bool = False,
 ) -> dict[str, Path]:
@@ -462,8 +453,8 @@ def main():
     parser.add_argument(
         "--top-n",
         type=int,
-        default=30,
-        help="Number of top nodes for the filtered graph (default: 30).",
+        default=15,
+        help="Number of top nodes for the filtered graph (default: 15).",
     )
     parser.add_argument(
         "--metric",
