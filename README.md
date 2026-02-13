@@ -53,7 +53,7 @@ Apart form standard RAG techniques, searching for improvements that could lead t
 | Technique | Paper | What It Does |
 |-----------|-------|--------------|
 | **HyDE** | [arXiv:2212.10496](https://arxiv.org/abs/2212.10496) | Generates hypothetical answers for semantic matching |
-| **Query Decomposition** | [arXiv:2507.00355](https://arxiv.org/abs/2507.00355) | Breaks complex questions into sub-queries with RRF merging |
+| **Query Decomposition** | [arXiv:2507.00355](https://arxiv.org/abs/2507.00355) | Breaks complex questions into sub-queries with union merging |
 | **Contextual Chunking** | [Anthropic Blog](https://www.anthropic.com/news/contextual-retrieval) | LLM-generated context prepended to chunks (-35% retrieval failures) |
 | **RAPTOR** | [arXiv:2401.18059](https://arxiv.org/abs/2401.18059) | Hierarchical summarization tree with UMAP + GMM clustering |
 | **GraphRAG** | [arXiv:2404.16130](https://arxiv.org/abs/2404.16130) | Knowledge graph + Leiden communities for cross-document reasoning |
@@ -68,9 +68,9 @@ For implementation details, design decisions, and code walkthroughs:
 
 - **[Getting Started](docs/getting-started.md)** — Installation, prerequisites, commands
 - **[Content Preparation](docs/content-preparation/README.md)** — PDF extraction, cleaning, segmentation
-- **[Chunking Strategies](docs/chunking/)** — Section, Contextual, RAPTOR
-- **[Preprocessing Strategies](docs/preprocessing/)** — HyDE, Decomposition, GraphRAG
-- **[Evaluation Framework](docs/evaluation/)** — RAGAS metrics and results
+- **[Chunking Strategies](docs/chunking/README.md)** — Section, Semantic, Contextual, RAPTOR
+- **[Preprocessing Strategies](docs/preprocessing/README.md)** — HyDE, Decomposition, GraphRAG
+- **[Evaluation Framework](docs/evaluation/README.md)** — RAGAS metrics and results
 
 
 
