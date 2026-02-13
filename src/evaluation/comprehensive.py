@@ -36,7 +36,6 @@ from src.config import (
 )
 from src.evaluation import run_evaluation
 from src.rag_pipeline.retrieval.query_strategy_config import (
-    get_strategy_config,
     is_valid_combination,
     list_strategy_configs,
     EVAL_TOP_K,
@@ -630,6 +629,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
                 strategy=strategy,
                 error=e,
                 failed_at_stage=failed_at_stage,
+                reranking=use_reranking,
             )
 
             all_results.append({
@@ -730,16 +730,14 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
     )
 
     for i, fc in enumerate(failed_report.failed_combinations):
+        rerank_str = "ON" if fc.reranking else "off"
         logger.info(
             f"\n[{i + 1}/{failed_report.total_failed}] Retrying: "
-            f"{fc.collection} | alpha={fc.alpha} | top_k={fc.top_k} | strategy={fc.strategy}"
+            f"{fc.collection} | alpha={fc.alpha} | rerank={rerank_str} | "
+            f"top_k={fc.top_k} | strategy={fc.strategy}"
         )
 
         try:
-            # Get reranking from StrategyConfig default
-            strategy_config = get_strategy_config(fc.strategy)
-            use_reranking = strategy_config.get_default_reranking()
-
             results = run_evaluation(
                 test_questions=questions,
                 metrics=EVAL_DEFAULT_METRICS,
@@ -747,7 +745,7 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
                 generation_model=args.generation_model,
                 evaluation_model=args.evaluation_model,
                 collection_name=fc.collection,
-                use_reranking=use_reranking,
+                use_reranking=fc.reranking,
                 alpha=fc.alpha,
                 preprocessing_strategy=fc.strategy,
                 preprocessing_model=None,
@@ -757,6 +755,7 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
             retry_results.append({
                 "collection": fc.collection,
                 "alpha": fc.alpha,
+                "reranking": fc.reranking,
                 "top_k": fc.top_k,
                 "strategy": fc.strategy,
                 "scores": results["scores"],
@@ -784,11 +783,13 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
                 strategy=fc.strategy,
                 error=e,
                 failed_at_stage=fc.failed_at_stage,
+                reranking=fc.reranking,
             )
 
             retry_results.append({
                 "collection": fc.collection,
                 "alpha": fc.alpha,
+                "reranking": fc.reranking,
                 "top_k": fc.top_k,
                 "strategy": fc.strategy,
                 "scores": {m: 0 for m in EVAL_DEFAULT_METRICS},
@@ -838,30 +839,41 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
 def compute_statistical_breakdown(
     results: list[dict[str, Any]],
     group_key: str,
-) -> dict[str, dict[str, float]]:
-    """Compute statistical analysis (mean, std, min, max) for each group.
+    metrics: Optional[list[str]] = None,
+) -> dict[str, dict[str, dict[str, float]]]:
+    """Compute statistical analysis (mean, std, min, max) for each group and metric.
 
     Args:
         results: List of result dicts (only successful runs).
         group_key: Key to group by ("strategy", "alpha", "top_k", "collection").
+        metrics: List of metric names to analyze. Defaults to EVAL_DEFAULT_METRICS.
 
     Returns:
-        Dict mapping group values to stats (mean, std, min, max, n).
+        Dict mapping group values to per-metric stats.
+        Structure: {group_value: {metric_name: {mean, std, min, max, n}}}.
     """
-    groups: dict[str, list[float]] = defaultdict(list)
+    if metrics is None:
+        metrics = EVAL_DEFAULT_METRICS
+
+    # Collect scores per group per metric
+    groups: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for r in results:
         if "error" not in r:
-            groups[str(r[group_key])].append(r["scores"].get("faithfulness") or 0)
+            group_val = str(r[group_key])
+            for metric in metrics:
+                groups[group_val][metric].append(r["scores"].get(metric) or 0)
 
-    analysis = {}
-    for group, scores in groups.items():
-        analysis[group] = {
-            "mean": round(statistics.mean(scores), 4),
-            "std": round(statistics.stdev(scores), 4) if len(scores) > 1 else 0.0,
-            "min": round(min(scores), 4),
-            "max": round(max(scores), 4),
-            "n": len(scores),
-        }
+    analysis: dict[str, dict[str, dict[str, float]]] = {}
+    for group, metric_scores in groups.items():
+        analysis[group] = {}
+        for metric, scores in metric_scores.items():
+            analysis[group][metric] = {
+                "mean": round(statistics.mean(scores), 4),
+                "std": round(statistics.stdev(scores), 4) if len(scores) > 1 else 0.0,
+                "min": round(min(scores), 4),
+                "max": round(max(scores), 4),
+                "n": len(scores),
+            }
     return analysis
 
 
@@ -1004,9 +1016,9 @@ def generate_comprehensive_report(
     print(f"\nTested {len(all_results)} combinations on {len(questions)} questions")
     print(f"Duration: {duration_str}")
     print(f"Successful: {len(successful_runs)} | Failed: {len(failed_runs)}")
-    print("\n" + "-" * 118)
-    print(f"{'Rank':<5} {'Collection':<35} {'Alpha':<7} {'Rerank':<8} {'Strategy':<15} {'Faith':<8} {'Relev':<8} {'CtxPrec':<8} {'CtxRec':<8}")
-    print("-" * 118)
+    print("\n" + "-" * 127)
+    print(f"{'Rank':<5} {'Collection':<35} {'Alpha':<7} {'Rerank':<8} {'Strategy':<15} {'Faith':<8} {'Relev':<8} {'CtxPrec':<8} {'CtxRec':<8} {'AnsCorr':<8}")
+    print("-" * 127)
 
     for i, result in enumerate(sorted_results, 1):
         scores = result["scores"]
@@ -1014,6 +1026,7 @@ def generate_comprehensive_report(
         relev = scores.get("relevancy") or 0
         ctx_prec = scores.get("context_precision") or 0
         ctx_rec = scores.get("context_recall") or 0
+        ans_corr = scores.get("answer_correctness") or 0
         collection_short = result["collection"][:35]
         rerank_str = "ON" if result.get("reranking") else "off"
         error_marker = " *" if "error" in result else ""
@@ -1021,22 +1034,29 @@ def generate_comprehensive_report(
         print(
             f"{i:<5} {collection_short:<35} {result['alpha']:<7} "
             f"{rerank_str:<8} {result['strategy']:<15} {faith:<8.3f} {relev:<8.3f} "
-            f"{ctx_prec:<8.3f} {ctx_rec:<8.3f}{error_marker}"
+            f"{ctx_prec:<8.3f} {ctx_rec:<8.3f} {ans_corr:<8.3f}{error_marker}"
         )
 
     # =========================================================================
     # CONSOLE OUTPUT: Statistical Breakdowns
     # =========================================================================
-    def _print_breakdown(title: str, analysis: dict[str, dict[str, float]], format_label=str):
+    def _print_breakdown(title: str, analysis: dict[str, dict[str, dict[str, float]]], format_label=str):
         print("\n" + "=" * 100)
         print(title)
         print("=" * 100)
-        for group in sorted(analysis.keys(), key=lambda x: analysis[x]["mean"], reverse=True):
-            stats = analysis[group]
+        # Sort groups by faithfulness mean (primary metric) for consistent ordering
+        def _sort_key(group_name: str) -> float:
+            return analysis[group_name].get("faithfulness", {}).get("mean", 0)
+
+        for group in sorted(analysis.keys(), key=_sort_key, reverse=True):
+            metric_stats = analysis[group]
             label = format_label(group)
-            print(f"\n{label} (n={stats['n']}):")
-            print(f"  Mean:  {stats['mean']:.3f}  +/-  {stats['std']:.3f}")
-            print(f"  Range: [{stats['min']:.3f}, {stats['max']:.3f}]")
+            # Use n from the first metric (all metrics have the same n per group)
+            first_metric = next(iter(metric_stats.values()))
+            print(f"\n{label} (n={first_metric['n']}):")
+            for metric, stats in metric_stats.items():
+                metric_short = metric[:16]
+                print(f"  {metric_short:<17} {stats['mean']:.3f}  +/-  {stats['std']:.3f}  [{stats['min']:.3f}, {stats['max']:.3f}]")
 
     _print_breakdown("BREAKDOWN BY PREPROCESSING STRATEGY", strategy_analysis, str.upper)
     _print_breakdown("BREAKDOWN BY ALPHA (0.0=keyword, 1.0=vector)", alpha_analysis, lambda a: f"ALPHA={a}")
@@ -1062,17 +1082,21 @@ def generate_comprehensive_report(
             b = best_configs[key]
             print(f"  {metric.title():<15} {b['collection'][:25]} + alpha={b['alpha']} + top_k={b['top_k']} + {b['strategy']} ({b['score']:.3f})")
 
-    # Calculate improvement percentages vs baseline (none strategy)
+    # Calculate improvement percentages vs baseline (none strategy) for each metric
     if "none" in strategy_analysis:
-        baseline = strategy_analysis["none"]["mean"]
-        print(f"\nSTRATEGY IMPROVEMENT VS BASELINE (none={baseline:.3f})")
-        for strategy in sorted(strategy_analysis.keys()):
-            stats = strategy_analysis[strategy]
-            if strategy == "none":
-                print(f"  {strategy.upper():<15} {stats['mean']:.3f} +/- {stats['std']:.3f}  (baseline)")
-            else:
-                improvement = ((stats["mean"] - baseline) / baseline) * 100 if baseline > 0 else 0
-                print(f"  {strategy.upper():<15} {stats['mean']:.3f} +/- {stats['std']:.3f}  [{improvement:+.1f}% vs baseline]")
+        print(f"\nSTRATEGY IMPROVEMENT VS BASELINE (none)")
+        for metric in EVAL_DEFAULT_METRICS:
+            baseline = strategy_analysis["none"].get(metric, {}).get("mean", 0)
+            print(f"\n  {metric}  (baseline={baseline:.3f}):")
+            for strategy in sorted(strategy_analysis.keys()):
+                stats = strategy_analysis[strategy].get(metric, {})
+                mean = stats.get("mean", 0)
+                std = stats.get("std", 0)
+                if strategy == "none":
+                    print(f"    {strategy.upper():<15} {mean:.3f} +/- {std:.3f}  (baseline)")
+                else:
+                    improvement = ((mean - baseline) / baseline) * 100 if baseline > 0 else 0
+                    print(f"    {strategy.upper():<15} {mean:.3f} +/- {std:.3f}  [{improvement:+.1f}% vs baseline]")
 
     # Show failed runs if any
     if failed_runs:

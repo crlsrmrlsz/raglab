@@ -172,6 +172,7 @@ class FailedCombination:
         alpha: Hybrid search alpha value.
         top_k: Number of chunks retrieved.
         strategy: Preprocessing strategy used.
+        reranking: Whether reranking was enabled for this combination.
         error_type: Exception class name (e.g., "RateLimitError").
         error_message: Full error message.
         failed_at_stage: Where failure occurred (preprocessing, retrieval, generation, ragas_evaluation).
@@ -183,6 +184,7 @@ class FailedCombination:
     alpha: float
     top_k: int
     strategy: str
+    reranking: bool
     error_type: str
     error_message: str
     failed_at_stage: str
@@ -195,7 +197,13 @@ class FailedCombination:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FailedCombination":
-        """Create from dict (for loading from JSON)."""
+        """Create from dict (for loading from JSON).
+
+        Handles backward compatibility for files saved before the reranking
+        field was added by defaulting to False.
+        """
+        if "reranking" not in data:
+            data = {**data, "reranking": False}
         return cls(**data)
 
 
@@ -281,6 +289,7 @@ class FailedCombinationsReport:
         strategy: str,
         error: Exception,
         failed_at_stage: str,
+        reranking: bool = False,
     ) -> None:
         """Add a failed combination to the report.
 
@@ -291,6 +300,7 @@ class FailedCombinationsReport:
             strategy: Preprocessing strategy.
             error: The exception that caused the failure.
             failed_at_stage: Where in the pipeline the failure occurred.
+            reranking: Whether reranking was enabled for this combination.
         """
         self.failed_combinations.append(
             FailedCombination(
@@ -298,6 +308,7 @@ class FailedCombinationsReport:
                 alpha=alpha,
                 top_k=top_k,
                 strategy=strategy,
+                reranking=reranking,
                 error_type=type(error).__name__,
                 error_message=str(error),
                 failed_at_stage=failed_at_stage,
