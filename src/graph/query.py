@@ -678,6 +678,7 @@ def graph_retrieval_with_drift(
                 "query_type": "global",
                 "drift_result": {
                     "final_answer": drift_result.final_answer,
+                    "intermediate_answers": drift_result.intermediate_answers,
                     "communities_used": drift_result.communities_used,
                     "primer_time_ms": drift_result.primer_time_ms,
                     "reduce_time_ms": drift_result.reduce_time_ms,

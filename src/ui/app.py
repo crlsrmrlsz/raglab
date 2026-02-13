@@ -284,6 +284,26 @@ def _render_graph_stage(graph_meta: dict) -> None:
                 st.markdown(comm['summary'])
 
 
+def _render_drift_stage(graph_meta: dict) -> None:
+    """Render DRIFT global search stage details."""
+    dr = graph_meta.get("drift_result", {})
+    communities = dr.get("communities_used", [])
+    intermediates = dr.get("intermediate_answers", [])
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Communities", len(communities))
+    col2.metric("LLM Calls", dr.get("total_llm_calls", 0))
+    col3.metric("Primer", f"{dr.get('primer_time_ms', 0):.0f}ms")
+    col4.metric("Reduce", f"{dr.get('reduce_time_ms', 0):.0f}ms")
+
+    if intermediates:
+        st.markdown("**Intermediate Answers (Primer Folds):**")
+        for i, answer in enumerate(intermediates, 1):
+            preview = answer[:80] + "..." if len(answer) > 80 else answer
+            with st.expander(f"Fold {i}: {preview}", expanded=False):
+                st.markdown(answer)
+
+
 def _render_rerank_stage(rerank) -> None:
     """Render reranking stage details."""
     col1, col2 = st.columns(2)
@@ -337,8 +357,12 @@ def _render_pipeline_log():
 
     # GraphRAG (only if used and successful)
     if graph_meta and not graph_meta.get("error"):
-        with st.expander("Graph Enrichment", expanded=False):
-            _render_graph_stage(graph_meta)
+        if graph_meta.get("drift_result"):
+            with st.expander("DRIFT Global Search", expanded=False):
+                _render_drift_stage(graph_meta)
+        else:
+            with st.expander("Graph Enrichment", expanded=False):
+                _render_graph_stage(graph_meta)
     elif graph_meta and graph_meta.get("error"):
         st.warning(f"GraphRAG failed: {graph_meta['error']}")
 
@@ -671,12 +695,23 @@ if search_clicked and query:
             # Global query: DRIFT already produced the answer (no chunks)
             mr = st.session_state.graph_metadata["drift_result"]
             from src.rag_pipeline.generation.answer_generator import GeneratedAnswer
+            n_communities = len(mr.get("communities_used", []))
+            n_folds = len(mr.get("intermediate_answers", []))
+            drift_summary = (
+                f"DRIFT Global Search\n"
+                f"Communities: {n_communities} | "
+                f"Primer folds: {n_folds} | "
+                f"LLM calls: {mr.get('total_llm_calls', 0)}\n"
+                f"Primer: {mr.get('primer_time_ms', 0):.0f}ms | "
+                f"Reduce: {mr.get('reduce_time_ms', 0):.0f}ms | "
+                f"Total: {mr.get('total_time_ms', 0):.0f}ms"
+            )
             st.session_state.generated_answer = GeneratedAnswer(
                 answer=mr["final_answer"],
                 model=GENERATION_MODEL,
                 generation_time_ms=mr.get("total_time_ms", 0),
                 sources_used=[],
-                system_prompt_used="DRIFT global query",
+                system_prompt_used=drift_summary,
                 user_prompt_used=query,
             )
         else:
