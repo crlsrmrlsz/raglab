@@ -62,6 +62,9 @@ neo4j_data/
 neo4j_logs/
 neo4j_plugins/
 
+# Large generated visualizations (regenerate with: python -m src.visualization.graph_export)
+docs/visualizations/graph_full.html
+
 # mcp
 .serena/
 
