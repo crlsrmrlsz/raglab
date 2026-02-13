@@ -165,7 +165,7 @@ def raptor_strategy(
     """RAPTOR hierarchical summarization tree.
 
     Algorithm:
-    - Load existing section chunks as leaves (level 0)
+    - Load existing semantic chunks (std=2) as leaves (level 0)
     - Embed -> UMAP reduction -> GMM clustering
     - LLM summarizes each cluster -> new level
     - Repeat until max_levels or too few nodes
@@ -174,7 +174,7 @@ def raptor_strategy(
     Use case: Queries requiring both thematic overview AND specific details.
     Paper reports +20% comprehension on multi-step reasoning tasks.
 
-    Note: Requires section chunks to exist first.
+    Note: Requires semantic_std2 chunks to exist first.
     Note: Significant LLM costs (~$0.40 for full corpus) and time (~2-3 min/book).
 
     Args:

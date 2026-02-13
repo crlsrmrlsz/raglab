@@ -6,7 +6,7 @@ eliminating the confusing multi_queries dual semantics.
 Strategies:
     StandardRetrieval: No preprocessing, direct Weaviate search
     HyDERetrieval: Hypothetical document embeddings (arXiv:2212.10496)
-    DecompositionRetrieval: Query decomposition + RRF merge (arXiv:2507.00355)
+    DecompositionRetrieval: Query decomposition + union merge + rerank (arXiv:2507.00355)
     GraphRAGRetrieval: Pure graph retrieval with combined_degree ranking (arXiv:2404.16130)
 """
 

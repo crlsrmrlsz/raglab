@@ -71,7 +71,7 @@ class PreprocessedQuery:
     model: str = ""
     # HyDE strategy fields
     hyde_passage: Optional[str] = None
-    # Decomposition strategy fields (generated_queries used for RRF)
+    # Decomposition strategy fields (generated_queries used for multi-query retrieval)
     generated_queries: list[dict[str, str]] = field(default_factory=list)
     sub_queries: list[str] = field(default_factory=list)
     decomposition_response: Optional[str] = None
@@ -237,7 +237,7 @@ def preprocess_query(
         strategy: Preprocessing strategy ID. Options:
             - "none": Return original query unchanged (no LLM calls)
             - "hyde": Generate hypothetical answer for semantic matching
-            - "decomposition": Break into sub-questions + RRF merge
+            - "decomposition": Break into sub-questions + union merge + rerank
 
     Returns:
         PreprocessedQuery with transformed query and strategy_used.

@@ -17,7 +17,7 @@ routing - they simply transform queries for better retrieval.
 Preprocessing Strategies (query transformation):
 - none: No transformation (baseline for comparison)
 - hyde: Generate hypothetical answer for semantic matching (arXiv:2212.10496)
-- decomposition: Break into sub-questions + RRF merge (+36.7% MRR@10, arXiv:2507.00355)
+- decomposition: Break into sub-questions + union merge + rerank (+36.7% MRR@10, arXiv:2507.00355)
 - graphrag: Pure graph retrieval with combined_degree ranking (arXiv:2404.16130)
 
 Note: Keyword/BM25 search is a search_type dimension, not a preprocessing strategy.
@@ -82,12 +82,12 @@ class RetrievalResult:
     """Result of strategy execution.
 
     Provides a unified structure for all strategy outputs, regardless
-    of whether they used embedding averaging, RRF merging, or graph traversal.
+    of whether they used embedding averaging, union merging, or graph traversal.
 
     Attributes:
         results: List of SearchResult objects (final ranked list).
         preprocessing: PreprocessedQuery with preprocessing metadata.
-        metadata: Strategy-specific metadata for UI logging (RRF scores, graph context, etc.).
+        metadata: Strategy-specific metadata for UI logging (rerank scores, graph context, etc.).
     """
 
     results: list["SearchResult"] = field(default_factory=list)
@@ -101,13 +101,13 @@ class RetrievalStrategy(Protocol):
 
     Each strategy implements the full preprocessing + retrieval pipeline:
     1. Preprocess query (generate hypotheticals, decompose, extract entities, etc.)
-    2. Execute retrieval (single search, multi-query RRF, graph traversal, etc.)
+    2. Execute retrieval (single search, multi-query union, graph traversal, etc.)
     3. Return unified results with metadata
 
     Implementations:
         - StandardRetrieval: No preprocessing, direct Weaviate search
         - HyDERetrieval: Generate hypotheticals -> average embeddings -> single search
-        - DecompositionRetrieval: Break into sub-questions -> parallel searches -> RRF merge
+        - DecompositionRetrieval: Break into sub-questions -> parallel searches -> union merge + rerank
         - GraphRAGRetrieval: Extract entities -> graph traversal -> combined_degree ranking
     """
 
@@ -215,11 +215,11 @@ def hyde_strategy(query: str, model: Optional[str] = None) -> PreprocessedQuery:
 
 
 def decomposition_strategy(query: str, model: Optional[str] = None) -> PreprocessedQuery:
-    """Always decompose query into sub-questions for RRF merging.
+    """Always decompose query into sub-questions for union merge + rerank.
 
     This strategy handles comparison and multi-aspect questions by:
     1. Decomposing into 2-4 sub-questions
-    2. Using sub-questions for RRF-merged retrieval
+    2. Using sub-questions for union-merged retrieval + reranking
 
     Based on Query Decomposition research showing +36.7% MRR@10 improvement
     for complex multi-hop queries. Works safely on simpler queries too.
@@ -229,7 +229,7 @@ def decomposition_strategy(query: str, model: Optional[str] = None) -> Preproces
         model: Model for LLM calls.
 
     Returns:
-        PreprocessedQuery with sub_queries and generated_queries for RRF.
+        PreprocessedQuery with sub_queries and generated_queries for retrieval.
     """
     start_time = time.time()
     model = model or PREPROCESSING_MODEL
@@ -239,7 +239,7 @@ def decomposition_strategy(query: str, model: Optional[str] = None) -> Preproces
     logger.info(f"[decomposition] Decomposed into {len(sub_queries)} sub-queries")
 
     # Build generated_queries format for search compatibility
-    # This allows reuse of existing RRF merging infrastructure
+    # This allows reuse of existing multi-query retrieval infrastructure
     generated_queries = [{"type": "original", "query": query}]
     for i, sq in enumerate(sub_queries):
         generated_queries.append({"type": f"sub_{i+1}", "query": sq})
@@ -253,7 +253,7 @@ def decomposition_strategy(query: str, model: Optional[str] = None) -> Preproces
         strategy_used="decomposition",
         preprocessing_time_ms=elapsed_ms,
         model=model,
-        generated_queries=generated_queries,  # For search/RRF compatibility
+        generated_queries=generated_queries,  # For multi-query search compatibility
         decomposition_response=decomposition_response,
     )
 

@@ -13,12 +13,12 @@ Key Components:
 
 Usage:
     >>> from src.rag_pipeline.chunking.raptor import run_raptor_chunking
-    >>> stats = run_raptor_chunking()  # Process all section chunks
+    >>> stats = run_raptor_chunking()  # Process all semantic_std2 chunks
     >>> print(stats)  # {"book_name": node_count, ...}
 
 Pipeline Integration:
     Stage 4b: python -m src.stages.run_stage_4b_raptor
-    Input:  data/processed/05_final_chunks/section/{book}.json
+    Input:  data/processed/05_final_chunks/semantic_std2/{book}.json
     Output: data/processed/05_final_chunks/raptor/{book}.json
 """
 

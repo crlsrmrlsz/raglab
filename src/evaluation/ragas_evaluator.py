@@ -4,7 +4,7 @@ Provides:
 - OpenRouter chat integration for answer generation
 - RAGAS evaluation with LangChain wrapper
 - Retrieval and generation functions for the evaluation pipeline
-- Strategy-aware retrieval (decomposition RRF, graphrag hybrid)
+- Strategy-aware retrieval (decomposition union merge, graphrag hybrid)
 """
 
 import time
@@ -296,7 +296,7 @@ def retrieve_contexts(
         - Strategies encapsulate their own retrieval logic:
           - StandardRetrieval: Direct search
           - HyDERetrieval: Embedding averaging
-          - DecompositionRetrieval: Multi-query RRF
+          - DecompositionRetrieval: Multi-query union merge + rerank
           - GraphRAGRetrieval: Graph + vector hybrid
         - Cross-encoder reranking improves precision by 20-35%
     """

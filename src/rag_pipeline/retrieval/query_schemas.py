@@ -36,7 +36,7 @@ class DecompositionResult(BaseModel):
 
     Contains 2-4 sub-questions that can be answered independently.
     Each sub-question is used for separate retrieval, with results
-    merged using RRF. This handles complex comparison or multi-aspect
+    merged using union + reranking. This handles complex comparison or multi-aspect
     questions that span multiple domains.
 
     Example for "Compare Stoic and Buddhist views on suffering":

@@ -49,13 +49,13 @@ def run_raptor_chunking(
     summary_model: str = RAPTOR_SUMMARY_MODEL,
     overwrite_context: Optional[OverwriteContext] = None,
 ) -> dict[str, TreeMetadata]:
-    """Build RAPTOR trees for all section chunks.
+    """Build RAPTOR trees for all semantic chunks (std=2).
 
-    Main entry point for RAPTOR strategy. Loads section chunks and builds
+    Main entry point for RAPTOR strategy. Loads semantic_std2 chunks and builds
     hierarchical summary trees for each book.
 
-    Note: This is a POST-PROCESSING step on section chunks. Run section
-    chunking first if the section/ folder is empty.
+    Note: This is a POST-PROCESSING step on semantic chunks (std=2). Run semantic
+    chunking first if the semantic_std2/ folder is empty.
 
     Args:
         max_levels: Maximum tree depth (default: 4).
@@ -67,7 +67,7 @@ def run_raptor_chunking(
         Dict mapping book names to TreeMetadata with full tree statistics.
 
     Raises:
-        FileNotFoundError: If section chunks don't exist.
+        FileNotFoundError: If semantic_std2 chunks don't exist.
         Exception: Re-raises any error from processing (fail-fast).
     """
     # Input: semantic chunks (std=2)
@@ -147,10 +147,10 @@ def _process_single_book(
     min_cluster_size: int,
     summary_model: str,
 ) -> TreeMetadata:
-    """Process a single book's section chunks into a RAPTOR tree.
+    """Process a single book's semantic chunks (std=2) into a RAPTOR tree.
 
     Args:
-        input_path: Path to section chunk JSON.
+        input_path: Path to semantic_std2 chunk JSON.
         output_path: Path for output RAPTOR JSON.
         max_levels: Maximum tree depth.
         min_cluster_size: Minimum nodes for clustering.
@@ -161,11 +161,11 @@ def _process_single_book(
     """
     book_id = input_path.stem
 
-    # Load section chunks
+    # Load semantic chunks
     with input_path.open("r", encoding="utf-8") as f:
         chunks = json.load(f)
 
-    logger.info(f"Processing {book_id} ({len(chunks)} section chunks)")
+    logger.info(f"Processing {book_id} ({len(chunks)} semantic chunks)")
 
     # Build tree
     all_nodes, metadata = build_raptor_tree(

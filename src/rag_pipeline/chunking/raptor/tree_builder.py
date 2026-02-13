@@ -203,10 +203,10 @@ def _create_leaf_nodes(
     chunks: list[dict[str, Any]],
     book_id: str,
 ) -> list[RaptorNode]:
-    """Convert section chunks to leaf RaptorNodes.
+    """Convert semantic chunks (std=2) to leaf RaptorNodes.
 
     Args:
-        chunks: Chunk dicts from section_chunker.py.
+        chunks: Chunk dicts from semantic chunking.
         book_id: Book identifier.
 
     Returns:
