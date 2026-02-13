@@ -148,7 +148,7 @@ These are some of the patterns that were removed:
 | `SINGLE_CHAR` | "a" (isolated line) | Remove OCR noise, diagram labels |
 | `FIG_TABLE_REF` | "(Figure 2)" | Remove parenthetical figure references |
 | `FOOTNOTE_MARKER` | "fn3" | Remove footnote markers mid-sentence |
-| `\u2014` | `--` | Unicode em-dash escape sequence |
+| `/u2014` | `--` | PDF extraction em-dash artifact |
 
 </div>
 

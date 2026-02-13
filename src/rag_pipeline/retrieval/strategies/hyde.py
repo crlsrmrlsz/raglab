@@ -34,7 +34,7 @@ class HyDERetrieval:
     """HyDE strategy: Generate hypotheticals → Average embeddings → Single search.
 
     Paper-aligned implementation (arXiv:2212.10496):
-    - Generates K hypothetical answers (default K=5)
+    - Generates K hypothetical answers (default K=4)
     - Averages embeddings: original query + K hypotheticals
     - Single semantic search with averaged embedding (alpha=1.0)
 

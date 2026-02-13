@@ -58,7 +58,7 @@ Chunks are stored in JSON files for inspection and inter-phase isolation, and ev
   "section": "Section 2",
   "text": "The actual chunk content...",
   "token_count": 750,
-  "chunking_strategy": "section"
+  "chunking_strategy": "sequential_overlap_2"
 }
 ```
 

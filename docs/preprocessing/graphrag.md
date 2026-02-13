@@ -65,7 +65,7 @@ Queries are classified as **local** or **global** and routed to different retrie
 
 **Global queries** ask about themes, patterns, or corpus-wide understanding (e.g., "What are the main themes?"). RAGLab uses **DRIFT search** (simplified from Microsoft's Dynamic Reasoning with Inference-time Fine-Tuning):
 
-1. **Embed query + HNSW top-K** — The query is embedded and compared against pre-computed community summary embeddings via Weaviate's HNSW index. The top-K most relevant L0 communities are retrieved (default K=20). This replaces the original paper's exhaustive approach of processing ALL communities.
+1. **Embed query + HNSW top-K** — The query is embedded and compared against pre-computed community summary embeddings via Weaviate's HNSW index. The top-K most relevant communities are retrieved across all hierarchy levels (default K=20). This replaces the original paper's exhaustive approach of processing ALL communities.
 
 2. **Primer folds** — The top-K communities are split into folds (default 4 folds of 5 communities each). Each fold runs a parallel LLM call that generates an intermediate answer from its community subset. Communities not relevant to the query are filtered out.
 

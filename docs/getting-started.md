@@ -42,9 +42,9 @@ pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/e
 # Or use standard model for general text:
 # python -m spacy download en_core_web_sm
 
-# Create .env file with your API key
-cp .env.example .env
-# Edit .env and add: OPENROUTER_API_KEY=your_key_here
+# Create .env file with your API key (code loads from src/)
+cp .env.example src/.env
+# Edit src/.env and add: OPENROUTER_API_KEY=your_key_here
 
 # Start Docker services
 docker compose up -d
@@ -124,7 +124,7 @@ src/
 ├── content_preparation/    # PDF → clean text
 ├── rag_pipeline/           # chunking, embedding, retrieval, generation
 │   ├── chunking/           # Section, contextual, semantic chunkers
-│   ├── embedder.py         # OpenAI embedding API
+│   ├── embedder.py         # OpenRouter embedding API (OpenAI-compatible)
 │   ├── indexing/           # Weaviate upload
 │   ├── retrieval/          # Search + preprocessing strategies
 │   └── generation/         # Answer generation

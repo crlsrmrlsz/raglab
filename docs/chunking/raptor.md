@@ -38,7 +38,7 @@ The paper demonstrated significant improvements on multi-step reasoning tasks, a
 
 The core insight is combining dimensionality reduction with probabilistic clustering to find semantically coherent groups, then summarizing them recursively:
 
-1. **UMAP** (Uniform Manifold Approximation and Projection) reduces 1536-dim embeddings to 10 dims, preserving local and global structure while making clustering tractable
+1. **UMAP** (Uniform Manifold Approximation and Projection) reduces 3072-dim embeddings (text-embedding-3-large) to 10 dims, preserving local and global structure while making clustering tractable
 2. **GMM** (Gaussian Mixture Model) clusters the reduced embeddings, using **BIC** (Bayesian Information Criterion) to automatically select K—balancing fit vs complexity to avoid both under- and over-clustering
 3. **LLM summarization** generates a summary for each cluster, creating parent nodes
 4. **Recursion** repeats on the summaries until the tree stops growing
@@ -59,7 +59,7 @@ The main deviation in this implementation is using larger leaf chunks. The paper
 | **Leaf chunks** | 100 tokens | Semantic std=2 (~500 tokens avg) |
 | **Document scope** | Per-document | Per-book |
 | **Summary model** | gpt-3.5-turbo | deepseek-v3.2 |
-| **Cluster assignment** | Soft (P > 0.3) | Hard (argmax); threshold used for logging only |
+| **Cluster assignment** | Soft (P > 0.3) | Soft (P >= 0.3), same as paper |
 | **Retrieval** | Collapsed tree | Collapsed tree (same) |
 
 </div>
@@ -75,11 +75,11 @@ The input is semantic chunks (std=2). The algorithm recursively clusters and sum
 For each book:
   Load semantic chunks (std=2) as level-0 nodes
 
-  While nodes.count > MIN_CLUSTER_SIZE:
+  While nodes.count >= MIN_CLUSTER_SIZE and level < MAX_LEVELS:
     1. Embed current level nodes
     2. UMAP reduce dimensions
     3. Find optimal K via BIC
-    4. GMM cluster nodes
+    4. GMM cluster nodes (soft assignment, P >= 0.3)
     5. LLM summarize each cluster → new nodes at level+1
 
   Return all nodes (leaves + summaries)

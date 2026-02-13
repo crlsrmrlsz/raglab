@@ -77,12 +77,12 @@ The test dataset was composed using Claude Code by reading the whole corpus and 
 ### Corpus
 
 19 books spanning two domains:
-- **Neuroscience** (9 books, ~4,800 chunks): Sapolsky, Kahneman, Eagleman, Gazzaniga
-- **Philosophy** (10 books, ~1,400 chunks): Stoics, Schopenhauer, Tao Te Ching, Confucius
+- **Neuroscience** (8 books, ~4,800 chunks): Sapolsky, Eagleman, Gazzaniga, Pinel
+- **Philosophy** (11 books, ~1,400 chunks): Kahneman, Stoics, Schopenhauer, Tao Te Ching, Confucius
 
 ### Question design
 
-45 questions total, each with a paragraph-length human-written reference answer.
+47 questions total, each with a paragraph-length human-written reference answer.
 
 <div align="center">
 
@@ -100,13 +100,13 @@ The test dataset was composed using Claude Code by reading the whole corpus and 
 
 ### Comprehensive subset
 
-The 15-question curated subset (`comprehensive_questions.json`) was selected for grid search based on: multi-source retrieval requirement, synthesis difficulty, and coverage of both single-concept and cross-domain question types. This smaller set keeps grid search tractable while maintaining evaluation signal.
+The 17-question curated subset (`comprehensive_questions.json`) was selected for grid search based on: multi-source retrieval requirement, synthesis difficulty, and coverage of both single-concept and cross-domain question types. This smaller set keeps grid search tractable while maintaining evaluation signal.
 
 
 ## Running Evaluation
 
 ```bash
-# Comprehensive grid search (15-question curated subset)
+# Comprehensive grid search (17-question curated subset)
 python -m src.stages.run_stage_7_evaluation --comprehensive
 ```
 

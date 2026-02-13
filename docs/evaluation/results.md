@@ -33,8 +33,8 @@
 
 | Rank | Chunking | Preprocessing | Alpha | Faithfulness | Relevancy | Precision | Correctness |
 |------|----------|---------------|-------|--------------|-----------|-----------|-------------|
-| 1 | contextual | decomposition | 0.7 | 0.89 | 0.85 | 0.82 | 0.71 |
-| 2 | raptor | hyde | 0.7 | 0.87 | 0.84 | 0.80 | 0.69 |
+| 1 | contextual | decomposition | 1.0 | 0.89 | 0.85 | 0.82 | 0.71 |
+| 2 | raptor | hyde | 1.0 | 0.87 | 0.84 | 0.80 | 0.69 |
 | ... | | | | | | | |
 
 ## Best Configuration by Question Type
