@@ -418,6 +418,7 @@ def _save_checkpoint(
         checkpoint_data["combinations"] = [
             [c, a, r, s] for c, a, r, s in combinations
         ]
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     with open(checkpoint_path, "w") as f:
         json.dump(checkpoint_data, f, indent=2)
     logger.info(f"  Checkpoint saved: {count}/{total} ({progress_pct}%)")
