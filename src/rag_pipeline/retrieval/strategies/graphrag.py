@@ -16,8 +16,8 @@ Key algorithm (local queries):
 
 Key algorithm (global queries):
     1. LLM classifies query as local or global
-    2. Map-reduce over L0 community summaries
-    3. Synthesize final answer from community perspectives
+    2. DRIFT search: embed query -> top-K communities via HNSW -> primer folds -> reduce
+    3. Synthesize final answer from community perspectives (~5 LLM calls vs ~1000)
 """
 
 from typing import Optional
@@ -40,7 +40,7 @@ class GraphRAGRetrieval:
 
     This implements Microsoft's GraphRAG approach:
     - Local queries: Entity extraction -> Graph traversal -> Combined_degree ranking
-    - Global queries: Map-reduce over Leiden community summaries
+    - Global queries: DRIFT search over Leiden community summaries
 
     Flow (local):
         1. Extract entities from query
@@ -50,8 +50,8 @@ class GraphRAGRetrieval:
 
     Flow (global):
         1. LLM classifies query as global
-        2. Map-reduce over L0 communities
-        3. Synthesize answer
+        2. DRIFT: embed query -> HNSW top-K -> primer folds -> reduce
+        3. Synthesize answer (~5 LLM calls)
 
     Attributes:
         strategy_id: "graphrag" - identifies this as the GraphRAG strategy.
@@ -94,14 +94,14 @@ class GraphRAGRetrieval:
             graph_metadata = {"error": "No Neo4j driver provided", "query_type": "local"}
         else:
             try:
-                from src.graph.query import graph_retrieval_with_map_reduce
+                from src.graph.query import graph_retrieval_with_drift
 
-                results_dicts, graph_metadata = graph_retrieval_with_map_reduce(
+                results_dicts, graph_metadata = graph_retrieval_with_drift(
                     query=query,
                     driver=context.neo4j_driver,
                     top_k=context.top_k,
                     collection_name=context.collection_name,
-                    use_map_reduce=True,
+                    use_drift=True,
                 )
             except Exception as e:
                 logger.error(f"[graphrag] Graph retrieval failed: {e}")

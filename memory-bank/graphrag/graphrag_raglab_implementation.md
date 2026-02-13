@@ -108,7 +108,7 @@ flowchart TB
 | Community Context | In token budget | By entity membership (separate) | Different |
 | Global Search | Map-reduce over communities | Map-reduce over L0 communities | Matches |
 | Query Classification | LLM-based | LLM-based | Matches |
-| DRIFT Search | Dynamic iterative search | **Not implemented** | Missing |
+| DRIFT Search | Dynamic iterative search | **Simplified DRIFT** (top-K HNSW + primer folds + reduce) | Implemented |
 
 ### Storage
 
@@ -598,16 +598,17 @@ flowchart TB
     style LOCAL fill:#90EE90
 ```
 
-### Map-Reduce Configuration
+### DRIFT Search Configuration (replaces Map-Reduce)
 
 | Parameter | Microsoft Reference | RAGLab |
 |-----------|--------------------|----|
-| Community selection | ALL at selected level | **ALL L0** (matches Microsoft) |
+| Community selection | ALL at selected level (map-reduce) | **Top-20 via HNSW** (DRIFT) |
 | Community level | Configurable (C0-C3) | **L0 only** (coarsest) |
-| Map concurrency | asyncio.Semaphore(32) | `asyncio.gather` (no limit) |
-| Map max tokens | Configurable | 300 |
-| Reduce max tokens | Configurable | 500 |
-| Score filtering | Remove score=0 | Remove "Not relevant" responses |
+| Primer folds | N/A (1 call per community) | **4 folds** (5 communities per fold) |
+| Primer max tokens | Configurable | 1000 |
+| Reduce max tokens | Configurable | 800 |
+| Total LLM calls | ~N (all communities) | **~5** (4 primer + 1 reduce) |
+| Score filtering | Remove score=0 | Remove "Not relevant" + score=0 |
 
 ### Query Classification Prompt
 
@@ -1030,12 +1031,14 @@ Microsoft's post-paper `DynamicCommunitySelection` is **not implemented**:
 - Benefit: Filters irrelevant communities, finds optimal granularity
 - Cost: Requires LLM call per community for relevance scoring
 
-### 2. DRIFT Search
+### 2. DRIFT Search (Simplified — Implemented)
 
-Microsoft's Dynamic Reasoning and Inference with Flexible Traversal is **not implemented**:
-- Iterative search with follow-up queries
-- Confidence-based stopping
-- Multi-phase exploration
+Simplified DRIFT replaces brute-force map-reduce for global queries:
+- Top-K community selection via Weaviate HNSW (O(log n) vs O(n))
+- Primer phase: parallel LLM calls over community folds
+- Reduce phase: single LLM call for final synthesis
+- ~5 LLM calls vs ~1000 (99.5% reduction)
+- **Not implemented**: Follow-up queries, confidence-based stopping (full Microsoft DRIFT)
 
 ### 3. Covariates/Claims
 
@@ -1095,7 +1098,7 @@ RAGLab implements the core GraphRAG pipeline with several enhancements:
 **Simplifications**:
 - Simpler community summary format
 - No token budget allocation
-- No DRIFT search
+- Simplified DRIFT (no follow-up loop, no confidence-based stopping)
 - No claims/covariates
 
 **Design Philosophy**:

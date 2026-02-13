@@ -667,16 +667,16 @@ if search_clicked and query:
                     st.warning(f"Answer generation failed: {e}")
                     st.session_state.generated_answer = None
         elif (st.session_state.graph_metadata
-              and st.session_state.graph_metadata.get("map_reduce_result")):
-            # Global query: map-reduce already produced the answer (no chunks)
-            mr = st.session_state.graph_metadata["map_reduce_result"]
+              and st.session_state.graph_metadata.get("drift_result")):
+            # Global query: DRIFT already produced the answer (no chunks)
+            mr = st.session_state.graph_metadata["drift_result"]
             from src.rag_pipeline.generation.answer_generator import GeneratedAnswer
             st.session_state.generated_answer = GeneratedAnswer(
                 answer=mr["final_answer"],
                 model=GENERATION_MODEL,
                 generation_time_ms=mr.get("total_time_ms", 0),
                 sources_used=[],
-                system_prompt_used="Map-reduce global query",
+                system_prompt_used="DRIFT global query",
                 user_prompt_used=query,
             )
         else:
@@ -726,12 +726,13 @@ if st.session_state.search_results or st.session_state.generated_answer:
 
             # Show metadata
             graph_meta = st.session_state.graph_metadata
-            is_global = (graph_meta and graph_meta.get("map_reduce_result"))
+            is_global = (graph_meta and graph_meta.get("drift_result"))
             col1, col2, col3 = st.columns(3)
             col1.caption(f"Model: {ans.model}")
             if is_global:
-                mr = graph_meta["map_reduce_result"]
-                col2.caption(f"Communities: {mr.get('communities_used', 0)}")
+                dr = graph_meta["drift_result"]
+                n_comm = len(dr.get("communities_used", []))
+                col2.caption(f"Communities: {n_comm} | LLM calls: {dr.get('total_llm_calls', 0)}")
             else:
                 col2.caption(f"Sources cited: {ans.sources_used}")
             col3.caption(f"Generated in {ans.generation_time_ms:.0f}ms")

@@ -291,3 +291,43 @@ Create a unified, coherent answer that:
 4. Ignores "Not relevant" responses
 
 Synthesized Answer:"""
+
+
+# ---------------------------------------------------------------------------
+# DRIFT Search prompts (simplified: primer + reduce, no follow-ups)
+# ---------------------------------------------------------------------------
+
+# Primer phase: Process one fold of community reports, generate intermediate answer
+DRIFT_PRIMER_PROMPT = """You are analyzing community reports from a knowledge graph to answer a query.
+
+Query: {query}
+
+Community Reports (ranked by relevance):
+{community_reports}
+
+Based on these community reports:
+1. Provide an intermediate answer to the query using ONLY information from the reports above.
+2. Rate the relevance of these communities to the query on a scale of 0-10.
+
+If the communities are not relevant, say "Not relevant" and give a score of 0.
+
+Format your response as:
+[Score: X/10]
+[Answer]
+Your intermediate answer here."""
+
+# Reduce phase: Synthesize scored intermediate answers into final response
+DRIFT_REDUCE_PROMPT = """Synthesize these intermediate answers into a comprehensive final response.
+
+Query: {query}
+
+Intermediate Answers (from different community groups, ranked by relevance score):
+{intermediate_answers}
+
+Create a unified, coherent answer that:
+1. Prioritizes insights from higher-scored intermediate answers
+2. Integrates complementary information across groups
+3. Identifies common themes and contrasting perspectives
+4. Omits information marked as "Not relevant"
+
+Synthesized Answer:"""

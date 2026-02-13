@@ -18,9 +18,10 @@ GraphRAG enables global queries ("What are the main themes across all documents?
 - community.py: Leiden detection + community summarization
 - hierarchy.py: Multi-level community parsing from Leiden
 - centrality.py: PageRank computation for entity importance
-- map_reduce.py: Async map-reduce for global queries
+- map_reduce.py: Query classification (classify_query, should_use_map_reduce)
+- drift.py: DRIFT search for global queries (replaces map-reduce)
 - query_entities.py: Query entity extraction (embedding similarity)
-- query.py: Graph retrieval (pure graph traversal + map-reduce)
+- query.py: Graph retrieval (pure graph traversal + DRIFT)
 
 ## Data Flow
 
@@ -28,7 +29,7 @@ GraphRAG enables global queries ("What are the main themes across all documents?
 2. Neo4j graph → Leiden communities → Community summaries (stored in Weaviate)
 3. Query → Embedding entity extraction → Graph traversal → Chunk ID discovery
 4. Fetch graph-discovered chunks from Weaviate (batch filter) → Rank by combined_degree
-5. For global queries: Map-reduce over L0 community summaries
+5. For global queries: DRIFT search over top-K community summaries
 """
 
 from .schemas import (
@@ -65,6 +66,10 @@ from .map_reduce import (
     map_reduce_global_query,
     should_use_map_reduce,
 )
+from .drift import (
+    DriftResult,
+    drift_search,
+)
 from .query_entities import (
     extract_query_entities,
 )
@@ -100,11 +105,14 @@ __all__ = [
     # Centrality
     "compute_pagerank",
     "write_pagerank_to_neo4j",
-    # Map-Reduce
+    # Map-Reduce (deprecated, kept for classify_query/should_use_map_reduce)
     "MapReduceResult",
     "classify_query",
     "map_reduce_global_query",
     "should_use_map_reduce",
+    # DRIFT Search
+    "DriftResult",
+    "drift_search",
     # Query entities
     "extract_query_entities",
     # Query

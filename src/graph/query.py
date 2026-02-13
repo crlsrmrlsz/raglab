@@ -27,12 +27,12 @@ Uses existing infrastructure:
 4. Rank by combined_degree (Microsoft approach: hub entities = more informative)
 5. Return top-k chunks
 
-## Data Flow (Global Queries - Map-Reduce)
+## Data Flow (Global Queries - DRIFT Search)
 
 1. Query → LLM classifies as local or global
-2. Retrieve ALL L0 communities (coarsest level)
-3. Map: Parallel LLM calls → partial answers per community
-4. Reduce: Synthesize final answer
+2. Embed query → Weaviate HNSW → top-K relevant communities
+3. Primer: Parallel LLM calls over community folds → intermediate answers
+4. Reduce: Single LLM call → final synthesized answer
 """
 
 from typing import Any, Optional
@@ -43,6 +43,7 @@ from neo4j import Driver
 from src.config import (
     GRAPHRAG_TRAVERSE_DEPTH,
     GRAPHRAG_MAX_HIERARCHY_LEVELS,
+    GRAPHRAG_SUMMARY_MODEL,
     get_community_collection_name,
     get_collection_name,
 )
@@ -628,74 +629,71 @@ def graph_retrieval(
     return result_dicts, metadata
 
 
-def graph_retrieval_with_map_reduce(
+def graph_retrieval_with_drift(
     query: str,
     driver: Driver,
     top_k: int = 10,
     collection_name: Optional[str] = None,
-    use_map_reduce: bool = True,
+    use_drift: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Graph-only retrieval with optional map-reduce for global queries.
+    """Graph-only retrieval with DRIFT search for global queries.
 
-    Wraps graph_retrieval() with map-reduce support:
+    Wraps graph_retrieval() with DRIFT support:
     - Local queries: Pure graph traversal ranked by combined_degree
-    - Global queries: Map-reduce over community summaries
+    - Global queries: DRIFT search (top-K communities via HNSW + primer + reduce)
 
     Args:
         query: User query string.
         driver: Neo4j driver instance.
         top_k: Number of results to return.
         collection_name: Weaviate collection name.
-        use_map_reduce: Whether to use map-reduce for global queries.
+        use_drift: Whether to use DRIFT for global queries.
 
     Returns:
         Tuple of (results, metadata).
-        For global queries, metadata includes "map_reduce_result".
+        For global queries, metadata includes "drift_result".
     """
-    from .map_reduce import map_reduce_global_query, should_use_map_reduce
+    from .map_reduce import should_use_map_reduce
+    from .drift import drift_search
 
     # Get graph context to check for global query
     graph_chunk_ids, graph_meta = get_graph_chunk_ids(query, driver)
 
-    # Global query path: map-reduce over communities
-    if use_map_reduce and should_use_map_reduce(query):
-        logger.info("Global query detected, using map-reduce")
+    # Global query path: DRIFT search over top-K communities
+    if use_drift and should_use_map_reduce(query):
+        logger.info("Global query detected, using DRIFT search")
 
-        communities = retrieve_communities_for_map_reduce(level=0)
+        drift_result = drift_search(query, model=GRAPHRAG_SUMMARY_MODEL)
 
-        if communities:
-            mr_result = map_reduce_global_query(query, communities)
-
+        if drift_result.communities_used or drift_result.final_answer:
             metadata = {
                 "extracted_entities": graph_meta.get("extracted_entities", []),
                 "query_entities": graph_meta.get("query_entities", []),
                 "graph_context": graph_meta.get("graph_context", []),
-                "community_context": [
-                    {"community_id": c.community_id, "summary": c.summary, "member_count": c.member_count}
-                    for c in communities
-                ],
                 "query_type": "global",
-                "map_reduce_result": {
-                    "final_answer": mr_result.final_answer,
-                    "communities_used": mr_result.communities_used,
-                    "map_time_ms": mr_result.map_time_ms,
-                    "reduce_time_ms": mr_result.reduce_time_ms,
-                    "total_time_ms": mr_result.total_time_ms,
+                "drift_result": {
+                    "final_answer": drift_result.final_answer,
+                    "communities_used": drift_result.communities_used,
+                    "primer_time_ms": drift_result.primer_time_ms,
+                    "reduce_time_ms": drift_result.reduce_time_ms,
+                    "total_time_ms": drift_result.total_time_ms,
+                    "total_llm_calls": drift_result.total_llm_calls,
                 },
             }
 
             logger.info(
-                f"Map-reduce complete: {len(mr_result.communities_used)} communities, "
-                f"{mr_result.total_time_ms:.0f}ms total"
+                f"DRIFT complete: {len(drift_result.communities_used)} communities, "
+                f"{drift_result.total_llm_calls} LLM calls, "
+                f"{drift_result.total_time_ms:.0f}ms total"
             )
 
-            # Return empty results (answer in metadata["map_reduce_result"])
+            # Return empty results (answer in metadata["drift_result"])
             return [], metadata
-        else:
-            logger.warning(
-                "Global query detected but no communities available, "
-                "falling back to local graph retrieval"
-            )
+
+        logger.warning(
+            "Global query detected but DRIFT returned no results, "
+            "falling back to local graph retrieval"
+        )
 
     # Local query path: pure graph retrieval (pass pre-computed data to avoid
     # redundant entity extraction + graph traversal)

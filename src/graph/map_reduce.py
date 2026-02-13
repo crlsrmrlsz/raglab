@@ -1,5 +1,13 @@
 """Map-reduce query handling for GraphRAG global queries.
 
+DEPRECATED: map_reduce_global_query() and map_reduce_global_query_async() are
+replaced by DRIFT search (src/graph/drift.py) which uses HNSW community selection
+instead of brute-force ALL-community processing (~5 LLM calls vs ~1000).
+
+Still active:
+- classify_query(): Used by DRIFT to determine local vs global
+- should_use_map_reduce(): Used by DRIFT to decide when to activate
+
 ## RAG Theory: Map-Reduce for Global Queries
 
 Microsoft GraphRAG (arXiv:2404.16130) uses map-reduce for global queries:
@@ -214,6 +222,10 @@ async def map_reduce_global_query_async(
 ) -> MapReduceResult:
     """Execute map-reduce query across communities (async).
 
+    .. deprecated::
+        Replaced by DRIFT search (src/graph/drift.py) which uses HNSW
+        community selection instead of processing ALL communities.
+
     Map phase runs in parallel for better latency.
     Reduce phase synthesizes all partial answers.
 
@@ -330,6 +342,9 @@ def map_reduce_global_query(
     reduce_max_tokens: int = GRAPHRAG_REDUCE_MAX_TOKENS,
 ) -> MapReduceResult:
     """Execute map-reduce query (sync wrapper for async version).
+
+    .. deprecated::
+        Replaced by drift_search() in src/graph/drift.py.
 
     Convenience function for non-async contexts.
 
