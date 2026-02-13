@@ -265,9 +265,9 @@ def build_pyvis_network(
         entity_type = attrs.get("entity_type", "UNKNOWN")
         color = ENTITY_TYPE_COLORS.get(entity_type, DEFAULT_COLOR)
 
-        # Scale degree to node size (10-50px)
+        # Scale degree to node size (20-70px)
         degree = attrs.get("degree", 0)
-        size = 10 + 40 * ((degree - min_deg) / deg_range)
+        size = 20 + 50 * ((degree - min_deg) / deg_range)
 
         # Build hover tooltip
         name = attrs.get("name", node_id)
