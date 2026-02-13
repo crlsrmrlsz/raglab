@@ -448,7 +448,7 @@ Add search mode toggle:
 
 ### 5.1 Implement Decomposition
 
-**File**: `src/rag_pipeline/retrieval/preprocessing/query_preprocessing.py` (IMPLEMENTED)
+**File**: `src/rag_pipeline/retrieval/query_preprocessing.py` (IMPLEMENTED)
 
 ```python
 def decompose_query(query: str, model: Optional[str] = None) -> List[str]:
@@ -552,7 +552,7 @@ python -m src.stages.run_stage_7_evaluation --comprehensive
 
 ### GraphRAG Execution (Updated Jan 2026)
 
-**Simplified pipeline:** Entity extraction now uses curated types from `src/graph/graphrag_types.yaml` (33 types for dual-domain corpus).
+**Simplified pipeline:** Entity extraction now uses curated types from `src/graph/graphrag_types.yaml` (9 types for dual-domain corpus).
 
 **Execution order:**
 ```bash
@@ -622,8 +622,8 @@ For each improvement:
 - `src/rag_pipeline/chunking/raptor/` - RAPTOR module (tree_builder.py, clustering.py, summarizer.py)
 
 ### Preprocessing Strategies
-- `src/rag_pipeline/retrieval/preprocessing/strategies.py` - Strategy registry
-- `src/rag_pipeline/retrieval/preprocessing/query_preprocessing.py` - Dispatcher
+- `src/rag_pipeline/retrieval/strategy_registry.py` - Strategy registry
+- `src/rag_pipeline/retrieval/query_preprocessing.py` - Dispatcher
 - `src/rag_pipeline/retrieval/rrf.py` - RRF merging for decomposition/graphrag
 
 ### GraphRAG Module
@@ -899,7 +899,7 @@ args = parser.parse_args()
 result = process_{domain}(input, strategy=args.{domain}_strategy)
 ```
 
-### A.6 Logging Integration (src/utils/*_logger.py)
+### A.6 Logging Integration (src/shared/*_logger.py)
 
 ```python
 def _build_{domain}_section(result) -> Dict:
@@ -938,8 +938,8 @@ When adding a new strategy domain (e.g., chunking), follow these steps:
 
 **Files:**
 - `src/config.py` - `AVAILABLE_PREPROCESSING_STRATEGIES`
-- `src/rag_pipeline/retrieval/preprocessing/strategies.py` - Strategy registry
-- `src/rag_pipeline/retrieval/preprocessing/query_preprocessing.py` - Dispatcher
+- `src/rag_pipeline/retrieval/strategy_registry.py` - Strategy registry
+- `src/rag_pipeline/retrieval/query_preprocessing.py` - Dispatcher
 - `src/ui/app.py` - UI strategy dropdown
 - `src/stages/run_stage_7_evaluation.py` - CLI `--preprocessing` argument
 
@@ -980,6 +980,6 @@ python -m src.stages.run_stage_7_evaluation --preprocessing graphrag
 To add a new strategy:
 
 1. Add to `AVAILABLE_PREPROCESSING_STRATEGIES` in `src/config.py`
-2. Implement function in `src/rag_pipeline/retrieval/preprocessing/strategies.py`
+2. Implement function in `src/rag_pipeline/retrieval/strategy_registry.py`
 3. Add to `STRATEGIES` registry dict
 4. Test via CLI: `python -m src.stages.run_stage_7_evaluation --preprocessing new_strategy`

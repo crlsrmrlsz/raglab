@@ -76,8 +76,8 @@ Once NLP chunks are ready, you can run:
 # Section (baseline) - No dependencies
 python -m src.stages.run_stage_4_chunking --strategy section
 
-# Semantic - No dependencies, specify threshold
-python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4
+# Semantic - No dependencies, specify std coefficient
+python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0
 
 # Contextual - Requires semantic chunks (std=2) first
 python -m src.stages.run_stage_4_chunking --strategy contextual
@@ -95,7 +95,8 @@ This stage reads JSON files (one per book) from `data/processed/04_nlp_chunks/` 
 | Strategy | Output Directory |
 |----------|------------------|
 | Section | `data/processed/05_final_chunks/section/` |
-| Semantic | `data/processed/05_final_chunks/semantic_0.4/` |
+| Semantic (std=2) | `data/processed/05_final_chunks/semantic_std2/` |
+| Semantic (std=3) | `data/processed/05_final_chunks/semantic_std3/` |
 | Contextual | `data/processed/05_final_chunks/contextual/` |
 | RAPTOR | `data/processed/05_final_chunks/raptor/` |
 

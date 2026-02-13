@@ -102,9 +102,9 @@ Key settings are in `src/config.py`. Some important parameters:
 | `MAX_CHUNK_TOKENS` | 800 | Target chunk size |
 | `OVERLAP_SENTENCES` | 2 | Sentence overlap between chunks |
 | `DEFAULT_TOP_K` | 10 | Chunks to retrieve per query |
-| `PREPROCESSING_MODEL` | deepseek-v3.2 | Model for HyDE/decomposition |
-| `GENERATION_MODEL` | gpt-5-mini | Model for answer generation |
-| `RERANK_MODEL` | mxbai-rerank-xsmall-v1 | Cross-encoder for reranking |
+| `PREPROCESSING_MODEL` | `deepseek/deepseek-v3.2` | Model for HyDE/decomposition |
+| `GENERATION_MODEL` | `openai/gpt-5-mini` | Model for answer generation |
+| `RERANK_MODEL` | `mixedbread-ai/mxbai-rerank-xsmall-v1` | Cross-encoder for reranking |
 
 </div>
 
@@ -124,7 +124,7 @@ src/
 ├── content_preparation/    # PDF → clean text
 ├── rag_pipeline/           # chunking, embedding, retrieval, generation
 │   ├── chunking/           # Section, contextual, semantic chunkers
-│   ├── embedding/          # OpenAI embedding API
+│   ├── embedder.py         # OpenAI embedding API
 │   ├── indexing/           # Weaviate upload
 │   ├── retrieval/          # Search + preprocessing strategies
 │   └── generation/         # Answer generation
@@ -160,7 +160,7 @@ When you run the pipeline, data flows through these folders:
 | `data/processed/04_nlp_chunks/` | Stage 3 | Sentence-segmented JSON |
 | `data/processed/05_final_chunks/{strategy}/` | Stage 4 | Chunks ready for embedding |
 | `data/processed/06_embeddings/{strategy}/` | Stage 5 | Chunks with vector embeddings |
-| `data/processed/07_graph/` | Stage 4.5b | GraphRAG entities and relationships |
+| `data/processed/05_final_chunks/graph/` | Stage 4c | GraphRAG entities and relationships |
 
 </div>
 

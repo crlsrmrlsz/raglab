@@ -71,7 +71,7 @@ Docling identifies some elements semantically, like captions, tables, figures, h
 Figures and tables were not extracted, as the complexity of extracting and parsing them correctly didn't pay off for the purpose of the project.
 
 ```python
-# src/content_preparation/extraction/docling_parser.py
+# src/content_preparation/extraction.py
 
 from docling.datamodel.document import InputFormat, DocItemLabel
 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -108,7 +108,7 @@ def extract_pdf(pdf_path: Path) -> str:
     doc.delete_items(node_items=items_to_remove)
 
     # Also remove pictures and their children (diagram labels, etc.)
-    # ... (see full implementation in docling_parser.py)
+    # ... (see full implementation in extraction.py)
 
     return doc.export_to_markdown()
 ```
@@ -197,7 +197,7 @@ The segmentation keeps section information as context metadata for future chunks
 The segmenter uses a lazy singleton pattern to avoid reloading the spaCy model on each call:
 
 ```python
-# src/content_preparation/segmentation/nlp_segmenter.py
+# src/content_preparation/segmentation.py
 
 def segment_document(clean_text: str, book_name: str) -> list[dict]:
     """Segment document into structured chunks with context."""
@@ -309,9 +309,9 @@ python -m src.stages.run_stage_3_segmentation
 
 | File | Purpose |
 |------|---------|
-| `src/content_preparation/extraction/docling_parser.py` | Docling PDF extraction |
-| `src/content_preparation/cleaning/text_cleaner.py` | Regex cleaning orchestration |
-| `src/content_preparation/segmentation/nlp_segmenter.py` | spaCy sentence segmentation |
+| `src/content_preparation/extraction.py` | Docling PDF extraction |
+| `src/content_preparation/cleaning.py` | Regex cleaning orchestration |
+| `src/content_preparation/segmentation.py` | spaCy sentence segmentation |
 | `src/config.py` (lines 45-133) | Cleaning patterns, NLP settings |
 | `src/stages/run_stage_1_extraction.py` | Stage 1 CLI runner |
 | `src/stages/run_stage_2_processing.py` | Stage 2 CLI runner |

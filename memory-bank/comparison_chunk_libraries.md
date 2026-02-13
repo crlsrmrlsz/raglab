@@ -17,7 +17,7 @@
 | **Overlap Mechanism** | Sentence-based overlap with deque | `overlap_buffer: Deque[str] = deque(maxlen=overlap_sentences)` - semantic units, not arbitrary characters |
 | **Oversized Handling** | 3-tier split strategy | Punctuation → word boundary → force include (never loses content) |
 | **Infinite Loop Safety** | MAX_LOOP_ITERATIONS guard | `iteration_count > MAX_LOOP_ITERATIONS` prevents edge case hangs |
-| **A/B Testing Built-in** | Threshold in folder name | `semantic_0.4/` enables easy strategy comparison |
+| **A/B Testing Built-in** | Coefficient in folder name | `semantic_std2/` enables easy strategy comparison |
 | **RAPTOR** | Full hierarchical tree | GMM + UMAP + LLM summarization (ICLR 2024 paper implementation) |
 | **Contextual Retrieval** | Anthropic's technique | LLM context prepending (35% failure reduction) |
 | **Research-backed Thresholds** | Qu et al. arXiv research | 0.4 absolute threshold vs percentile-based (more stable) |
@@ -269,8 +269,8 @@ from langchain.text_splitter import TokenTextSplitter
 ### 2. Semantic Chunking
 
 **Your approach (research-backed):**
-- Uses absolute threshold (0.4) based on Chroma research
-- Folder naming includes threshold for A/B testing: `semantic_0.4/`
+- Uses standard deviation coefficient (k=2.0, k=3.0) for self-calibrating breakpoints
+- Folder naming includes std coefficient for A/B testing: `semantic_std2/`
 - Paper-backed: arXiv:2410.13070
 
 **LangChain SemanticChunker:**
@@ -425,7 +425,7 @@ When presenting this project, emphasize:
    - This is a common production bug you already avoided
 
 3. **"I built A/B testing infrastructure into the chunking"**
-   - Folders like `semantic_0.4/` enable experiments
+   - Folders like `semantic_std2/` enable experiments
    - Shows production mindset
    - Most tutorials skip this entirely
 

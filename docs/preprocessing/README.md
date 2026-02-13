@@ -38,7 +38,7 @@ Each strategy targets a specific retrieval failure mode with a distinct mechanis
 | Strategy | Failure Mode Addressed | LLM Calls | Latency |
 |----------|------------------------|-----------|---------|
 | **None** | — (baseline) | 0 | ~0ms |
-| [**HyDE**](hyde.md) | Semantic gap | 1-2 | ~500ms |
+| [**HyDE**](hyde.md) | Semantic gap | 4 | ~500ms |
 | [**Decomposition**](query-decomposition.md) | Multi-aspect queries | 1 | ~500ms |
 | [**GraphRAG**](graphrag.md) | Cross-document synthesis | 1+ | ~1-2s |
 
@@ -48,7 +48,7 @@ How each technique improves retrieval:
 
 - **HyDE (Hypothetical Document Embeddings)**: Bridges the semantic gap between how users ask questions and how documents express answers. Instead of embedding the question directly, an LLM generates a hypothetical answer, which is then embedded. This "answer-shaped" embedding lands closer to actual answer chunks in vector space, improving recall for queries where question-document vocabulary differs significantly.
 
-- **Decomposition**: Handles multi-aspect queries by breaking a complex question into independent sub-questions, each retrieving its own set of chunks. Results are merged using Reciprocal Rank Fusion (RRF). This prevents any single aspect from dominating retrieval and ensures coverage across all facets of a compound question.
+- **Decomposition**: Handles multi-aspect queries by breaking a complex question into independent sub-questions, each retrieving its own set of chunks. Results are merged using simple union (concatenate + deduplicate). The cross-encoder reranker then scores all pooled documents against the original query, making sophisticated merging redundant.
 
 - **GraphRAG**: Synthesizes information across documents by leveraging a pre-built knowledge graph. Entity extraction identifies key concepts in the query, which are matched to graph communities (clusters of related entities). Community summaries provide corpus-wide context that no individual chunk contains, enabling answers to thematic or comparative questions.
 

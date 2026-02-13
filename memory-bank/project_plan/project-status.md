@@ -21,8 +21,8 @@ RAGLab is a Retrieval-Augmented Generation pipeline designed for learning and ex
 | 7A. Query | `query_similar()`, `query_hybrid()` | weaviate_query.py |
 | 7B. UI | Streamlit interface | src/ui/app.py |
 | 7C. RAGAS | Evaluation framework | src/evaluation/ |
-| 8A. Preprocessing | Strategy-based query transformation | src/rag_pipeline/retrieval/preprocessing/ |
-| 8B. Generation | LLM answer synthesis | src/generation/ |
+| 8A. Preprocessing | Strategy-based query transformation | src/rag_pipeline/retrieval/ |
+| 8B. Generation | LLM answer synthesis | src/rag_pipeline/generation/ |
 
 ## Data Flow
 
@@ -75,12 +75,12 @@ The pipeline includes RAGAS-based evaluation metrics:
 | Component | Purpose | Status |
 |-----------|---------|--------|
 | HyDE | Generate hypothetical answers for semantic matching | Complete |
-| Query Decomposition | Break into sub-questions + RRF merge | Complete |
+| Query Decomposition | Break into sub-questions + union merge | Complete |
 | Answer Generator | Synthesize LLM answer from retrieved chunks | Complete |
 | LLM Call Logging | Log all LLM calls with model and char counts | Complete |
 
 **Key Modules:**
-- `src/rag_pipeline/retrieval/preprocessing/` - Strategy-based query transformation
+- `src/rag_pipeline/retrieval/` - Strategy-based query transformation
 - `src/rag_pipeline/generation/` - LLM answer synthesis with source citations
 
 **Design Decisions (Dec 22):**
@@ -126,7 +126,7 @@ Comprehensive code revision for publishing:
 
 ## GraphRAG Entity Extraction (Phase 8.1)
 
-Entity extraction uses curated types from `src/graph/graphrag_types.yaml` (33 types for dual-domain corpus).
+Entity extraction uses curated types from `src/graph/graphrag_types.yaml` (9 types for dual-domain corpus).
 
 **Process:**
 1. LLM extracts entities constrained to predefined types from YAML
@@ -153,9 +153,11 @@ data/logs/
 └── extraction_TIMESTAMP.log      # Execution log
 ```
 
-**Entity Types (33 curated in graphrag_types.yaml):**
-- Neuroscience (18): BRAIN_REGION, NEURAL_STRUCTURE, NEUROTRANSMITTER, COGNITIVE_PROCESS, BEHAVIOR, EMOTION, etc.
-- Philosophy (15): PHILOSOPHER, PHILOSOPHICAL_SCHOOL, VIRTUE, ETHICAL_CONCEPT, PRINCIPLE, etc.
+**Entity Types (9 curated in graphrag_types.yaml):**
+- Generic (1): PERSON
+- Neuroscience (4): BRAIN_STRUCTURE, BRAIN_FUNCTION, CHEMICAL, DISORDER
+- Psychology bridge (2): MENTAL_STATE, BEHAVIOR
+- Frameworks (2): THEORY, PRECEPT
 
 ## Strategy Pattern Architecture
 
@@ -196,20 +198,20 @@ The project uses a **Strategy Pattern with Registry** for modular, testable RAG 
 | **Result** | Dataclass | Contains `strategy_used` field for tracking |
 | **UI** | `src/ui/app.py` | Dropdown populated from `AVAILABLE_*` |
 | **CLI** | `src/run_stage_*.py` | `--strategy` argument with choices |
-| **Logging** | `src/utils/query_logger.py` | Records `strategy` in JSON logs |
+| **Logging** | `src/shared/query_logger.py` | Records `strategy` in JSON logs |
 
 ### Implemented: Preprocessing Strategies
 
 **Files:**
 - `src/config.py:AVAILABLE_PREPROCESSING_STRATEGIES`
-- `src/rag_pipeline/retrieval/preprocessing/strategies.py` (registry)
-- `src/rag_pipeline/retrieval/preprocessing/query_preprocessing.py` (dispatcher)
-- `src/rag_pipeline/retrieval/rrf.py` (RRF merging for decomposition)
+- `src/rag_pipeline/retrieval/strategy_registry.py` (registry)
+- `src/rag_pipeline/retrieval/query_preprocessing.py` (dispatcher)
+- `src/rag_pipeline/retrieval/rrf.py` (RRF merging for graphrag)
 
 **Available strategies (each applies directly to any query):**
 - `none` - No transformation, use original query (0 LLM calls)
 - `hyde` - Generate hypothetical answer for semantic matching (1 LLM call, 1 search) [arXiv:2212.10496]
-- `decomposition` - Break into 2-4 sub-questions + RRF merge (1 LLM call, 3-4 searches) [arXiv:2507.00355]
+- `decomposition` - Break into 2-4 sub-questions + union merge (1 LLM call, 3-4 searches) [arXiv:2507.00355]
 - `graphrag` - Hybrid graph + vector retrieval via RRF (entity traversal + semantic search) [arXiv:2404.16130]
 
 ### Implemented: Chunking Strategies
@@ -226,12 +228,6 @@ The project uses a **Strategy Pattern with Registry** for modular, testable RAG 
 - `contextual` - LLM-generated context prepended to chunks (Anthropic-style)
 - `raptor` - Hierarchical summarization tree with dynamic n_neighbors (sqrt formula like original RAPTOR) [arXiv:2401.18059]
 
-### To Implement: Embedding Strategies
-
-Same pattern for `src/ingest/embedding_strategies.py`:
-- `text-embedding-3-large` - Current OpenAI model
-- `voyage-3` - Higher quality, different pricing
-
 ### Implemented: Retrieval Strategies
 
 Retrieval is handled via search functions in `src/rag_pipeline/indexing/weaviate_query.py`:
@@ -243,7 +239,7 @@ Retrieval is handled via search functions in `src/rag_pipeline/indexing/weaviate
 
 Uses Pydantic schemas for type-safe LLM outputs with JSON Schema enforcement:
 - `src/shared/schemas.py` - `get_openrouter_schema()` utility
-- `src/rag_pipeline/retrieval/preprocessing/schemas.py` - Response models (DecompositionResult)
+- `src/rag_pipeline/retrieval/query_schemas.py` - Response models (DecompositionResult)
 
 Key function: `call_structured_completion(messages, model, response_model)` in `openrouter_client.py`
 

@@ -5,7 +5,7 @@
 Semantic chunking splits text at topic boundaries detected by embedding similarity, creating chunks that preserve conceptual coherence rather than splitting mid-argument. Unlike fixed-size chunking, it adapts to content structure.
 
 Here **Breakpoint-based semantic chunking**, with **standard deviation** as a reference is implemented, using these parameters:
-- **Max token limit**: 8192, embedding model max. To leave room for semantic chunk to group as needed.
+- **Max token limit**: 8191, embedding model max. To leave room for semantic chunk to group as needed.
 - **Sentence overlap**: 2, same as in section chunking.
 - **Std coefficient**: 2std and 3std chunks were generated to compare results.
 

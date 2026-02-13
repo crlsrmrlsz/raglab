@@ -10,20 +10,20 @@
 
 **Chunking Strategies:**
 - `section` — 800-token baseline
+- `semantic_std2` — Semantic boundaries (k=2.0 std coefficient)
+- `semantic_std3` — Semantic boundaries (k=3.0 std coefficient)
 - `contextual` — LLM-enriched chunks
 - `raptor` — Hierarchical summaries
 
 **Preprocessing Strategies:**
 - `none` — Original query
 - `hyde` — Hypothetical document
-- `decomposition` — Sub-queries + RRF
+- `decomposition` — Sub-queries + union merge
 - `graphrag` — Entity extraction + communities
 
 **Alpha Values (BM25/Vector Balance):**
 - `0.0` — Pure BM25
-- `0.3` — Mostly BM25
-- `0.5` — Balanced
-- `0.7` — Mostly vector (default)
+- `0.5` — Balanced hybrid
 - `1.0` — Pure vector
 
 ### Expected Output Format

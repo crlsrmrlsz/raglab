@@ -91,25 +91,26 @@ Microsoft's reference implementation uses Parquet files for everything. RAGLab u
 
 ### Entity Types
 
-Entity types are defined in `src/graph/graphrag_types.yaml` with 8 curated types. Microsoft defaults to 4 generic types (PERSON, ORGANIZATION, LOCATION, EVENT). RAGLab extends this for the dual-domain corpus while following the industry consensus that fewer, non-overlapping types work better than many specific ones.
+Entity types are defined in `src/graph/graphrag_types.yaml` with 9 curated types. Microsoft defaults to 4 generic types (PERSON, ORGANIZATION, LOCATION, EVENT). RAGLab extends this for the dual-domain corpus while following the industry consensus that fewer, non-overlapping types work better than many specific ones.
 
 <details>
-<summary><strong>Why these 8 types?</strong></summary>
+<summary><strong>Why these 9 types?</strong></summary>
 
 Initial extraction with open types showed PERSON fragmented across 6 variants (RESEARCHER, PHILOSOPHER, HISTORICAL_FIGURE) totaling ~9,000 entities that should be one type. Similarly, CONCEPT dominated with 19,916 entities—too generic for useful retrieval.
 
-The 8 types mirror the evaluation query pattern (brain mechanisms → psychological states → behaviors → philosophical principles):
+The 9 types mirror the evaluation query pattern (brain mechanisms → brain functions → psychological states → behaviors → theories & precepts):
 
 | Type | Examples | Query Role |
 |------|----------|------------|
 | PERSON | Sapolsky, Epictetus, Kahneman | Attribution |
-| WORK | Behave, Meditations | Source reference |
-| BRAIN_STRUCTURE | amygdala, prefrontal cortex | Causal mechanism |
-| CHEMICAL | dopamine, serotonin, oxytocin | Causal mechanism |
+| BRAIN_STRUCTURE | amygdala, prefrontal cortex, thalamus | Causal mechanism |
+| BRAIN_FUNCTION | neuroplasticity, fear conditioning, fight-or-flight | Process mechanism |
+| CHEMICAL | dopamine, serotonin, oxytocin, cortisol | Causal mechanism |
 | DISORDER | PTSD, depression, addiction | Clinical condition |
-| MENTAL_STATE | emotion, consciousness, suffering | Internal experience |
-| BEHAVIOR | procrastination, aggression, empathy | Observable pattern |
-| PRINCIPLE | dichotomy of control, wu wei | Philosophical interpretation |
+| MENTAL_STATE | emotion, consciousness, suffering, happiness | Internal experience |
+| BEHAVIOR | procrastination, aggression, conformity | Observable pattern |
+| THEORY | dual process theory, prospect theory, classical conditioning | Empirical model |
+| PRECEPT | dichotomy of control, wu wei, memento mori | Wisdom teaching |
 
 Strict mode (`GRAPHRAG_STRICT_MODE = True`) discards entities with types not in this list, preventing graph fragmentation.
 
