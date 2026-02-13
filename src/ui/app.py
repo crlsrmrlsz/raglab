@@ -561,7 +561,7 @@ with header_col1:
     # Search button
     search_clicked = st.button("Search", type="primary", disabled=not query)
 with header_col2:
-    st.image("assets/raglab_logo.png", use_container_width=True)
+    st.image("assets/raglab_logo.png", width="stretch")
 
 # Execute search
 if search_clicked and query:
@@ -666,6 +666,19 @@ if search_clicked and query:
                 except Exception as e:
                     st.warning(f"Answer generation failed: {e}")
                     st.session_state.generated_answer = None
+        elif (st.session_state.graph_metadata
+              and st.session_state.graph_metadata.get("map_reduce_result")):
+            # Global query: map-reduce already produced the answer (no chunks)
+            mr = st.session_state.graph_metadata["map_reduce_result"]
+            from src.rag_pipeline.generation.answer_generator import GeneratedAnswer
+            st.session_state.generated_answer = GeneratedAnswer(
+                answer=mr["final_answer"],
+                model=GENERATION_MODEL,
+                generation_time_ms=mr.get("total_time_ms", 0),
+                sources_used=[],
+                system_prompt_used="Map-reduce global query",
+                user_prompt_used=query,
+            )
         else:
             # No results to generate from
             st.session_state.generated_answer = None
@@ -689,7 +702,7 @@ if search_clicked and query:
 # RESULTS DISPLAY - Tabs: Answer | Pipeline Log
 # ============================================================================
 
-if st.session_state.search_results:
+if st.session_state.search_results or st.session_state.generated_answer:
     #st.divider()
     #st.subheader(f"Results for: \"{st.session_state.last_query}\"")
 
@@ -712,9 +725,15 @@ if st.session_state.search_results:
             st.markdown(ans.answer)
 
             # Show metadata
+            graph_meta = st.session_state.graph_metadata
+            is_global = (graph_meta and graph_meta.get("map_reduce_result"))
             col1, col2, col3 = st.columns(3)
             col1.caption(f"Model: {ans.model}")
-            col2.caption(f"Sources cited: {ans.sources_used}")
+            if is_global:
+                mr = graph_meta["map_reduce_result"]
+                col2.caption(f"Communities: {mr.get('communities_used', 0)}")
+            else:
+                col2.caption(f"Sources cited: {ans.sources_used}")
             col3.caption(f"Generated in {ans.generation_time_ms:.0f}ms")
 
             # Display formatted references for cited sources
@@ -747,7 +766,7 @@ if st.session_state.search_results:
         st.caption("Full visibility into what happened at each stage of the RAG pipeline.")
         _render_pipeline_log()
 
-elif query and not st.session_state.search_results:
+elif query and not st.session_state.search_results and not st.session_state.generated_answer:
     st.info("No results found. Try a different query.")
 
 else:
