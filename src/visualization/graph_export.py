@@ -312,11 +312,12 @@ def build_pyvis_network(
         "physics": {
             "solver": "barnesHut",
             "barnesHut": {
-                "gravitationalConstant": -50000,
-                "centralGravity": 0.1,
-                "springLength": 350,
-                "springConstant": 0.01,
-                "damping": 0.3
+                "gravitationalConstant": -80000,
+                "centralGravity": 0.05,
+                "springLength": 500,
+                "springConstant": 0.005,
+                "damping": 0.3,
+                "avoidOverlap": 0.5
             },
             "stabilization": {
                 "iterations": 300,
