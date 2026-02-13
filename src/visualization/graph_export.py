@@ -307,20 +307,22 @@ def build_pyvis_network(
         net.add_edge(source, target, **edge_kwargs)
 
     # Configure physics
+    # Strategy: strong repulsion + wide springs for initial layout,
+    # then disable physics after stabilization so dragged nodes stay put.
     net.set_options("""
     {
         "physics": {
             "solver": "barnesHut",
             "barnesHut": {
-                "gravitationalConstant": -80000,
-                "centralGravity": 0.05,
-                "springLength": 500,
-                "springConstant": 0.005,
-                "damping": 0.3,
-                "avoidOverlap": 0.5
+                "gravitationalConstant": -120000,
+                "centralGravity": 0.0,
+                "springLength": 700,
+                "springConstant": 0.002,
+                "damping": 0.5,
+                "avoidOverlap": 1.0
             },
             "stabilization": {
-                "iterations": 300,
+                "iterations": 400,
                 "fit": true
             }
         },
@@ -332,6 +334,10 @@ def build_pyvis_network(
         "edges": {
             "smooth": {
                 "type": "continuous"
+            },
+            "font": {
+                "background": "white",
+                "size": 11
             }
         }
     }
@@ -398,6 +404,7 @@ def export_graph(
             full_path = output_dir / "graph_full.html"
             net_full.save_graph(str(full_path))
             _inject_legend(full_path, legend_html)
+            _inject_freeze_on_stabilize(full_path)
             outputs["graph_full.html"] = full_path
             logger.info(f"Saved full graph: {full_path}")
 
@@ -413,6 +420,7 @@ def export_graph(
         filtered_path = output_dir / "graph_filtered.html"
         net_filtered.save_graph(str(filtered_path))
         _inject_legend(filtered_path, legend_html)
+        _inject_freeze_on_stabilize(filtered_path)
         outputs["graph_filtered.html"] = filtered_path
         logger.info(f"Saved filtered graph: {filtered_path}")
 
@@ -437,6 +445,29 @@ def _inject_legend(html_path: Path, legend_html: str) -> None:
     """
     content = html_path.read_text(encoding="utf-8")
     content = content.replace("</body>", f"{legend_html}\n</body>")
+    html_path.write_text(content, encoding="utf-8")
+
+
+def _inject_freeze_on_stabilize(html_path: Path) -> None:
+    """Disable physics after the layout stabilizes.
+
+    Once vis.js finishes computing the initial layout, this script
+    turns physics off entirely. The result: dragged nodes stay exactly
+    where the user places them — no spring pull-back, no gravity drift.
+
+    Args:
+        html_path: Path to the PyVis-generated HTML file.
+    """
+    script = """
+<script type="text/javascript">
+    // After stabilization, freeze layout so drag = permanent placement
+    network.on("stabilizationIterationsDone", function() {
+        network.setOptions({ physics: { enabled: false } });
+    });
+</script>
+"""
+    content = html_path.read_text(encoding="utf-8")
+    content = content.replace("</body>", f"{script}\n</body>")
     html_path.write_text(content, encoding="utf-8")
 
 
