@@ -95,6 +95,7 @@ from src.evaluation.comprehensive import (
     retry_failed_combinations,
     resolve_questions_file,
     load_test_questions,
+    print_combination_table,
     COMPREHENSIVE_QUESTIONS_FILE,
 )
 
@@ -466,6 +467,19 @@ def main() -> None:
         default=None,
         help="Questions file: path or 'full' for all 45 questions (default: comprehensive 15)",
     )
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        metavar="CHECKPOINT_PATH",
+        help="Resume comprehensive evaluation from checkpoint file",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print all valid combinations without running evaluation",
+    )
 
     args = parser.parse_args()
 
@@ -474,7 +488,12 @@ def main() -> None:
         retry_failed_combinations(args.retry_failed, args)
         return
 
-    # Comprehensive mode: different execution path
+    # Dry-run mode: print combination table and exit
+    if args.dry_run:
+        print_combination_table()
+        return
+
+    # Comprehensive mode: different execution path (supports --resume)
     if args.comprehensive:
         run_comprehensive_evaluation(args)
         return

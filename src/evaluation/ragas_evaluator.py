@@ -349,6 +349,74 @@ def retrieve_contexts(
             neo4j_driver.close()
 
 
+def retrieve_contexts_with_metadata(
+    question: str,
+    top_k: int = DEFAULT_TOP_K,
+    collection_name: Optional[str] = None,
+    use_reranking: bool = True,
+    alpha: float = 0.5,
+    preprocessed: Optional[PreprocessedQuery] = None,
+    search_type: str = "hybrid",
+) -> tuple[list[str], dict]:
+    """Retrieve contexts and strategy metadata (supports DRIFT answer detection).
+
+    Same as retrieve_contexts() but also returns RetrievalResult.metadata,
+    which may contain drift_final_answer for GraphRAG global queries.
+
+    Args:
+        question: The user's question.
+        top_k: Number of chunks to return.
+        collection_name: Override collection name.
+        use_reranking: If True, apply cross-encoder reranking.
+        alpha: Hybrid search balance.
+        preprocessed: PreprocessedQuery from strategy.
+        search_type: "keyword" or "hybrid".
+
+    Returns:
+        Tuple of (context_texts, metadata_dict).
+    """
+    from src.rag_pipeline.retrieval.strategy_registry import RetrievalContext, get_strategy
+
+    collection_name = collection_name or get_collection_name()
+
+    strategy_id = "none"
+    if preprocessed:
+        strategy_id = preprocessed.strategy_used
+
+    logger.info(f"  [retrieve_contexts_with_metadata] strategy={strategy_id}, search_type={search_type}")
+
+    neo4j_driver = None
+    if strategy_id == "graphrag":
+        try:
+            from src.graph.neo4j_client import get_driver
+            neo4j_driver = get_driver()
+        except Exception as e:
+            logger.warning(f"  [retrieve_contexts_with_metadata] Neo4j driver unavailable: {e}")
+
+    client = get_client()
+    initial_k = 50 if use_reranking else top_k
+
+    context = RetrievalContext(
+        client=client,
+        collection_name=collection_name,
+        top_k=top_k,
+        use_reranking=use_reranking,
+        initial_k=initial_k,
+        alpha=alpha,
+        search_type=search_type,
+        neo4j_driver=neo4j_driver,
+    )
+
+    try:
+        retrieval_strategy = get_strategy(strategy_id)
+        result = retrieval_strategy.execute(question, context)
+        return [r.text for r in result.results], result.metadata
+    finally:
+        client.close()
+        if neo4j_driver:
+            neo4j_driver.close()
+
+
 def generate_answer(
     question: str,
     contexts: list[str],
@@ -448,6 +516,66 @@ def retrieve_contexts_with_cache(
 
     # Slice to top_k for return
     return full_contexts[:top_k]
+
+
+def retrieve_contexts_with_cache_and_metadata(
+    question: str,
+    top_k: int,
+    retrieval_k: int,
+    collection_name: str,
+    use_reranking: bool,
+    alpha: float,
+    preprocessed: Optional[PreprocessedQuery],
+    cache: Optional[dict] = None,
+    cache_key: Optional[tuple] = None,
+    search_type: str = "hybrid",
+) -> tuple[list[str], dict]:
+    """Retrieve contexts with caching, returning metadata for DRIFT detection.
+
+    Like retrieve_contexts_with_cache() but returns (contexts, metadata).
+    On cache HIT, metadata is empty (DRIFT answers are not cached — GraphRAG
+    always runs fresh since it's a single dedicated combination).
+
+    Args:
+        question: The search query.
+        top_k: Number of contexts to return.
+        retrieval_k: Number to retrieve from Weaviate.
+        collection_name: Weaviate collection name.
+        use_reranking: Whether to apply cross-encoder reranking.
+        alpha: Hybrid search balance.
+        preprocessed: Optional PreprocessedQuery for strategy-aware retrieval.
+        cache: Optional cache dict.
+        cache_key: Optional tuple for cache lookup.
+        search_type: "keyword" or "hybrid".
+
+    Returns:
+        Tuple of (context_texts, metadata_dict).
+    """
+    # Check cache first (metadata not cached — only standard retrieval is cached)
+    if cache is not None and cache_key is not None:
+        if cache_key in cache:
+            cached_contexts = cache[cache_key]
+            sliced = cached_contexts[:top_k]
+            logger.debug(f"  [cache] HIT for {cache_key[0]}, sliced {len(cached_contexts)} -> {len(sliced)}")
+            return sliced, {}
+
+    # Cache miss — do full retrieval with metadata
+    full_contexts, metadata = retrieve_contexts_with_metadata(
+        question=question,
+        top_k=retrieval_k,
+        collection_name=collection_name,
+        use_reranking=use_reranking,
+        alpha=alpha,
+        preprocessed=preprocessed,
+        search_type=search_type,
+    )
+
+    # Store in cache before slicing (only contexts, not metadata)
+    if cache is not None and cache_key is not None:
+        cache[cache_key] = full_contexts
+        logger.debug(f"  [cache] STORED {len(full_contexts)} contexts for {cache_key[0]}")
+
+    return full_contexts[:top_k], metadata
 
 
 # ============================================================================
@@ -563,7 +691,7 @@ def process_single_question(
 
             retrieval_k = max_retrieval_k if max_retrieval_k else top_k
 
-            contexts = retrieve_contexts_with_cache(
+            contexts, retrieval_meta = retrieve_contexts_with_cache_and_metadata(
                 question=question,  # Always use original question (preprocessed has strategy data)
                 top_k=top_k,
                 retrieval_k=retrieval_k,
@@ -578,16 +706,21 @@ def process_single_question(
             logger.info(f"  Retrieved {len(contexts)} contexts")
 
             # =====================================================================
-            # STAGE 3: Generation
+            # STAGE 3: Generation (or DRIFT answer passthrough)
             # =====================================================================
             failed_at_stage = "generation"
 
-            answer = generate_answer(
-                question=question,
-                contexts=contexts,
-                model=generation_model,
-            )
-            logger.info(f"  Generated answer: {answer[:100]}...")
+            drift_answer = retrieval_meta.get("drift_final_answer")
+            if drift_answer:
+                answer = drift_answer
+                logger.info("  Using DRIFT synthesized answer (skipping generation)")
+            else:
+                answer = generate_answer(
+                    question=question,
+                    contexts=contexts,
+                    model=generation_model,
+                )
+                logger.info(f"  Generated answer: {answer[:100]}...")
 
             # =====================================================================
             # BUILD SAMPLE AND TRACE

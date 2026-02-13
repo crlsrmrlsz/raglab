@@ -56,6 +56,7 @@ class DriftResult:
         final_answer: Synthesized answer from reduce phase.
         intermediate_answers: Scored answers from primer phase.
         communities_used: Community IDs that contributed.
+        community_summaries: Full summary texts from retrieved communities (for evaluation).
         query_type: Always "global" for DRIFT.
         primer_time_ms: Time for primer phase (parallel LLM calls).
         reduce_time_ms: Time for reduce phase (single LLM call).
@@ -66,6 +67,7 @@ class DriftResult:
     final_answer: str
     intermediate_answers: list[str] = field(default_factory=list)
     communities_used: list[str] = field(default_factory=list)
+    community_summaries: list[str] = field(default_factory=list)
     query_type: str = "global"
     primer_time_ms: float = 0.0
     reduce_time_ms: float = 0.0
@@ -180,6 +182,9 @@ async def drift_search_async(
             total_time_ms=(time.time() - start_time) * 1000,
         )
 
+    # Collect community summary texts for evaluation (RAGAS contexts)
+    community_summary_texts = [c["summary"] for c in communities if c.get("summary")]
+
     logger.info(f"DRIFT: Retrieved {len(communities)} communities via HNSW")
 
     # 1c. Split communities into folds
@@ -222,6 +227,7 @@ async def drift_search_async(
         return DriftResult(
             final_answer="The retrieved communities do not contain information relevant to this query.",
             communities_used=all_community_ids,
+            community_summaries=community_summary_texts,
             primer_time_ms=primer_time_ms,
             total_time_ms=(time.time() - start_time) * 1000,
             total_llm_calls=primer_llm_calls,
@@ -262,6 +268,7 @@ async def drift_search_async(
         final_answer=final_answer.strip(),
         intermediate_answers=[a for a, _, _ in scored_answers],
         communities_used=all_community_ids,
+        community_summaries=community_summary_texts,
         primer_time_ms=primer_time_ms,
         reduce_time_ms=reduce_time_ms,
         total_time_ms=total_time_ms,

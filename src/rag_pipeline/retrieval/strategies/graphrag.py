@@ -124,6 +124,33 @@ class GraphRAGRetrieval:
             for r in results_dicts
         ]
 
+        # DRIFT global queries: create SearchResult objects from community summaries
+        # so RAGAS has real contexts to evaluate (instead of empty list)
+        result_metadata = {
+            "strategy": "graphrag",
+            "graph_metadata": graph_metadata,
+            "query_entities": preprocessed.query_entities,
+            "query_type": graph_metadata.get("query_type", "local"),
+        }
+
+        if not results and graph_metadata.get("query_type") == "global":
+            drift_data = graph_metadata.get("drift_result", {})
+            summaries = drift_data.get("community_summaries", [])
+            for i, summary in enumerate(summaries):
+                results.append(SearchResult(
+                    chunk_id=f"community_summary_{i}",
+                    book_id="graphrag_community",
+                    section="community_summary",
+                    context="DRIFT community summary",
+                    text=summary,
+                    token_count=len(summary.split()),
+                    score=1.0 - (i * 0.01),
+                ))
+            result_metadata["drift_final_answer"] = drift_data.get("final_answer", "")
+            logger.info(
+                f"[graphrag] DRIFT global: {len(results)} community summaries as contexts"
+            )
+
         logger.info(
             f"[graphrag] Retrieved {len(results)} results "
             f"(query_type={graph_metadata.get('query_type', 'local')})"
@@ -132,10 +159,5 @@ class GraphRAGRetrieval:
         return RetrievalResult(
             results=results,
             preprocessing=preprocessed,
-            metadata={
-                "strategy": "graphrag",
-                "graph_metadata": graph_metadata,
-                "query_entities": preprocessed.query_entities,
-                "query_type": graph_metadata.get("query_type", "local"),
-            },
+            metadata=result_metadata,
         )

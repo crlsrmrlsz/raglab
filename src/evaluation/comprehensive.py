@@ -150,6 +150,46 @@ def load_test_questions(
 # ============================================================================
 
 
+def _load_checkpoint(checkpoint_path: Path) -> tuple[list[dict], set[tuple]]:
+    """Load checkpoint and extract completed combination keys.
+
+    Each combination is identified by (collection, alpha, reranking, strategy).
+    Results with errors are still considered "completed" to avoid re-running
+    known failures (use --retry-failed for that).
+
+    Args:
+        checkpoint_path: Path to checkpoint JSON file.
+
+    Returns:
+        Tuple of (existing_results, completed_keys) where completed_keys is
+        a set of (collection, alpha, reranking, strategy) tuples.
+
+    Raises:
+        FileNotFoundError: If checkpoint file doesn't exist.
+        json.JSONDecodeError: If checkpoint file is corrupted.
+    """
+    with open(checkpoint_path, "r") as f:
+        data = json.load(f)
+
+    existing_results = data.get("results", [])
+    completed_keys = set()
+
+    for result in existing_results:
+        key = (
+            result["collection"],
+            result["alpha"],
+            result["reranking"],
+            result["strategy"],
+        )
+        completed_keys.add(key)
+
+    logger.info(
+        f"Loaded checkpoint: {len(completed_keys)} completed of {data.get('total', '?')} total"
+    )
+
+    return existing_results, completed_keys
+
+
 def _build_valid_combinations(
     available_collections: list[str],
 ) -> tuple[list[tuple], list[tuple], list[str]]:
@@ -240,6 +280,74 @@ def _build_valid_combinations(
     return combinations, skipped_combinations, list_strategies()
 
 
+def print_combination_table() -> None:
+    """Print all valid evaluation combinations as a formatted table.
+
+    Enumerates every combination that --comprehensive would run,
+    grouped by strategy. Useful for verifying the grid before a long run.
+    """
+    from src.ui.services.search import list_collections
+
+    available_collections = list_collections()
+    if not available_collections:
+        logger.error("No RAG collections found in Weaviate. Run stage 6 first.")
+        return
+
+    combinations, skipped, all_strategies = _build_valid_combinations(available_collections)
+
+    print("\n" + "=" * 110)
+    print("COMPREHENSIVE EVALUATION: ALL VALID COMBINATIONS")
+    print("=" * 110)
+    print(f"\nTotal: {len(combinations)} combinations")
+    print(f"Available collections: {available_collections}")
+    print(f"Strategies: {all_strategies}")
+    print(f"Skipped (invalid): {len(skipped)}")
+    print()
+
+    # Table header
+    print(f"{'#':<4} {'Strategy':<16} {'Collection':<40} {'Alpha':<7} {'Rerank':<8} {'Notes'}")
+    print("-" * 110)
+
+    # Group notes by strategy for readability
+    strategy_notes = {
+        "none": {
+            (0.0, False): "Pure BM25 keyword search",
+            (0.0, True): "BM25 + reranking",
+            (0.5, False): "Balanced hybrid",
+            (0.5, True): "Balanced hybrid + reranking",
+            (1.0, False): "Pure vector",
+            (1.0, True): "Pure vector + reranking",
+        },
+        "hyde": {
+            (1.0, False): "HyDE avg embedding",
+            (1.0, True): "HyDE + reranking",
+        },
+        "decomposition": {
+            (1.0, True): "Sub-questions + mandatory reranking",
+        },
+        "graphrag": {
+            (1.0, False): "Graph traversal (local) + DRIFT (global)",
+        },
+    }
+
+    for i, (collection, alpha, reranking, strategy) in enumerate(combinations, 1):
+        rerank_str = "ON" if reranking else "off"
+        notes = strategy_notes.get(strategy, {}).get((alpha, reranking), "")
+        coll_short = collection[:40]
+        print(f"{i:<4} {strategy:<16} {coll_short:<40} {alpha:<7} {rerank_str:<8} {notes}")
+
+    # Show skipped combinations
+    if skipped:
+        print(f"\n{'SKIPPED COMBINATIONS':}")
+        print("-" * 110)
+        for coll, alpha, rerank, strat, reason in skipped[:10]:
+            print(f"  {strat} | {coll} | alpha={alpha} | rerank={rerank}: {reason}")
+        if len(skipped) > 10:
+            print(f"  ... and {len(skipped) - 10} more")
+
+    print("=" * 110)
+
+
 def _log_grid_summary(
     combinations: list[tuple],
     skipped_combinations: list[tuple],
@@ -279,6 +387,7 @@ def _save_checkpoint(
     available_collections: list[str],
     top_k: int,
     all_strategies: list[str],
+    combinations: Optional[list[tuple]] = None,
 ) -> None:
     """Save checkpoint after each combination for crash resilience.
 
@@ -290,6 +399,8 @@ def _save_checkpoint(
         available_collections: Collections in the grid.
         top_k: Fixed top_k value.
         all_strategies: All strategy IDs.
+        combinations: Full list of (collection, alpha, reranking, strategy) tuples
+            for validation on resume.
     """
     progress_pct = round(count / total * 100, 1)
     checkpoint_data = {
@@ -304,6 +415,10 @@ def _save_checkpoint(
             "strategies": all_strategies,
         },
     }
+    if combinations is not None:
+        checkpoint_data["combinations"] = [
+            [c, a, r, s] for c, a, r, s in combinations
+        ]
     with open(checkpoint_path, "w") as f:
         json.dump(checkpoint_data, f, indent=2)
     logger.info(f"  Checkpoint saved: {count}/{total} ({progress_pct}%)")
@@ -449,16 +564,38 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
     # Initialize tracking
     total_combinations = len(combinations)
     all_results = []
+    completed_keys: set[tuple] = set()
     comprehensive_run_id = f"comprehensive_{timestamp}"
     checkpoint_path = RESULTS_DIR / f"comprehensive_checkpoint_{timestamp}.json"
+
+    # Resume from checkpoint if requested
+    resume_path = getattr(args, "resume", None)
+    if resume_path:
+        resume_file = Path(resume_path)
+        if not resume_file.exists():
+            logger.error(f"Checkpoint file not found: {resume_file}")
+            return
+        all_results, completed_keys = _load_checkpoint(resume_file)
+        # Reuse the original checkpoint path for continued saves
+        checkpoint_path = resume_file
+        logger.info(
+            f"Resumed: {len(completed_keys)}/{total_combinations} already completed, "
+            f"{total_combinations - len(completed_keys)} remaining"
+        )
 
     failed_report = FailedCombinationsReport(
         comprehensive_run_id=comprehensive_run_id,
         timestamp=datetime.now().isoformat(),
     )
 
-    # Run all combinations
+    # Run all combinations (skipping completed on resume)
     for count, (collection, alpha, use_reranking, strategy) in enumerate(combinations, 1):
+        combo_key = (collection, alpha, use_reranking, strategy)
+        if combo_key in completed_keys:
+            logger.info(f"  [{count}/{total_combinations}] SKIP (already completed): "
+                        f"{collection} | alpha={alpha} | strategy={strategy}")
+            continue
+
         rerank_str = "ON" if use_reranking else "off"
         logger.info(
             f"\n[{count}/{total_combinations}] "
@@ -510,7 +647,7 @@ def run_comprehensive_evaluation(args: argparse.Namespace) -> None:
         # Save checkpoint after each combination
         _save_checkpoint(
             checkpoint_path, count, total_combinations, all_results,
-            available_collections, top_k, all_strategies
+            available_collections, top_k, all_strategies, combinations
         )
 
     # Generate report
