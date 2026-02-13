@@ -10,9 +10,10 @@ by zooming, dragging, and hovering for entity metadata.
 
 ## Library Usage
 
-- **PyVis** (wraps vis.js): Produces self-contained HTML files with
-  interactive zoom, drag, hover. `cdn_resources="in_line"` embeds
-  vis.js directly so the HTML works offline and from GitHub Pages.
+- **PyVis** (wraps vis.js): Produces interactive HTML files with
+  zoom, drag, hover. `cdn_resources="remote"` loads vis.js from
+  jsDelivr CDN, keeping HTML files small and compatible with
+  htmlpreview.github.io (which blocks large inline scripts).
 - **NetworkX**: Provides the graph data structure and algorithms
   (degree centrality, subgraph extraction) that PyVis renders.
 - **Neo4j driver**: Fetches entities and relationships via Cypher
@@ -246,7 +247,7 @@ def build_pyvis_network(
         height=height,
         width="100%",
         directed=True,
-        cdn_resources="in_line",
+        cdn_resources="remote",
         notebook=False,
     )
 
@@ -351,18 +352,21 @@ def export_graph(
     output_dir: Path = None,
     top_n: int = 50,
     metric: str = "degree",
+    include_full: bool = False,
 ) -> dict[str, Path]:
     """Export interactive knowledge graph visualizations to HTML files.
 
-    Main entry point. Connects to Neo4j, fetches the full graph,
-    builds both a full and filtered visualization, and writes
-    standalone HTML files with embedded vis.js.
+    Main entry point. Connects to Neo4j, fetches the graph data,
+    builds a filtered visualization (and optionally a full one),
+    and writes HTML files that load vis.js from CDN.
 
     Args:
         output_dir: Directory for HTML output. Defaults to
             PROJECT_ROOT / "docs" / "visualizations".
         top_n: Number of top nodes for the filtered graph.
         metric: Node attribute for filtering ("degree" or "pagerank").
+        include_full: If True, also generate the full graph HTML
+            (can be very large for 60K+ node graphs).
 
     Returns:
         Dict mapping file names to their output Paths.
@@ -395,14 +399,15 @@ def export_graph(
 
         outputs = {}
 
-        # Full graph
-        logger.info("Generating full graph visualization...")
-        net_full = build_pyvis_network(G, title="RAGLab Knowledge Graph (Full)")
-        full_path = output_dir / "graph_full.html"
-        net_full.save_graph(str(full_path))
-        _inject_legend(full_path, legend_html)
-        outputs["graph_full.html"] = full_path
-        logger.info(f"Saved full graph: {full_path}")
+        # Full graph (opt-in, large graphs produce huge HTML files)
+        if include_full:
+            logger.info("Generating full graph visualization...")
+            net_full = build_pyvis_network(G, title="RAGLab Knowledge Graph (Full)")
+            full_path = output_dir / "graph_full.html"
+            net_full.save_graph(str(full_path))
+            _inject_legend(full_path, legend_html)
+            outputs["graph_full.html"] = full_path
+            logger.info(f"Saved full graph: {full_path}")
 
         # Filtered graph
         logger.info(
@@ -472,6 +477,11 @@ def main():
         default=None,
         help="Output directory for HTML files (default: docs/visualizations/).",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Also generate full graph HTML (can be very large).",
+    )
 
     args = parser.parse_args()
 
@@ -481,6 +491,7 @@ def main():
         output_dir=output_dir,
         top_n=args.top_n,
         metric=args.metric,
+        include_full=args.full,
     )
 
     if outputs:

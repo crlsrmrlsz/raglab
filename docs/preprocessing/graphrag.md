@@ -133,9 +133,7 @@ Strict mode (`GRAPHRAG_STRICT_MODE = True`) discards entities with types not in 
 The knowledge graph can be explored interactively. Nodes are colored by entity
 type and sized by degree centrality. Hover for entity details.
 
-**[Interactive full graph](https://htmlpreview.github.io/?https://github.com/crlsrmrlsz/raglab/blob/main/docs/visualizations/graph_full.html)** — All entities and relationships
-
-**[Interactive filtered graph (top 50)](https://htmlpreview.github.io/?https://github.com/crlsrmrlsz/raglab/blob/main/docs/visualizations/graph_filtered.html)** — Core entities by degree centrality
+**[Interactive graph (top 50 entities)](https://htmlpreview.github.io/?https://github.com/crlsrmrlsz/raglab/blob/main/docs/visualizations/graph_filtered.html)** — Core entities by degree centrality
 
 To regenerate after re-indexing:
 ```bash
