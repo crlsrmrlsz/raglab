@@ -46,7 +46,6 @@ This implementation uses SECTION-SCOPE breakpoint detection:
 import json
 import numpy as np
 from pathlib import Path
-from typing import Deque
 from collections import deque
 
 from src.config import (
@@ -252,7 +251,7 @@ def create_semantic_chunks(
 
         # Build chunks from this section
         current_chunk_sentences: list[str] = []
-        overlap_buffer: Deque[str] = deque(
+        overlap_buffer: deque[str] = deque(
             maxlen=overlap_sentences if overlap_sentences > 0 else None
         )
         num_overlap_sentences = 0

@@ -8,7 +8,7 @@ Saves all query execution data to a JSON file for:
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -44,7 +44,7 @@ def log_query(
     """
     record = {
         "id": str(uuid.uuid4()),
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "input": {"query": query},
         "preprocessing": _build_preprocessing(preprocessed),
         "retrieval": _build_retrieval(retrieval_settings, search_results, collection_name),

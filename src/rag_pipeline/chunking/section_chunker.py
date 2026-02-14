@@ -6,7 +6,6 @@ Includes configurable overlap between consecutive chunks within same section.
 
 import json
 from pathlib import Path
-from typing import Deque
 from collections import deque
 
 from src.config import (
@@ -190,7 +189,7 @@ def create_chunks_from_paragraphs(
     num_overlap_sentences = 0  # Track how many sentences are from overlap (not new content)
     
     # Overlap buffer: stores last N sentences from previous chunk (within same section)
-    overlap_buffer: Deque[str] = deque(maxlen=overlap_sentences if overlap_sentences > 0 else None)
+    overlap_buffer: deque[str] = deque(maxlen=overlap_sentences if overlap_sentences > 0 else None)
     
     def _save_current_chunk():
         """Helper to save current chunk and update overlap buffer"""
