@@ -14,7 +14,7 @@ Techniques implemented:
 
 ## Library Usage
 
-Uses OpenRouter API via `requests` for LLM calls.
+Uses OpenRouter API via `openrouter_client` for LLM calls.
 Pydantic schemas ensure structured LLM outputs.
 
 ## Data Flow
@@ -27,7 +27,6 @@ Pydantic schemas ensure structured LLM outputs.
 from dataclasses import dataclass, field
 from typing import Optional
 
-import requests
 from pydantic import ValidationError as PydanticValidationError
 
 from src.config import (
@@ -39,7 +38,7 @@ from src.config import (
     HYDE_MAX_TOKENS,
 )
 from src.shared.files import setup_logging
-from src.shared.openrouter_client import call_chat_completion, call_structured_completion
+from src.shared.openrouter_client import call_chat_completion, call_structured_completion, OpenRouterError
 from src.rag_pipeline.retrieval.query_schemas import (
     DecompositionResult,
 )
@@ -142,7 +141,7 @@ def hyde_prompt(query: str, model: Optional[str] = None, k: int = HYDE_K) -> lis
                     passages.append({"domain": domain_name, "passage": response_text})
                 else:
                     logger.warning(f"HyDE {domain_name} {i+1}/{count} returned empty")
-            except requests.RequestException as e:
+            except OpenRouterError as e:
                 logger.warning(f"HyDE {domain_name} {i+1}/{count} failed: {e}")
 
     # Ensure at least one passage (fallback to original query)

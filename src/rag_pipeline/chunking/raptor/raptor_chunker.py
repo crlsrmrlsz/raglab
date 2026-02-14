@@ -76,7 +76,7 @@ def run_raptor_chunking(
     if not input_dir.exists():
         raise FileNotFoundError(
             f"Semantic chunks not found at {input_dir}. "
-            "Run semantic chunking first: python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4"
+            "Run semantic chunking first: python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0"
         )
 
     input_files = list(input_dir.glob("*.json"))

@@ -142,7 +142,7 @@ class EvaluationTrace:
             path: Path to save the trace file.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
     @classmethod
@@ -158,7 +158,7 @@ class EvaluationTrace:
         Raises:
             FileNotFoundError: If trace file doesn't exist.
         """
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_dict(data)
 
@@ -261,7 +261,7 @@ class FailedCombinationsReport:
             path: Path to save the report file.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
     @classmethod
@@ -277,7 +277,7 @@ class FailedCombinationsReport:
         Raises:
             FileNotFoundError: If report file doesn't exist.
         """
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_dict(data)
 

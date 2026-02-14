@@ -15,12 +15,7 @@ Prerequisites:
     - Stage 6 must have been run to populate the collection
 """
 
-import sys
 import logging
-from pathlib import Path
-
-# Add project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Suppress noisy HTTP logs from Weaviate client
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -612,20 +607,14 @@ if search_clicked and query:
 
         # Step 2 & 3: Search (with optional reranking)
         # Strategy determines retrieval method: HyDE=embedding averaging, decomposition=union+rerank
-        multi_queries = None
-        if preprocessed and preprocessed.generated_queries:
-            multi_queries = preprocessed.generated_queries
 
         # Build spinner message based on strategy-specific retrieval method
         spinner_msg = "Stage 2: Searching..."
-        if selected_strategy == "hyde" and multi_queries and len(multi_queries) > 1:
-            # HyDE averages embeddings into single vector for one search
-            spinner_msg = f"Stage 2: Searching ({len(multi_queries)} embeddings averaged)..."
-        elif selected_strategy == "decomposition" and multi_queries and len(multi_queries) > 1:
-            # Decomposition runs N searches, pools results, reranks (per paper)
-            spinner_msg = f"Stage 2: Searching ({len(multi_queries)} queries + rerank)..."
+        if selected_strategy == "hyde":
+            spinner_msg = "Stage 2: Searching (HyDE embedding averaging)..."
+        elif selected_strategy == "decomposition":
+            spinner_msg = "Stage 2: Searching (sub-queries + rerank)..."
         elif selected_strategy == "graphrag":
-            # GraphRAG combines vector search with graph traversal
             spinner_msg = "Stage 2: Searching (graph + vector)..."
         # Add reranking indicator for non-decomposition strategies (decomposition always reranks)
         if use_reranking and selected_strategy != "decomposition":
@@ -640,7 +629,6 @@ if search_clicked and query:
                     alpha=alpha,
                     collection_name=selected_collection,
                     use_reranking=use_reranking,
-                    multi_queries=multi_queries,
                     strategy=selected_strategy,
                 )
                 st.session_state.search_results = search_output.results

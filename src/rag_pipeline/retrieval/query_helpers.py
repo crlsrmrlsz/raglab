@@ -80,6 +80,12 @@ def execute_search(
             precomputed_embedding=precomputed_embedding,
         )
     else:
+        if precomputed_embedding is not None:
+            logger.warning(
+                "precomputed_embedding provided but search_type is '%s' "
+                "(only 'hybrid' supports precomputed embeddings) - embedding ignored",
+                context.search_type,
+            )
         return query_similar(
             client=context.client,
             query_text=query_text,

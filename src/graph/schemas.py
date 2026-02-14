@@ -100,14 +100,6 @@ class GraphEntity(BaseModel):
         # Normalize whitespace
         return ' '.join(name.split())
 
-    def to_neo4j_properties(self) -> dict[str, Any]:
-        """Convert to Neo4j node properties dict."""
-        return {
-            "name": self.name,
-            "normalized_name": self.normalized_name(),
-            "description": self.description,
-            "source_chunk_id": self.source_chunk_id,
-        }
 
 
 class GraphRelationship(BaseModel):
@@ -160,13 +152,6 @@ class GraphRelationship(BaseModel):
         description="Chunk ID where this relationship was extracted from",
     )
 
-    def to_neo4j_properties(self) -> dict[str, Any]:
-        """Convert to Neo4j relationship properties dict."""
-        return {
-            "description": self.description,
-            "weight": self.weight,
-            "source_chunk_id": self.source_chunk_id,
-        }
 
 
 class ExtractionResult(BaseModel):
@@ -197,54 +182,6 @@ class ExtractionResult(BaseModel):
     relationships: list[GraphRelationship] = Field(
         default_factory=list,
         description="List of relationships between entities",
-    )
-
-
-class QueryEntity(BaseModel):
-    """Entity mention extracted from a user query.
-
-    Used for query-time entity extraction to enable graph traversal
-    from conceptual terms (not just proper nouns).
-
-    Attributes:
-        name: Entity name as mentioned or implied in the query.
-        entity_type: Entity type (optional, for logging/debugging).
-
-    Example:
-        >>> entity = QueryEntity(name="happiness", entity_type="PHILOSOPHICAL_CONCEPT")
-    """
-
-    name: str = Field(
-        ...,
-        description="Entity name as mentioned or implied in the query",
-        min_length=1,
-    )
-    entity_type: str = Field(
-        default="CONCEPT",
-        description="Entity type from the allowed types list",
-    )
-
-
-class QueryEntities(BaseModel):
-    """Result of entity extraction from a user query.
-
-    This schema is used with call_structured_completion() for LLM-based
-    entity extraction at query time. Unlike ExtractionResult (used during
-    indexing), this only captures entity names without relationships.
-
-    Attributes:
-        entities: List of entities mentioned or implied in the query.
-
-    Example:
-        >>> result = QueryEntities(entities=[
-        ...     QueryEntity(name="happiness"),
-        ...     QueryEntity(name="hedonic adaptation"),
-        ... ])
-    """
-
-    entities: list[QueryEntity] = Field(
-        default_factory=list,
-        description="Entities mentioned or implied in the query",
     )
 
 

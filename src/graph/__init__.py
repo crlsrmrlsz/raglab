@@ -61,9 +61,7 @@ from .centrality import (
     write_pagerank_to_neo4j,
 )
 from .map_reduce import (
-    MapReduceResult,
     classify_query,
-    map_reduce_global_query,
     should_use_map_reduce,
 )
 from .drift import (
@@ -76,7 +74,6 @@ from .query_entities import (
 from .query import (
     get_graph_chunk_ids,
     retrieve_graph_context,
-    retrieve_communities_for_map_reduce,
     format_graph_context_for_generation,
     fetch_chunks_by_ids,
 )
@@ -105,10 +102,8 @@ __all__ = [
     # Centrality
     "compute_pagerank",
     "write_pagerank_to_neo4j",
-    # Map-Reduce (deprecated, kept for classify_query/should_use_map_reduce)
-    "MapReduceResult",
+    # Query classification (used by DRIFT)
     "classify_query",
-    "map_reduce_global_query",
     "should_use_map_reduce",
     # DRIFT Search
     "DriftResult",
@@ -118,7 +113,6 @@ __all__ = [
     # Query
     "get_graph_chunk_ids",
     "retrieve_graph_context",
-    "retrieve_communities_for_map_reduce",
     "format_graph_context_for_generation",
     "fetch_chunks_by_ids",
 ]

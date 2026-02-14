@@ -36,9 +36,6 @@ from src.config import (
     NEO4J_URI,
     NEO4J_USER,
     NEO4J_PASSWORD,
-    GRAPHRAG_LEIDEN_RESOLUTION,
-    GRAPHRAG_LEIDEN_MAX_LEVELS,
-    GRAPHRAG_MIN_COMMUNITY_SIZE,
 )
 from src.shared.files import setup_logging
 

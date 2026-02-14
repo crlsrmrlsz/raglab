@@ -391,7 +391,6 @@ def build_hierarchical_context(
 
         # Rebuild context with substitutions
         context_parts = []
-        cross_community_rels = []
 
         # Process each child: use summary if in substitution set
         for cid in child_community_ids:

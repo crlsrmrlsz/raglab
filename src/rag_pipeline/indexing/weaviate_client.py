@@ -20,6 +20,9 @@ from src.config import (
     WEAVIATE_GRPC_PORT,
     WEAVIATE_BATCH_SIZE,
 )
+from src.shared.files import setup_logging
+
+logger = setup_logging(__name__)
 
 
 def get_client() -> weaviate.WeaviateClient:

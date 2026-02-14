@@ -16,7 +16,7 @@ from src.config import (
     HEADER_SECTION,
     CONTEXT_SEPARATOR,
 )
-from src.shared import setup_logging
+from src.shared.files import setup_logging
 
 logger = setup_logging(__name__)
 

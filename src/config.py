@@ -719,11 +719,6 @@ GRAPHRAG_MAX_HIERARCHY_LEVELS = 3   # Number of levels: C0, C1, C2
 GRAPHRAG_PAGERANK_DAMPING = 0.85    # Standard damping factor
 GRAPHRAG_PAGERANK_ITERATIONS = 20   # Max iterations for convergence
 
-# Map-reduce for global queries (Microsoft GraphRAG paper) — DEPRECATED by DRIFT
-# Microsoft uses ALL communities at selected level (no top_k filtering)
-GRAPHRAG_MAP_MAX_TOKENS = 300       # Max tokens per map response
-GRAPHRAG_REDUCE_MAX_TOKENS = 500    # Max tokens for reduce response
-
 # DRIFT Search parameters (replaces map-reduce for global queries)
 # Simplified DRIFT: top-K community selection + primer + reduce (no follow-ups)
 # Matches Microsoft defaults for K and folds, tuned for 19-book corpus (1000+ communities)

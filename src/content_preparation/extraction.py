@@ -11,7 +11,7 @@ from docling.datamodel.document import InputFormat, DocItemLabel
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 
-from src.shared import setup_logging
+from src.shared.files import setup_logging
 
 logger = setup_logging(__name__)
 

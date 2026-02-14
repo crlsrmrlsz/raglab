@@ -257,42 +257,6 @@ Query: {query}
 
 Respond with ONLY the word 'local' or 'global'."""
 
-# DEPRECATED Map phase: Generate partial answer from one community
-GRAPHRAG_MAP_PROMPT = """Answer this question using ONLY the community context below.
-
-Community Theme:
-{community_summary}
-
-Key Entities (ranked by importance):
-{top_entities}
-
-Key Relationships:
-{relationships}
-
-Question: {query}
-
-Provide a concise answer (2-3 sentences) based ONLY on this community's themes and entities.
-If this community is not relevant to the question, respond with "Not relevant to this community."
-
-Answer:"""
-
-# DEPRECATED Reduce phase: Synthesize partial answers into final response
-GRAPHRAG_REDUCE_PROMPT = """Synthesize these partial answers from different thematic communities into a comprehensive response.
-
-Question: {query}
-
-Partial Answers from Communities:
-{partial_answers}
-
-Create a unified, coherent answer that:
-1. Integrates insights from relevant communities
-2. Identifies common themes across communities
-3. Notes any contrasting perspectives if present
-4. Ignores "Not relevant" responses
-
-Synthesized Answer:"""
-
-
 # ---------------------------------------------------------------------------
 # DRIFT Search prompts (simplified: primer + reduce, no follow-ups)
 # ---------------------------------------------------------------------------

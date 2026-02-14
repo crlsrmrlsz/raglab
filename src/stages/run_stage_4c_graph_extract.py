@@ -86,9 +86,9 @@ def main():
     if args.list_books:
         try:
             book_files = load_book_files(args.strategy)
-            print(f"\n=== Books ({len(book_files)}) ===")
+            logger.info(f"=== Books ({len(book_files)}) ===")
             for i, path in enumerate(book_files, 1):
-                print(f"  {i:2}. {path.stem}")
+                logger.info(f"  {i:2}. {path.stem}")
         except FileNotFoundError as e:
             logger.error(str(e))
             sys.exit(1)

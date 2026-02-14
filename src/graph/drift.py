@@ -121,7 +121,7 @@ async def _primer_fold_async(
 
     prompt = DRIFT_PRIMER_PROMPT.format(query=query, community_reports=reports)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _call():
         return call_chat_completion(

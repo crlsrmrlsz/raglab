@@ -247,7 +247,7 @@ def append_to_evaluation_history(
 
 """
 
-    with open(EVALUATION_HISTORY_FILE, "a") as f:
+    with open(EVALUATION_HISTORY_FILE, "a", encoding="utf-8") as f:
         f.write(entry)
 
     logger.info(f"Appended to {EVALUATION_HISTORY_FILE} as Run {run_number}")
@@ -302,36 +302,36 @@ def generate_report(
         report["per_question_results"].append(question_result)
 
     # Save JSON report
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 
     logger.info(f"Report saved to: {output_path}")
 
-    # Print summary
-    print("\n" + "=" * 60)
-    print("RAGAS EVALUATION RESULTS")
-    print("=" * 60)
-    print(f"\nQuestions evaluated: {len(questions)}")
-    print(f"\nAggregate Scores:")
+    # Log summary
+    logger.info("=" * 60)
+    logger.info("RAGAS EVALUATION RESULTS")
+    logger.info("=" * 60)
+    logger.info(f"Questions evaluated: {len(questions)}")
+    logger.info("Aggregate Scores:")
     for metric, score in results["scores"].items():
-        print(f"  {metric}: {score:.4f}")
+        logger.info(f"  {metric}: {score:.4f}")
 
-    # Print difficulty breakdown
+    # Log difficulty breakdown
     if results.get("difficulty_breakdown"):
-        print("\nScores by Question Difficulty:")
+        logger.info("Scores by Question Difficulty:")
         for difficulty, metrics in results["difficulty_breakdown"].items():
-            print(f"\n  {difficulty}:")
+            logger.info(f"  {difficulty}:")
             for metric, score in metrics.items():
-                print(f"    {metric}: {score:.4f}")
+                logger.info(f"    {metric}: {score:.4f}")
 
-    print("\nPer-Question Results:")
+    logger.info("Per-Question Results:")
     for qr in report["per_question_results"]:
-        print(f"\n  [{qr['id']}] {qr['question'][:50]}...")
+        logger.info(f"  [{qr['id']}] {qr['question'][:50]}...")
         for key, val in qr.items():
             if key not in ["id", "question", "category", "difficulty"] and val is not None:
-                print(f"    {key}: {val:.4f}")
+                logger.info(f"    {key}: {val:.4f}")
 
-    print("\n" + "=" * 60)
+    logger.info("=" * 60)
 
 
 # NOTE: Comprehensive evaluation functions moved to src/evaluation/comprehensive.py
@@ -588,7 +588,7 @@ def main() -> None:
             "search_type": args.search_type,
             "alpha": args.alpha,
             "top_k": args.top_k,
-            "reranking": args.reranking,
+            "reranking": use_reranking,
             "preprocessing_strategy": args.preprocessing,
             "preprocessing_model": args.preprocessing_model,
             "generation_model": args.generation_model,

@@ -131,7 +131,7 @@ def load_test_questions(
             "Create test questions first in data/evaluation/test_questions.json"
         )
 
-    with open(filepath, "r") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     questions = data.get("questions", [])
@@ -167,7 +167,7 @@ def _load_checkpoint(checkpoint_path: Path) -> tuple[list[dict], set[tuple]]:
         FileNotFoundError: If checkpoint file doesn't exist.
         json.JSONDecodeError: If checkpoint file is corrupted.
     """
-    with open(checkpoint_path, "r") as f:
+    with open(checkpoint_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     existing_results = data.get("results", [])
@@ -419,7 +419,7 @@ def _save_checkpoint(
             [c, a, r, s] for c, a, r, s in combinations
         ]
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(checkpoint_path, "w") as f:
+    with open(checkpoint_path, "w", encoding="utf-8") as f:
         json.dump(checkpoint_data, f, indent=2)
     logger.info(f"  Checkpoint saved: {count}/{total} ({progress_pct}%)")
 
@@ -823,7 +823,7 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
 
     logger.info(f"\nRetry results saved to: {output_path}")
@@ -1001,7 +1001,7 @@ def generate_comprehensive_report(
     }
 
     # Save JSON report
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 
     logger.info(f"Comprehensive report saved to: {output_path}")

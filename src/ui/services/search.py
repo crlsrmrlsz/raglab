@@ -49,11 +49,8 @@ from src.config import (
 from src.shared.files import setup_logging
 
 logger = setup_logging(__name__)
-from src.rag_pipeline.indexing import get_client, query_similar, query_hybrid, SearchResult
+from src.rag_pipeline.indexing import get_client
 from src.rag_pipeline.retrieval.reranking import apply_reranking_with_metadata
-
-# Import RRF for backward compatibility (search_multi_query still exists)
-from src.rag_pipeline.retrieval.rrf import reciprocal_rank_fusion, RRFResult
 
 # Import strategy pattern components
 from src.rag_pipeline.retrieval.strategy_registry import RetrievalContext, RetrievalResult, get_strategy
@@ -75,77 +72,6 @@ class SearchOutput:
     graph_metadata: Optional[dict[str, Any]] = None  # GraphRAG metadata
 
 
-def search_multi_query(
-    queries: list[dict[str, str]],
-    top_k: int = DEFAULT_TOP_K,
-    search_type: str = "hybrid",
-    alpha: float = 0.5,
-    collection_name: Optional[str] = None,
-) -> tuple[list[SearchResult], RRFResult]:
-    """Execute multiple queries and merge with Reciprocal Rank Fusion.
-
-    Each query is executed independently, then results are merged using RRF
-    to produce a single ranked list that benefits from query diversity.
-
-    Args:
-        queries: List of {type, query} dicts from decomposition strategy.
-        top_k: Final number of results after merging.
-        search_type: "vector" or "hybrid".
-        alpha: Hybrid search alpha.
-        collection_name: Weaviate collection.
-
-    Returns:
-        Tuple of (merged SearchResult list, RRFResult for logging).
-    """
-    collection_name = collection_name or get_collection_name()
-    client = get_client()
-
-    try:
-        result_lists = []
-        query_types = []
-
-        # Retrieve more per query to give RRF enough candidates
-        per_query_k = max(top_k * 2, 20)
-
-        for q in queries:
-            query_text = q.get("query", "")
-            query_type = q.get("type", "unknown")
-
-            if not query_text:
-                continue
-
-            if search_type == "hybrid":
-                results = query_hybrid(
-                    client=client,
-                    query_text=query_text,
-                    top_k=per_query_k,
-                    alpha=alpha,
-                    collection_name=collection_name,
-                )
-            else:
-                results = query_similar(
-                    client=client,
-                    query_text=query_text,
-                    top_k=per_query_k,
-                    collection_name=collection_name,
-                )
-
-            result_lists.append(results)
-            query_types.append(query_type)
-
-        # Merge with RRF
-        rrf_result = reciprocal_rank_fusion(
-            result_lists=result_lists,
-            query_types=query_types,
-            top_k=top_k,
-        )
-
-        return rrf_result.results, rrf_result
-
-    finally:
-        client.close()
-
-
 def search_chunks(
     query: str,
     top_k: int = DEFAULT_TOP_K,
@@ -153,7 +79,6 @@ def search_chunks(
     alpha: float = 0.5,
     collection_name: Optional[str] = None,
     use_reranking: bool = False,
-    multi_queries: Optional[list[dict[str, str]]] = None,  # DEPRECATED: kept for backward compat
     strategy: Optional[str] = None,
 ) -> SearchOutput:
     """
@@ -170,8 +95,6 @@ def search_chunks(
         alpha: For hybrid search, balance between vector (1.0) and keyword (0.0).
         collection_name: Override collection (for future multi-collection).
         use_reranking: If True, apply cross-encoder reranking for better accuracy.
-        multi_queries: DEPRECATED. Kept for backward compatibility but ignored.
-                       Strategies now handle their own query generation.
         strategy: Preprocessing strategy name ("none", "hyde", "decomposition", "graphrag").
 
     Returns:

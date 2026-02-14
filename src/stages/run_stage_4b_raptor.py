@@ -109,7 +109,7 @@ def main():
     except FileNotFoundError as e:
         logger.error(str(e))
         logger.error("Run semantic chunking first:")
-        logger.error("  python -m src.stages.run_stage_4_chunking --strategy semantic --threshold 0.4")
+        logger.error("  python -m src.stages.run_stage_4_chunking --strategy semantic --std-coefficient 2.0")
         raise
 
     except Exception as e:

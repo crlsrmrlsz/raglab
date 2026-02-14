@@ -50,7 +50,6 @@ from src.config import (
 from src.shared.files import setup_logging
 from src.rag_pipeline.indexing.weaviate_client import (
     get_client as get_weaviate_client,
-    fetch_all_communities_by_level,
     fetch_communities_by_ids,
 )
 from src.rag_pipeline.indexing.weaviate_query import SearchResult
@@ -327,48 +326,6 @@ def retrieve_community_context_by_membership(
 
     logger.info(f"Retrieved {len(results)} communities by entity membership")
     return results
-
-
-def retrieve_communities_for_map_reduce(level: int = 0) -> list[Community]:
-    """Retrieve full Community objects for map-reduce processing.
-
-    .. deprecated::
-        Map-reduce global queries have been replaced by DRIFT search.
-        Use :func:`src.graph.drift.drift_search` for global queries instead.
-        This function is retained for backward compatibility.
-
-    Fetches ALL communities at the specified level from Weaviate
-    (Microsoft GraphRAG design: global queries use L0 coarsest level).
-
-    Args:
-        level: Hierarchy level filter (0=coarsest for global queries).
-
-    Returns:
-        List of Community objects with full data for map-reduce.
-    """
-
-    try:
-        collection_name = get_community_collection_name()
-        client = get_weaviate_client()
-        try:
-            weaviate_results = fetch_all_communities_by_level(
-                client=client,
-                collection_name=collection_name,
-                level=level,
-            )
-        finally:
-            client.close()
-    except Exception as e:
-        logger.warning(f"Weaviate community fetch failed for map-reduce: {e}")
-        return []
-
-    if not weaviate_results:
-        logger.warning(f"No communities found at level {level} in Weaviate")
-        return []
-
-    communities = [_deserialize_community(r) for r in weaviate_results]
-    logger.info(f"Retrieved {len(communities)} communities at level {level} from Weaviate")
-    return communities
 
 
 def get_graph_chunk_ids(

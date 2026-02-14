@@ -74,7 +74,7 @@ class ExtractedRelationship(BaseModel):
     weight: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
-class ExtractionResult(BaseModel):
+class ChunkExtractionResult(BaseModel):
     """Result of entity/relationship extraction from a chunk."""
     entities: list[ExtractedEntity] = Field(default_factory=list)
     relationships: list[ExtractedRelationship] = Field(default_factory=list)
@@ -121,7 +121,7 @@ def extract_chunk(
     chunk: dict[str, Any],
     model: str = GRAPHRAG_EXTRACTION_MODEL,
     max_gleanings: int = GRAPHRAG_MAX_GLEANINGS,
-) -> ExtractionResult:
+) -> ChunkExtractionResult:
     """Extract entities/relationships from a single chunk using curated types.
 
     Uses Microsoft GraphRAG's gleaning mechanism for improved recall:
@@ -136,7 +136,7 @@ def extract_chunk(
         max_gleanings: Maximum additional extraction passes (0 = disabled).
 
     Returns:
-        ExtractionResult with merged entities and relationships.
+        ChunkExtractionResult with merged entities and relationships.
     """
     entity_types = get_entity_types_string()
     text = chunk["text"]
@@ -151,7 +151,7 @@ def extract_chunk(
     result = call_structured_completion(
         messages=[{"role": "user", "content": prompt}],
         model=model,
-        response_model=ExtractionResult,
+        response_model=ChunkExtractionResult,
         temperature=0.0,
         max_tokens=GRAPHRAG_MAX_EXTRACTION_TOKENS,
     )
@@ -190,7 +190,7 @@ def extract_chunk(
     final_entities = _deduplicate_entities(all_entities)
     final_relationships = _deduplicate_relationships(all_relationships)
 
-    result = ExtractionResult(entities=final_entities, relationships=final_relationships)
+    result = ChunkExtractionResult(entities=final_entities, relationships=final_relationships)
 
     # Apply strict mode filtering if enabled
     if GRAPHRAG_STRICT_MODE:
@@ -198,7 +198,7 @@ def extract_chunk(
         filtered, discarded = filter_entities_strict(result.entities, allowed)
         if discarded > 0:
             logger.debug(f"Strict mode: discarded {discarded} entities with non-matching types")
-        result = ExtractionResult(entities=filtered, relationships=result.relationships)
+        result = ChunkExtractionResult(entities=filtered, relationships=result.relationships)
 
     return result
 
@@ -249,7 +249,7 @@ def _glean_additional_entities(
     previous_relationships: list[ExtractedRelationship],
     entity_types: str,
     model: str,
-) -> ExtractionResult:
+) -> ChunkExtractionResult:
     """Extract additional entities missed in previous passes.
 
     Args:
@@ -260,7 +260,7 @@ def _glean_additional_entities(
         model: LLM model.
 
     Returns:
-        ExtractionResult with additional entities/relationships.
+        ChunkExtractionResult with additional entities/relationships.
     """
     prev_entity_str = ", ".join(f"{e.name} ({e.entity_type})" for e in previous_entities)
     prev_rel_str = ", ".join(
@@ -277,7 +277,7 @@ def _glean_additional_entities(
     return call_structured_completion(
         messages=[{"role": "user", "content": prompt}],
         model=model,
-        response_model=ExtractionResult,
+        response_model=ChunkExtractionResult,
         temperature=0.0,
         max_tokens=GRAPHRAG_MAX_EXTRACTION_TOKENS,
     )
