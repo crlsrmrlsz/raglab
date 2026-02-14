@@ -294,18 +294,18 @@ def print_combination_table() -> None:
 
     combinations, skipped, all_strategies = _build_valid_combinations(available_collections)
 
-    print("\n" + "=" * 110)
-    print("COMPREHENSIVE EVALUATION: ALL VALID COMBINATIONS")
-    print("=" * 110)
-    print(f"\nTotal: {len(combinations)} combinations")
-    print(f"Available collections: {available_collections}")
-    print(f"Strategies: {all_strategies}")
-    print(f"Skipped (invalid): {len(skipped)}")
-    print()
+    logger.info("=" * 110)
+    logger.info("COMPREHENSIVE EVALUATION: ALL VALID COMBINATIONS")
+    logger.info("=" * 110)
+    logger.info(f"Total: {len(combinations)} combinations")
+    logger.info(f"Available collections: {available_collections}")
+    logger.info(f"Strategies: {all_strategies}")
+    logger.info(f"Skipped (invalid): {len(skipped)}")
+    logger.info("")
 
     # Table header
-    print(f"{'#':<4} {'Strategy':<16} {'Collection':<40} {'Alpha':<7} {'Rerank':<8} {'Notes'}")
-    print("-" * 110)
+    logger.info(f"{'#':<4} {'Strategy':<16} {'Collection':<40} {'Alpha':<7} {'Rerank':<8} {'Notes'}")
+    logger.info("-" * 110)
 
     # Group notes by strategy for readability
     strategy_notes = {
@@ -333,18 +333,18 @@ def print_combination_table() -> None:
         rerank_str = "ON" if reranking else "off"
         notes = strategy_notes.get(strategy, {}).get((alpha, reranking), "")
         coll_short = collection[:40]
-        print(f"{i:<4} {strategy:<16} {coll_short:<40} {alpha:<7} {rerank_str:<8} {notes}")
+        logger.info(f"{i:<4} {strategy:<16} {coll_short:<40} {alpha:<7} {rerank_str:<8} {notes}")
 
     # Show skipped combinations
     if skipped:
-        print(f"\n{'SKIPPED COMBINATIONS':}")
-        print("-" * 110)
+        logger.info(f"{'SKIPPED COMBINATIONS':}")
+        logger.info("-" * 110)
         for coll, alpha, rerank, strat, reason in skipped[:10]:
-            print(f"  {strat} | {coll} | alpha={alpha} | rerank={rerank}: {reason}")
+            logger.info(f"  {strat} | {coll} | alpha={alpha} | rerank={rerank}: {reason}")
         if len(skipped) > 10:
-            print(f"  ... and {len(skipped) - 10} more")
+            logger.info(f"  ... and {len(skipped) - 10} more")
 
-    print("=" * 110)
+    logger.info("=" * 110)
 
 
 def _log_grid_summary(
@@ -879,13 +879,11 @@ def compute_statistical_breakdown(
 
 
 def find_best_configurations(
-    sorted_results: list[dict[str, Any]],
     successful_runs: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     """Find best configurations per metric.
 
     Args:
-        sorted_results: Results sorted by faithfulness.
         successful_runs: Only successful runs.
 
     Returns:
@@ -957,7 +955,7 @@ def generate_comprehensive_report(
     collection_analysis = compute_statistical_breakdown(successful_runs, "collection")
 
     # Find best configurations
-    best_configs = find_best_configurations(sorted_results, successful_runs)
+    best_configs = find_best_configurations(successful_runs)
 
     # Format duration
     duration_minutes = duration_seconds / 60
@@ -1011,15 +1009,15 @@ def generate_comprehensive_report(
     # =========================================================================
     # CONSOLE OUTPUT: Leaderboard
     # =========================================================================
-    print("\n" + "=" * 100)
-    print("COMPREHENSIVE EVALUATION LEADERBOARD")
-    print("=" * 100)
-    print(f"\nTested {len(all_results)} combinations on {len(questions)} questions")
-    print(f"Duration: {duration_str}")
-    print(f"Successful: {len(successful_runs)} | Failed: {len(failed_runs)}")
-    print("\n" + "-" * 127)
-    print(f"{'Rank':<5} {'Collection':<35} {'Alpha':<7} {'Rerank':<8} {'Strategy':<15} {'Faith':<8} {'Relev':<8} {'CtxPrec':<8} {'CtxRec':<8} {'AnsCorr':<8}")
-    print("-" * 127)
+    logger.info("=" * 100)
+    logger.info("COMPREHENSIVE EVALUATION LEADERBOARD")
+    logger.info("=" * 100)
+    logger.info(f"Tested {len(all_results)} combinations on {len(questions)} questions")
+    logger.info(f"Duration: {duration_str}")
+    logger.info(f"Successful: {len(successful_runs)} | Failed: {len(failed_runs)}")
+    logger.info("-" * 127)
+    logger.info(f"{'Rank':<5} {'Collection':<35} {'Alpha':<7} {'Rerank':<8} {'Strategy':<15} {'Faith':<8} {'Relev':<8} {'CtxPrec':<8} {'CtxRec':<8} {'AnsCorr':<8}")
+    logger.info("-" * 127)
 
     for i, result in enumerate(sorted_results, 1):
         scores = result["scores"]
@@ -1032,7 +1030,7 @@ def generate_comprehensive_report(
         rerank_str = "ON" if result.get("reranking") else "off"
         error_marker = " *" if "error" in result else ""
 
-        print(
+        logger.info(
             f"{i:<5} {collection_short:<35} {result['alpha']:<7} "
             f"{rerank_str:<8} {result['strategy']:<15} {faith:<8.3f} {relev:<8.3f} "
             f"{ctx_prec:<8.3f} {ctx_rec:<8.3f} {ans_corr:<8.3f}{error_marker}"
@@ -1042,9 +1040,9 @@ def generate_comprehensive_report(
     # CONSOLE OUTPUT: Statistical Breakdowns
     # =========================================================================
     def _print_breakdown(title: str, analysis: dict[str, dict[str, dict[str, float]]], format_label=str):
-        print("\n" + "=" * 100)
-        print(title)
-        print("=" * 100)
+        logger.info("=" * 100)
+        logger.info(title)
+        logger.info("=" * 100)
         # Sort groups by faithfulness mean (primary metric) for consistent ordering
         def _sort_key(group_name: str) -> float:
             return analysis[group_name].get("faithfulness", {}).get("mean", 0)
@@ -1054,10 +1052,10 @@ def generate_comprehensive_report(
             label = format_label(group)
             # Use n from the first metric (all metrics have the same n per group)
             first_metric = next(iter(metric_stats.values()))
-            print(f"\n{label} (n={first_metric['n']}):")
+            logger.info(f"{label} (n={first_metric['n']}):")
             for metric, stats in metric_stats.items():
                 metric_short = metric[:16]
-                print(f"  {metric_short:<17} {stats['mean']:.3f}  +/-  {stats['std']:.3f}  [{stats['min']:.3f}, {stats['max']:.3f}]")
+                logger.info(f"  {metric_short:<17} {stats['mean']:.3f}  +/-  {stats['std']:.3f}  [{stats['min']:.3f}, {stats['max']:.3f}]")
 
     _print_breakdown("BREAKDOWN BY PREPROCESSING STRATEGY", strategy_analysis, str.upper)
     _print_breakdown("BREAKDOWN BY ALPHA (0.0=keyword, 1.0=vector)", alpha_analysis, lambda a: f"ALPHA={a}")
@@ -1067,45 +1065,45 @@ def generate_comprehensive_report(
     # =========================================================================
     # CONSOLE OUTPUT: Article Summary
     # =========================================================================
-    print("\n" + "=" * 100)
-    print("ARTICLE SUMMARY")
-    print("=" * 100)
+    logger.info("=" * 100)
+    logger.info("ARTICLE SUMMARY")
+    logger.info("=" * 100)
 
-    print(f"\nEXPERIMENT METADATA")
-    print(f"  Duration: {duration_str}")
-    print(f"  Combinations tested: {len(all_results)} ({len(successful_runs)} successful, {len(failed_runs)} failed)")
-    print(f"  Questions per run: {len(questions)}")
+    logger.info(f"EXPERIMENT METADATA")
+    logger.info(f"  Duration: {duration_str}")
+    logger.info(f"  Combinations tested: {len(all_results)} ({len(successful_runs)} successful, {len(failed_runs)} failed)")
+    logger.info(f"  Questions per run: {len(questions)}")
 
-    print(f"\nBEST CONFIGURATIONS")
+    logger.info(f"BEST CONFIGURATIONS")
     for metric in EVAL_DEFAULT_METRICS:
         key = f"by_{metric}"
         if best_configs.get(key):
             b = best_configs[key]
-            print(f"  {metric.title():<15} {b['collection'][:25]} + alpha={b['alpha']} + top_k={b['top_k']} + {b['strategy']} ({b['score']:.3f})")
+            logger.info(f"  {metric.title():<15} {b['collection'][:25]} + alpha={b['alpha']} + top_k={b['top_k']} + {b['strategy']} ({b['score']:.3f})")
 
     # Calculate improvement percentages vs baseline (none strategy) for each metric
     if "none" in strategy_analysis:
-        print(f"\nSTRATEGY IMPROVEMENT VS BASELINE (none)")
+        logger.info(f"STRATEGY IMPROVEMENT VS BASELINE (none)")
         for metric in EVAL_DEFAULT_METRICS:
             baseline = strategy_analysis["none"].get(metric, {}).get("mean", 0)
-            print(f"\n  {metric}  (baseline={baseline:.3f}):")
+            logger.info(f"  {metric}  (baseline={baseline:.3f}):")
             for strategy in sorted(strategy_analysis.keys()):
                 stats = strategy_analysis[strategy].get(metric, {})
                 mean = stats.get("mean", 0)
                 std = stats.get("std", 0)
                 if strategy == "none":
-                    print(f"    {strategy.upper():<15} {mean:.3f} +/- {std:.3f}  (baseline)")
+                    logger.info(f"    {strategy.upper():<15} {mean:.3f} +/- {std:.3f}  (baseline)")
                 else:
                     improvement = ((mean - baseline) / baseline) * 100 if baseline > 0 else 0
-                    print(f"    {strategy.upper():<15} {mean:.3f} +/- {std:.3f}  [{improvement:+.1f}% vs baseline]")
+                    logger.info(f"    {strategy.upper():<15} {mean:.3f} +/- {std:.3f}  [{improvement:+.1f}% vs baseline]")
 
     # Show failed runs if any
     if failed_runs:
-        print("\n" + "=" * 100)
-        print("FAILED RUNS")
-        print("=" * 100)
+        logger.info("=" * 100)
+        logger.info("FAILED RUNS")
+        logger.info("=" * 100)
         for result in failed_runs:
-            print(f"  {result['collection']} | alpha={result['alpha']} | top_k={result['top_k']} | {result['strategy']}")
-            print(f"    Error: {result.get('error', 'Unknown')}")
+            logger.info(f"  {result['collection']} | alpha={result['alpha']} | top_k={result['top_k']} | {result['strategy']}")
+            logger.info(f"    Error: {result.get('error', 'Unknown')}")
 
-    print("\n" + "=" * 100)
+    logger.info("=" * 100)
