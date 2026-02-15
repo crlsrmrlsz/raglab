@@ -31,6 +31,7 @@ import time
 
 from src.config import (
     EVAL_DEFAULT_METRICS,
+    EVAL_GRAPHRAG_METRICS,
     EVAL_LOGS_DIR,
     PROJECT_ROOT,
 )
@@ -447,9 +448,11 @@ def _run_single_combination(
     Returns:
         Result dict with scores, or error information if failed.
     """
+    eval_metrics = EVAL_GRAPHRAG_METRICS if strategy == "graphrag" else EVAL_DEFAULT_METRICS
+
     results = run_evaluation(
         test_questions=questions,
-        metrics=EVAL_DEFAULT_METRICS,
+        metrics=eval_metrics,
         top_k=top_k,
         generation_model=args.generation_model,
         evaluation_model=args.evaluation_model,
@@ -739,9 +742,11 @@ def retry_failed_combinations(run_id: str, args: argparse.Namespace) -> None:
         )
 
         try:
+            eval_metrics = EVAL_GRAPHRAG_METRICS if fc.strategy == "graphrag" else EVAL_DEFAULT_METRICS
+
             results = run_evaluation(
                 test_questions=questions,
-                metrics=EVAL_DEFAULT_METRICS,
+                metrics=eval_metrics,
                 top_k=fc.top_k,
                 generation_model=args.generation_model,
                 evaluation_model=args.evaluation_model,

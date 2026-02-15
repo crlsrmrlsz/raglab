@@ -747,6 +747,8 @@ def process_single_question(
                     "collection": resolved_collection,
                     "reranking": use_reranking,
                     "search_type": search_type,
+                    "graphrag_query_type": retrieval_meta.get("query_type"),
+                    "preprocessing_strategy": preprocessing_strategy,
                 },
                 generated_answer=answer,
                 generation_model=generation_model,

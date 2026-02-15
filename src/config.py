@@ -321,6 +321,15 @@ EVAL_DEFAULT_METRICS = [
     "answer_correctness",  # End-to-end: Is answer factually correct? (requires reference)
 ]
 
+# Reduced metrics for GraphRAG evaluation.
+# GraphRAG returns community summaries (not document chunks) for global queries,
+# making context_precision/recall meaningless. Faithfulness is also misleading
+# because DRIFT synthesizes answers across multiple LLM rounds.
+EVAL_GRAPHRAG_METRICS = [
+    "relevancy",           # Generation: Does answer address question?
+    "answer_correctness",  # End-to-end: Is answer factually correct? (requires reference)
+]
+
 # Trace output directory for evaluation runs
 EVAL_TRACES_DIR = DATA_DIR / "evaluation" / "traces"
 
