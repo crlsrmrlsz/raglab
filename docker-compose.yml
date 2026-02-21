@@ -1,0 +1,139 @@
+# docker-compose.yml
+# Weaviate Vector Database for RAG Experiments
+# 
+# Usage:
+#   Start:   docker compose up -d
+#   Stop:    docker compose down
+#   Logs:    docker compose logs -f weaviate
+#   Status:  docker compose ps
+
+services:
+  weaviate:
+    # The Docker image to use
+    # cr.weaviate.io = Weaviate's container registry
+    # semitechnologies/weaviate = the image name
+    # 1.34.5 = specific version (don't use 'latest' in production!)
+    image: cr.weaviate.io/semitechnologies/weaviate:1.34.5
+    
+    # Container name (makes it easier to reference in commands)
+    container_name: weaviate_raglab
+    
+    # Command line arguments passed to Weaviate
+    command:
+      - --host
+      - 0.0.0.0        # Listen on all network interfaces
+      - --port
+      - '8080'         # HTTP API port
+      - --scheme
+      - http           # Use HTTP (not HTTPS) for local dev
+    
+    # Port mapping: HOST_PORT:CONTAINER_PORT
+    # This makes the container accessible from your machine
+    ports:
+      - "8080:8080"    # REST API + GraphQL
+      - "50051:50051"  # gRPC (required for Python v4 client)
+    
+    # Persistent storage
+    # Maps a folder on your machine to a folder inside the container
+    # Format: ./local_path:/container_path
+    volumes:
+      - ./.data/weaviate:/var/lib/weaviate
+    
+    # Restart policy
+    # on-failure:0 = don't restart on failure (good for debugging)
+    # Other options: always, unless-stopped
+    # restart: on-failure:0
+    # Change restart policy (line 45)
+    restart: unless-stopped
+
+    # Add after environment section (new block)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s   
+      
+    # Environment variables configure Weaviate's behavior
+    environment:
+      # Default limit for query results
+      QUERY_DEFAULTS_LIMIT: 25
+      
+      # Where Weaviate stores its data inside the container
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      
+      # Cluster settings (even single-node needs this)
+      CLUSTER_HOSTNAME: 'node1'
+      
+      # Authentication: disabled for local development
+      # IMPORTANT: Enable this in production!
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      
+      # No default vectorizer - we bring our own embeddings
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      
+      # We don't need any ML modules since we pre-compute embeddings
+      # If you later want Weaviate to call OpenAI for you, add:
+      # ENABLE_MODULES: 'text2vec-openai'
+
+  # ============================================================================
+  # NEO4J GRAPH DATABASE (for GraphRAG)
+  # ============================================================================
+  # Neo4j with Graph Data Science (GDS) plugin for:
+  # - Knowledge graph storage (entities + relationships)
+  # - Leiden community detection algorithm
+  # - Graph traversal queries via Cypher
+  #
+  # GraphRAG Architecture:
+  # 1. Entity extraction: LLM extracts entities/relationships from chunks
+  # 2. Graph construction: Store in Neo4j with embeddings
+  # 3. Community detection: Leiden algorithm clusters related entities
+  # 4. Summarization: LLM generates community summaries
+  # 5. Query: Hybrid graph traversal + vector search via RRF
+
+  neo4j:
+    # Neo4j Enterprise with GDS plugin (required for Leiden algorithm)
+    # GDS plugin is pre-installed in the official neo4j image with APOC
+    image: neo4j:5.26.0-enterprise
+
+    container_name: neo4j_raglab
+
+    ports:
+      - "7474:7474"   # HTTP (Browser UI)
+      - "7687:7687"   # Bolt (Python driver)
+
+    volumes:
+      - ./.data/neo4j/data:/data
+      - ./.data/neo4j/logs:/logs
+      - ./.data/neo4j/plugins:/plugins
+
+    environment:
+      # Accept enterprise license (required for GDS)
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
+
+      # Authentication (change in production!)
+      NEO4J_AUTH: neo4j/raglab_graphrag
+
+      # Enable GDS, APOC plugin
+      NEO4J_PLUGINS: '["graph-data-science", "apoc"]'
+      
+      # APOC import/export
+      NEO4J_apoc_export_file_enabled: "true"
+      NEO4J_apoc_import_file_enabled: "true"
+
+      # Memory configuration (adjust based on your system)
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 512m
+
+      # Allow CSV import from anywhere (for data loading)
+      NEO4J_dbms_security_allow__csv__import__from__file__urls: "true"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+    restart: unless-stopped

@@ -1,0 +1,38 @@
+# GraphRAG Entity Types
+# Optimized for dual-domain corpus: Neuroscience (8 books) + Philosophy/Wisdom (11 books)
+#
+# Design: 9 types following industry best practices (Microsoft: 4, LangChain: "basic types")
+# Goal: Connect brain mechanisms → psychological states → behaviors → theories & precepts
+#
+# Previous version had 33 types with significant overlap (RESEARCHER/PHILOSOPHER/HISTORICAL_FIGURE,
+# PSYCHOLOGICAL_PHENOMENON/PSYCHOLOGICAL_CONCEPT, VIRTUE/VICE/ETHICAL_CONCEPT). Consolidated based on:
+# - Corpus extraction analysis (discovered_types.json): PERSON fragmented across 6 types (~9k entities)
+# - Evaluation questions: queries connect brain→behavior→philosophy, not fine-grained subtypes
+# - Industry consensus: 4-6 generic + 2-4 domain-specific maximum
+#
+# v3 changes: dropped WORK (low-connectivity, better as chunk metadata), added BRAIN_FUNCTION
+# to capture the process layer between anatomy and psychology (neuroplasticity, fear conditioning).
+# MENTAL_STATE vs BEHAVIOR kept separate but requires explicit boundary examples in extraction prompt.
+# v4 changes: split PRINCIPLE into THEORY (empirical) and PHILOSOPHY (normative) to prevent
+# dumping-ground effect. Extraction boundary: empirical/testable → THEORY, prescriptive/metaphysical → PHILOSOPHY.
+# v5 changes: added PRECEPT for specific teachings/maxims from wisdom books.
+# v6 changes: dropped PHILOSOPHY — books *are* the philosophy, but extracted entities are
+# precepts/teachings, not school labels. Tradition grouping is a community detection task.
+
+entity_types:
+  # Generic (1) - minimal base
+  - PERSON           # researchers, philosophers, historical figures (Sapolsky, Epictetus, Kahneman)
+
+  # Neuroscience (4) - structure, function, chemistry, pathology
+  - BRAIN_STRUCTURE  # regions, systems (amygdala, prefrontal cortex, thalamus, nucleus accumbens)
+  - BRAIN_FUNCTION   # processes, mechanisms (neuroplasticity, long-term potentiation, fear conditioning, fight-or-flight)
+  - CHEMICAL         # neurotransmitters, hormones (dopamine, serotonin, oxytocin, cortisol)
+  - DISORDER         # clinical conditions (PTSD, depression, addiction)
+
+  # Psychology bridge (2) - observable and internal
+  - MENTAL_STATE     # internal experiences (emotion, consciousness, suffering, happiness)
+  - BEHAVIOR         # observable patterns (procrastination, aggression, conformity, helping)
+
+  # Frameworks (2) - empirical models and wisdom teachings
+  - THEORY           # empirical models: testable, explains *how something works* (dual process theory, prospect theory, classical conditioning, hedonic adaptation, cognitive dissonance)
+  - PRECEPT          # teachings, maxims, wisdom principles (memento mori, amor fati, dichotomy of control, wu wei, golden rule, know thyself, non-attachment)

@@ -1,0 +1,338 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script>function neighbourhoodHighlight(params) {
+  // console.log("in nieghbourhoodhighlight");
+  allNodes = nodes.get({ returnType: "Object" });
+  // originalNodes = JSON.parse(JSON.stringify(allNodes));
+  // if something is selected:
+  if (params.nodes.length > 0) {
+    highlightActive = true;
+    var i, j;
+    var selectedNode = params.nodes[0];
+    var degrees = 2;
+
+    // mark all nodes as hard to read.
+    for (let nodeId in allNodes) {
+      // nodeColors[nodeId] = allNodes[nodeId].color;
+      allNodes[nodeId].color = "rgba(200,200,200,0.5)";
+      if (allNodes[nodeId].hiddenLabel === undefined) {
+        allNodes[nodeId].hiddenLabel = allNodes[nodeId].label;
+        allNodes[nodeId].label = undefined;
+      }
+    }
+    var connectedNodes = network.getConnectedNodes(selectedNode);
+    var allConnectedNodes = [];
+
+    // get the second degree nodes
+    for (i = 1; i < degrees; i++) {
+      for (j = 0; j < connectedNodes.length; j++) {
+        allConnectedNodes = allConnectedNodes.concat(
+          network.getConnectedNodes(connectedNodes[j])
+        );
+      }
+    }
+
+    // all second degree nodes get a different color and their label back
+    for (i = 0; i < allConnectedNodes.length; i++) {
+      // allNodes[allConnectedNodes[i]].color = "pink";
+      allNodes[allConnectedNodes[i]].color = "rgba(150,150,150,0.75)";
+      if (allNodes[allConnectedNodes[i]].hiddenLabel !== undefined) {
+        allNodes[allConnectedNodes[i]].label =
+          allNodes[allConnectedNodes[i]].hiddenLabel;
+        allNodes[allConnectedNodes[i]].hiddenLabel = undefined;
+      }
+    }
+
+    // all first degree nodes get their own color and their label back
+    for (i = 0; i < connectedNodes.length; i++) {
+      // allNodes[connectedNodes[i]].color = undefined;
+      allNodes[connectedNodes[i]].color = nodeColors[connectedNodes[i]];
+      if (allNodes[connectedNodes[i]].hiddenLabel !== undefined) {
+        allNodes[connectedNodes[i]].label =
+          allNodes[connectedNodes[i]].hiddenLabel;
+        allNodes[connectedNodes[i]].hiddenLabel = undefined;
+      }
+    }
+
+    // the main node gets its own color and its label back.
+    // allNodes[selectedNode].color = undefined;
+    allNodes[selectedNode].color = nodeColors[selectedNode];
+    if (allNodes[selectedNode].hiddenLabel !== undefined) {
+      allNodes[selectedNode].label = allNodes[selectedNode].hiddenLabel;
+      allNodes[selectedNode].hiddenLabel = undefined;
+    }
+  } else if (highlightActive === true) {
+    // console.log("highlightActive was true");
+    // reset all nodes
+    for (let nodeId in allNodes) {
+      // allNodes[nodeId].color = "purple";
+      allNodes[nodeId].color = nodeColors[nodeId];
+      // delete allNodes[nodeId].color;
+      if (allNodes[nodeId].hiddenLabel !== undefined) {
+        allNodes[nodeId].label = allNodes[nodeId].hiddenLabel;
+        allNodes[nodeId].hiddenLabel = undefined;
+      }
+    }
+    highlightActive = false;
+  }
+
+  // transform the object into an array
+  var updateArray = [];
+  if (params.nodes.length > 0) {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        // console.log(allNodes[nodeId]);
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  } else {
+    // console.log("Nothing was selected");
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        // console.log(allNodes[nodeId]);
+        // allNodes[nodeId].color = {};
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  }
+}
+
+function filterHighlight(params) {
+  allNodes = nodes.get({ returnType: "Object" });
+  // if something is selected:
+  if (params.nodes.length > 0) {
+    filterActive = true;
+    let selectedNodes = params.nodes;
+
+    // hiding all nodes and saving the label
+    for (let nodeId in allNodes) {
+      allNodes[nodeId].hidden = true;
+      if (allNodes[nodeId].savedLabel === undefined) {
+        allNodes[nodeId].savedLabel = allNodes[nodeId].label;
+        allNodes[nodeId].label = undefined;
+      }
+    }
+
+    for (let i=0; i < selectedNodes.length; i++) {
+      allNodes[selectedNodes[i]].hidden = false;
+      if (allNodes[selectedNodes[i]].savedLabel !== undefined) {
+        allNodes[selectedNodes[i]].label = allNodes[selectedNodes[i]].savedLabel;
+        allNodes[selectedNodes[i]].savedLabel = undefined;
+      }
+    }
+
+  } else if (filterActive === true) {
+    // reset all nodes
+    for (let nodeId in allNodes) {
+      allNodes[nodeId].hidden = false;
+      if (allNodes[nodeId].savedLabel !== undefined) {
+        allNodes[nodeId].label = allNodes[nodeId].savedLabel;
+        allNodes[nodeId].savedLabel = undefined;
+      }
+    }
+    filterActive = false;
+  }
+
+  // transform the object into an array
+  var updateArray = [];
+  if (params.nodes.length > 0) {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  } else {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  }
+}
+
+function selectNode(nodes) {
+  network.selectNodes(nodes);
+  neighbourhoodHighlight({ nodes: nodes });
+  return nodes;
+}
+
+function selectNodes(nodes) {
+  network.selectNodes(nodes);
+  filterHighlight({nodes: nodes});
+  return nodes;
+}
+
+function highlightFilter(filter) {
+  let selectedNodes = []
+  let selectedProp = filter['property']
+  if (filter['item'] === 'node') {
+    let allNodes = nodes.get({ returnType: "Object" });
+    for (let nodeId in allNodes) {
+      if (allNodes[nodeId][selectedProp] && filter['value'].includes((allNodes[nodeId][selectedProp]).toString())) {
+        selectedNodes.push(nodeId)
+      }
+    }
+  }
+  else if (filter['item'] === 'edge'){
+    let allEdges = edges.get({returnType: 'object'});
+    // check if the selected property exists for selected edge and select the nodes connected to the edge
+    for (let edge in allEdges) {
+      if (allEdges[edge][selectedProp] && filter['value'].includes((allEdges[edge][selectedProp]).toString())) {
+        selectedNodes.push(allEdges[edge]['from'])
+        selectedNodes.push(allEdges[edge]['to'])
+      }
+    }
+  }
+  selectNodes(selectedNodes)
+}</script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+            
+            
+            
+            
+            
+
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 900px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#6A4C93", "id": "learning", "label": "learning", "shape": "dot", "size": 30.0, "title": "Learning is the acquisition of knowledge and skills, a process essential for interpreting experiences and guiding behavior. While it is a fundamental part of human development, it must be balanced wit..."}, {"color": "#A8DADC", "id": "soul", "label": "soul", "shape": "dot", "size": 30.756880733944953, "title": "The soul is understood as the immaterial essence or spirit of a being. In philosophical contexts, it represents the non-physical core of existence. This concept is also expressed as the mode of a divi..."}, {"color": "#457B9D", "id": "prefrontal cortex", "label": "prefrontal cortex", "shape": "dot", "size": 35.84862385321101, "title": "The prefrontal cortex is the anterior region of the frontal lobes responsible for higher-order executive functions, including decision-making, planning, working memory, and cognitive control. It regul..."}, {"color": "#1D3557", "id": "behavior", "label": "behavior", "shape": "dot", "size": 31.720183486238533, "title": "Behavior is the observable action and response of an individual, produced by the functional output of the nervous system\u0027s interconnected neural circuits. These actions are constructed from both innat..."}, {"color": "#F4A261", "id": "attention", "label": "attention", "shape": "dot", "size": 54.15137614678899, "title": "Attention is a cognitive state of focused awareness that selectively processes specific stimuli, locations, or sensory modalities. It modulates neural activity and sensory processing, enhancing plasti..."}, {"color": "#2A9D8F", "id": "dopamine", "label": "dopamine", "shape": "dot", "size": 35.22935779816514, "title": "Dopamine is a key neurotransmitter and neuromodulator produced primarily in the substantia nigra and ventral tegmental area. It is critically involved in reward processing, motivation, learning, and m..."}, {"color": "#F4A261", "id": "sleep", "label": "sleep", "shape": "dot", "size": 31.926605504587155, "title": "Sleep is a natural, essential state of rest characterized by reduced consciousness, sensory awareness, and responsiveness, regulated by brain processes and circadian rhythms. It involves distinct phys..."}, {"color": "#457B9D", "id": "hippocampus", "label": "hippocampus", "shape": "dot", "size": 47.27064220183486, "title": "The hippocampus is a medial temporal lobe structure within the limbic system that is essential for forming, consolidating, and retrieving declarative and episodic memories. It is critically involved i..."}, {"color": "#457B9D", "id": "brain", "label": "brain", "shape": "dot", "size": 75.41284403669725, "title": "The brain is the central organ of the nervous system, located within the skull, and is responsible for consciousness, cognition, emotion, and controlling all bodily functions. It is an immensely compl..."}, {"color": "#F4A261", "id": "memory", "label": "memory", "shape": "dot", "size": 48.027522935779814, "title": "Memory is a mental state involving the recall of past experiences. This cognitive factor can directly shape and alter present sensory perceptions, such as the experience of taste."}, {"color": "#F4A261", "id": "fear", "label": "fear", "shape": "dot", "size": 37.362385321100916, "title": "Fear is a fundamental emotional state triggered by the perception of threat or danger, characterized by rapid physiological and psychological responses that motivate avoidance and survival behaviors. ..."}, {"color": "#F4A261", "id": "happiness", "label": "happiness", "shape": "dot", "size": 36.39908256880734, "title": "Happiness is a complex and often elusive emotional state characterized by overall well-being, life satisfaction, and positive affect. It is widely considered the supreme good or ultimate goal, achieve..."}, {"color": "#F4A261", "id": "consciousness", "label": "consciousness", "shape": "dot", "size": 54.42660550458716, "title": "Consciousness is the state of subjective awareness and experience, encompassing the perception of one\u0027s internal thoughts, feelings, and the external environment. It is an emergent property of the bra..."}, {"color": "#6A4C93", "id": "virtue", "label": "virtue", "shape": "dot", "size": 90.0, "title": "Virtue is the supreme and unconditional good, representing moral excellence achieved through rational alignment with nature, consistent right conduct, and self-mastery. It is the central quality of ch..."}, {"color": "#457B9D", "id": "amygdala", "label": "amygdala", "shape": "dot", "size": 88.55504587155963, "title": "The amygdala is an almond-shaped cluster of nuclei in the medial temporal lobe that serves as a central hub for processing emotions, particularly fear, threat detection, and aggression. It is critical..."}]);
+                  edges = new vis.DataSet([{"arrows": "to", "color": "#888888", "from": "learning", "label": "CLOSELY_CONNECTED", "title": "CLOSELY_CONNECTED\nLearning and memory are interdependent brain processes", "to": "memory", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "learning", "label": "PREVENTS_LOSS_OF", "title": "PREVENTS_LOSS_OF\nLearning prevents virtue from being compromised by gossip and false convention", "to": "virtue", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "learning", "label": "REQUIRES", "title": "REQUIRES\nLearning difficult subjects involves allocating attentional resources over time", "to": "attention", "width": 0.75}, {"arrows": "to", "color": "#888888", "from": "learning", "label": "ENABLES", "title": "ENABLES\nLearning allows individuals to perform behaviors consistently across similar occasions", "to": "behavior", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "soul", "label": "generates", "title": "generates\nSoul generates consciousness of constitution", "to": "consciousness", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "soul", "label": "CONSTITUTES", "title": "CONSTITUTES\nVirtue is soul in a certain condition", "to": "virtue", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "soul", "label": "PRODUCES", "title": "PRODUCES\nSoul\u0027s own agency can produce genuine, lasting happiness independent of Fortune", "to": "happiness", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "soul", "label": "enables", "title": "enables\nThe soul must be soothed for true sleep and rest to occur", "to": "sleep", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "prefrontal cortex", "label": "ENABLES", "title": "ENABLES\nReactivation of prefrontal areas is crucial for recovery of consciousness", "to": "consciousness", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "prefrontal cortex", "label": "SUPPORTS", "title": "SUPPORTS\nPrefrontal cortex plays major roles in memory", "to": "memory", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "prefrontal cortex", "label": "MODULATES", "title": "MODULATES\nDorsolateral prefrontal cortex shows stronger activation during happiness", "to": "happiness", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "prefrontal cortex", "label": "SUPPORTS", "title": "SUPPORTS\nThe prefrontal cortex is a critical component of the brain\u0027s attention network, with its higher-order regions being essential for directing and mainta...", "to": "attention", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "prefrontal cortex", "label": "INHIBITS", "title": "INHIBITS\nPrefrontal cortex strongly connected to and inhibits amygdala activity", "to": "amygdala", "width": 0.88}, {"arrows": "to", "color": "#888888", "from": "prefrontal cortex", "label": "connected_to", "title": "connected_to\nPrefrontal cortex has connections with hippocampus for memory functions", "to": "hippocampus", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "prefrontal cortex", "label": "MODULATES", "title": "MODULATES\nThe prefrontal cortex influences dopamine activity by signaling reward probability through its own activation and by modulating subcortical dopamine r...", "to": "dopamine", "width": 0.75}, {"arrows": "to", "color": "#888888", "from": "attention", "label": "REQUIRES", "title": "REQUIRES\nAttention and consciousness are mutually dependent: conscious awareness requires attention to focus on stimuli, and attention itself can only operate ...", "to": "consciousness", "width": 0.8500000000000001}, {"arrows": "to", "color": "#888888", "from": "attention", "label": "ENABLES", "title": "ENABLES\nDirected attention permits uptake of relevant data into memory", "to": "memory", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "attention", "label": "FACILITATES", "title": "FACILITATES\nAttention to color and pattern facilitates learning about objects", "to": "learning", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "attention", "label": "ENABLES", "title": "ENABLES\nConstant attention to duty enables achievement of virtue", "to": "virtue", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "attention", "label": "involves", "title": "involves\nAttention involves prefrontal cortex regions that power down during sleep", "to": "prefrontal cortex", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "attention", "label": "DIRECTS", "title": "DIRECTS\nAttended information is transferred to hippocampus for long-term storage", "to": "hippocampus", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "dopamine", "label": "plays_role_in", "title": "plays_role_in\nDopamine plays crucial role in learning", "to": "learning", "width": 1.0}, {"arrows": "to", "color": "#888888", "from": "dopamine", "label": "signals", "title": "signals\nDopamine signals things that require attention", "to": "attention", "width": 1.0}, {"arrows": "to", "color": "#888888", "from": "dopamine", "label": "MODULATES", "title": "MODULATES\nDopamine critically influences prefrontal cortex function through an inverted U-shaped dose-response relationship, with its levels and receptor activi...", "to": "prefrontal cortex", "width": 0.8624999999999999}, {"arrows": "to", "color": "#888888", "from": "dopamine", "label": "has_receptor_in", "title": "has_receptor_in\nDopamine has receptors in the amygdala", "to": "amygdala", "width": 1.0}, {"arrows": "to", "color": "#888888", "from": "sleep", "label": "MODULATES", "title": "MODULATES\nDifferent sleep levels produce varying degrees of consciousness", "to": "consciousness", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "sleep", "label": "INFLUENCES", "title": "INFLUENCES\nSleep affects memory through multiple mechanisms and forms", "to": "memory", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "sleep", "label": "FACILITATES", "title": "FACILITATES\nSleep plays a vital role in enabling learning processes and enhancing both learning performance and cognitive function.", "to": "learning", "width": 0.925}, {"arrows": "to", "color": "#888888", "from": "sleep", "label": "disrupts", "title": "disrupts\nThe nightly cycle of sleep disrupts the attention-consciousness process", "to": "attention", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "sleep", "label": "RESTORES", "title": "RESTORES\nSleep restores and renews exhausted brain capacity", "to": "brain", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "hippocampus", "label": "ENCODES", "title": "ENCODES\nHippocampus encodes and retrieves memories as patterns of neural activity", "to": "memory", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "hippocampus", "label": "supports", "title": "supports\nHippocampus is critically important for learning", "to": "learning", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "hippocampus", "label": "co-occurs_with", "title": "co-occurs_with\nBoth structures show reduced activity during REM sleep compared to waking state", "to": "prefrontal cortex", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "hippocampus", "label": "CO_IMPLICATED_IN", "title": "CO_IMPLICATED_IN\nBoth structures implicated together in depression and anxiety disorders", "to": "amygdala", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "brain", "label": "PRODUCES", "title": "PRODUCES\nBrain organization and function generate consciousness as emergent property", "to": "consciousness", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "brain", "label": "ENABLES", "title": "ENABLES\nThe brain\u0027s structure and organization are essential for building, maintaining, and retrieving memories.", "to": "memory", "width": 0.8999999999999999}, {"arrows": "to", "color": "#888888", "from": "brain", "label": "ENABLES", "title": "ENABLES\nThe brain\u0027s functions and mechanisms support and underpin the acquisition, integration, and frameworks of learning.", "to": "learning", "width": 0.875}, {"arrows": "to", "color": "#888888", "from": "brain", "label": "GENERATES", "title": "GENERATES\nBrain mechanisms produce attentional focus and selective processing", "to": "attention", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "brain", "label": "DRIVES", "title": "DRIVES\nBrain serves as mission control center that drives behavior and actions", "to": "behavior", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "brain", "label": "contains", "title": "contains\nThe amygdala is a structure located within the brain.", "to": "amygdala", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "brain", "label": "contains", "title": "contains\nBrain contains the hippocampus as a structural component", "to": "hippocampus", "width": 1.0}, {"arrows": "to", "color": "#888888", "from": "brain", "label": "signals", "title": "signals\nThe brain signals changes that bring on sleep", "to": "sleep", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "memory", "label": "correlates_with", "title": "correlates_with\nFewer traces are left in memory as consciousness diminishes with age", "to": "consciousness", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "memory", "label": "PREDICTS", "title": "PREDICTS\nMemory functions as predictive mechanism for survival and learning", "to": "learning", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "memory", "label": "SUPPORTS", "title": "SUPPORTS\nMemory programming helps maintain attentional focus on task goals", "to": "attention", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "memory", "label": "occurs_in", "title": "occurs_in\nMemory processes occur in the brain", "to": "brain", "width": 1.0}, {"arrows": "to", "color": "#888888", "from": "memory", "label": "INFLUENCES", "title": "INFLUENCES\nMemory, which stores past experiences, directly shapes and influences an individual\u0027s observable behavior and performance in daily tasks.", "to": "behavior", "width": 0.8500000000000001}, {"arrows": "to", "color": "#888888", "from": "fear", "label": "transcended_by", "title": "transcended_by\nThe virtuous soul transcends fear of bodily harm and death", "to": "soul", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "fear", "label": "OBSTRUCTS", "title": "OBSTRUCTS\nFear prevents individuals from acting virtuously and fulfilling duties", "to": "virtue", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "fear", "label": "PREVENTS", "title": "PREVENTS\nFear and ambition prevent achieving a light heart and authentic happiness.", "to": "happiness", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "fear", "label": "TRIGGERS", "title": "TRIGGERS\nFear leads to fast adaptive behavior manifestation", "to": "behavior", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "fear", "label": "processed_by", "title": "processed_by\nThe amygdala is automatically involved in the neural processing of fear, particularly in response to fearful stimuli.", "to": "amygdala", "width": 0.925}, {"arrows": "to", "color": "#888888", "from": "happiness", "label": "synonymous_with", "title": "synonymous_with\nFor Epictetus, a happy life and a virtuous life are synonymous", "to": "virtue", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "consciousness", "label": "INFLUENCES", "title": "INFLUENCES\nMaking something conscious improves memory retention", "to": "memory", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "consciousness", "label": "FACILITATES", "title": "FACILITATES\nConscious awareness actively enables and strengthens learning and knowledge acquisition.", "to": "learning", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "consciousness", "label": "DETERMINES", "title": "DETERMINES\nPersonal consciousness and internal conditions more important than external opinion", "to": "happiness", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "consciousness", "label": "component_of", "title": "component_of\nConsciousness is achieved by making oneself aware of something through attention", "to": "attention", "width": 1.0}, {"arrows": "to", "color": "#888888", "from": "consciousness", "label": "EMERGES_FROM", "title": "EMERGES_FROM\nConsciousness emerges from neural interactions at different organizational level", "to": "brain", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "consciousness", "label": "underlies", "title": "underlies\nConscious awareness underlies intentional actions and thoughts", "to": "behavior", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "consciousness", "label": "varies_during", "title": "varies_during\nConsciousness levels vary during different sleep stages", "to": "sleep", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "virtue", "label": "COUNTERACTS", "title": "COUNTERACTS\nVirtue is as efficacious as excessive fear in overcoming dread", "to": "fear", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "virtue", "label": "requires", "title": "requires\nVirtue requires continuous learning and cultural studies", "to": "learning", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "virtue", "label": "DEPENDS_ON", "title": "DEPENDS_ON\nVirtues must act in conjunction with man through the soul", "to": "soul", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "virtue", "label": "LEADS_TO", "title": "LEADS_TO\nPracticing virtue results in enduring happiness and tranquility", "to": "happiness", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "virtue", "label": "controls", "title": "controls\nAll human acts are performed at the bidding of wickedness or virtue", "to": "behavior", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "amygdala", "label": "GENERATES", "title": "GENERATES\nThe amygdala is central to fear processing, as its activity correlates with fear responses to threats and emotional stimuli, while its impairment elim...", "to": "fear", "width": 0.8875}, {"arrows": "to", "color": "#888888", "from": "amygdala", "label": "supports", "title": "supports\nAmygdala supports memory functions alongside hippocampus", "to": "memory", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "amygdala", "label": "supports", "title": "supports\nAmygdala supports learning functions alongside hippocampus", "to": "learning", "width": 0.8}, {"arrows": "to", "color": "#888888", "from": "amygdala", "label": "MODULATES", "title": "MODULATES\nAmygdala enhances attention to emotionally salient stimuli through feedback projections", "to": "attention", "width": 0.95}, {"arrows": "to", "color": "#888888", "from": "amygdala", "label": "connected_to", "title": "connected_to\nAmygdala and prefrontal cortex have functional connectivity", "to": "prefrontal cortex", "width": 0.9}, {"arrows": "to", "color": "#888888", "from": "amygdala", "label": "PARTICIPATES_IN", "title": "PARTICIPATES_IN\nAmygdala damage affects various behaviors but effects difficult to isolate from adjacent damage", "to": "behavior", "width": 0.75}, {"arrows": "to", "color": "#888888", "from": "amygdala", "label": "CONNECTS_TO", "title": "CONNECTS_TO\nStrong connections particularly to anterior hippocampal portions", "to": "hippocampus", "width": 0.85}, {"arrows": "to", "color": "#888888", "from": "amygdala", "label": "inhibits_via_projections", "title": "inhibits_via_projections\nAmygdala projections cause dopamine inhibition in anxiety", "to": "dopamine", "width": 0.85}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"physics": {"solver": "barnesHut", "barnesHut": {"gravitationalConstant": -100000, "centralGravity": 0.0, "springLength": 600, "springConstant": 0.003, "damping": 0.5, "avoidOverlap": 1.0}, "stabilization": {"iterations": 400, "fit": true}}, "interaction": {"hover": true, "tooltipDelay": 100, "navigationButtons": true}, "edges": {"smooth": {"type": "continuous"}, "font": {"background": "white", "size": 11}}};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    <div id="graph-legend" style="position:fixed;top:10px;right:10px;background:rgba(255,255,255,0.95);border:1px solid #ddd;border-radius:8px;padding:12px 16px;box-shadow:0 2px 8px rgba(0,0,0,0.1);z-index:1000;font-family:sans-serif;"><div style="font-weight:bold;font-size:13px;margin-bottom:8px;color:#222;border-bottom:1px solid #eee;padding-bottom:6px;">Entity Types</div><div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#E63946;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Person</span></div>
+<div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#457B9D;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Brain Structure</span></div>
+<div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#1D3557;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Brain Function</span></div>
+<div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#2A9D8F;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Chemical</span></div>
+<div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#E9C46A;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Disorder</span></div>
+<div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#F4A261;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Mental State</span></div>
+<div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#264653;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Behavior</span></div>
+<div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#A8DADC;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Theory</span></div>
+<div style="display:flex;align-items:center;margin:3px 0;"><span style="display:inline-block;width:14px;height:14px;background:#6A4C93;border-radius:50%;margin-right:8px;flex-shrink:0;"></span><span style="font-size:12px;color:#333;">Precept</span></div></div>
+
+<script type="text/javascript">
+    // After stabilization, freeze layout so drag = permanent placement
+    network.on("stabilizationIterationsDone", function() {
+        network.setOptions({ physics: { enabled: false } });
+    });
+</script>
+
+</body>
+</html>
